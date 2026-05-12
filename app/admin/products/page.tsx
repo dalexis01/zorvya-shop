@@ -49,6 +49,7 @@ function StatusChip({
 
 export default function AdminProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
+  const [dataSource, setDataSource] = useState<string>("runtime-storage");
   const [loading, setLoading] = useState(true);
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [stockDrafts, setStockDrafts] = useState<Record<string, string>>({});
@@ -70,6 +71,7 @@ export default function AdminProductsPage() {
         if (isActive && data.success) {
           const nextProducts = data.products ?? [];
           setProducts(nextProducts);
+          setDataSource(String(data.meta?.source ?? "runtime-storage"));
           setStockDrafts(
             Object.fromEntries(
               nextProducts.map((product: Product) => [product.id, String(product.stock)])
@@ -163,9 +165,11 @@ export default function AdminProductsPage() {
         {products.length === 0 ? (
           <div className="px-8 py-14 text-center">
             <p className="text-base font-semibold text-white" style={{ fontFamily: "var(--font-sora)" }}>
-              No hay productos para mostrar.
+              No hay productos cargados en el catalogo.
             </p>
-            <p className="mt-2 text-xs text-slate-300">Crea el primer producto publicado.</p>
+            <p className="mt-2 text-xs text-slate-300">
+              Fuente actual: {dataSource}. Crea o publica productos desde admin para verlos aqui y en la tienda.
+            </p>
           </div>
         ) : (
           <div className="overflow-x-auto">

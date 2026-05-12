@@ -3,6 +3,7 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 
 import { readDataFile, writeDataFile } from "../storage";
+import productsSeedData from "@/data/products.json";
 
 import type {
   Product,
@@ -15,6 +16,9 @@ import type { ProductLocaleContent } from "@/lib/shop/types";
 
 const PRODUCTS_FILE = "products.json";
 const PUBLIC_ID_PREFIX = "PRD-";
+const PRODUCTS_SEED_FALLBACK = productsSeedData as Product[];
+
+export type ProductsDataSource = "runtime-storage" | "seed-fallback";
 
 function trimText(value: string | undefined) {
   return (value ?? "").trim();
@@ -224,14 +228,17 @@ function normalizeProduct(product: Product): Product {
   };
 }
 
-async function readProducts() {
-  const products = await readDataFile<Product[]>(PRODUCTS_FILE, []);
+async function readProductsWithSource() {
+  const storedProducts = await readDataFile<Product[]>(PRODUCTS_FILE, []);
+  const source: ProductsDataSource =
+    storedProducts.length > 0 ? "runtime-storage" : "seed-fallback";
+  const products = storedProducts.length > 0 ? storedProducts : PRODUCTS_SEED_FALLBACK;
   let nextPublicIdValue = products.reduce((highest, product) => {
     const parsed = parsePublicIdNumber(product.publicId);
     return parsed ? Math.max(highest, parsed) : highest;
   }, 0);
 
-  return products.map((product) => {
+  const normalizedProducts = products.map((product) => {
     const normalized = normalizeProduct(product);
 
     if (normalized.publicId) {
@@ -244,6 +251,16 @@ async function readProducts() {
       publicId: formatPublicId(nextPublicIdValue),
     };
   });
+
+  return {
+    products: normalizedProducts,
+    source,
+  };
+}
+
+async function readProducts() {
+  const { products } = await readProductsWithSource();
+  return products;
 }
 
 async function writeProducts(products: Product[]) {
@@ -299,6 +316,20 @@ export async function getAllProducts(options?: {
 
     return new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime();
   });
+}
+
+export async function getProductsDataSourceInfo(options?: {
+  onlyActive?: boolean;
+  category?: string;
+  search?: string;
+}) {
+  const { source } = await readProductsWithSource();
+  const products = await getAllProducts(options);
+
+  return {
+    source,
+    count: products.length,
+  };
 }
 
 export async function getProductById(id: string) {

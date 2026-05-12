@@ -2,10 +2,19 @@ import "server-only";
 
 import { unstable_cache } from "next/cache";
 
-import { getAllProducts, getProductById } from "@/lib/server/admin/products";
+import {
+  getAllProducts,
+  getProductById,
+  getProductsDataSourceInfo,
+  type ProductsDataSource,
+} from "@/lib/server/admin/products";
 import type { StorefrontProduct, StorefrontProductVariant } from "@/lib/shop/types";
 
 const STOREFRONT_PRODUCTS_TAG = "storefront-products";
+type StorefrontProductsResult = {
+  products: StorefrontProduct[];
+  source: ProductsDataSource;
+};
 
 function buildMediaProxyUrl(productId: string | number, kind: "gallery" | "variant", key: string, updatedAt?: string) {
   const params = new URLSearchParams({
@@ -155,9 +164,22 @@ export function toStorefrontProduct(product: Awaited<ReturnType<typeof getAllPro
   };
 }
 
-async function readStorefrontProductsUncached() {
+async function readStorefrontProductsUncached(): Promise<StorefrontProductsResult> {
   const products = await getAllProducts({ onlyActive: true });
-  return products.map(toStorefrontProduct);
+  const info = await getProductsDataSourceInfo({ onlyActive: true });
+
+  console.info(
+    `[catalog] storefront loaded ${products.length} product(s) from ${info.source}`
+  );
+
+  if (products.length === 0) {
+    console.warn("[catalog] storefront has no visible products after filtering.");
+  }
+
+  return {
+    products: products.map(toStorefrontProduct),
+    source: info.source,
+  };
 }
 
 const getCachedStorefrontProducts = unstable_cache(
@@ -170,7 +192,17 @@ const getCachedStorefrontProducts = unstable_cache(
 );
 
 export async function getStorefrontProducts() {
-  return getCachedStorefrontProducts();
+  const result = await getCachedStorefrontProducts();
+  return result.products;
+}
+
+export async function getStorefrontProductsDebugInfo() {
+  const result = await getCachedStorefrontProducts();
+
+  return {
+    source: result.source,
+    count: result.products.length,
+  };
 }
 
 export function getStorefrontSnapshotTimestamp() {

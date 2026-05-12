@@ -4,7 +4,7 @@ import { revalidateTag } from "next/cache";
 import { createStatusLog } from "@/lib/server/admin/logs";
 import { createProduct } from "@/lib/server/admin/products";
 import { requireAdminRequestUser } from "@/lib/server/admin/request-auth";
-import { getAllProducts } from "@/lib/server/admin/products";
+import { getAllProducts, getProductsDataSourceInfo } from "@/lib/server/admin/products";
 import { STOREFRONT_PRODUCTS_TAG } from "@/lib/server/catalog";
 
 function getErrorMessage(error: unknown) {
@@ -25,10 +25,16 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const search = searchParams.get("search") ?? undefined;
     const products = await getAllProducts({ search });
+    const info = await getProductsDataSourceInfo({ search });
+
+    console.info(
+      `[admin/products] loaded ${info.count} product(s) from ${info.source}`
+    );
 
     return NextResponse.json({
       success: true,
       products,
+      meta: info,
     });
   } catch (error) {
     console.error("Failed to get products:", error);
