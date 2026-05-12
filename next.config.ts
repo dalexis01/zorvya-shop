@@ -28,6 +28,9 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  outputFileTracingIncludes: {
+    "/*": ["./data/**/*", "./db/migrations/**/*"],
+  },
   images: {
     qualities: [75, 95],
     localPatterns: [
