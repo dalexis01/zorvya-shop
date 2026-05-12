@@ -2,8 +2,7 @@ import "server-only";
 
 import { randomUUID } from "node:crypto";
 
-import { readDataFile, writeDataFile } from "../storage";
-import productsSeedData from "@/data/products.json";
+import { Pool, type PoolClient, type QueryResultRow } from "pg";
 
 import type {
   Product,
@@ -14,11 +13,108 @@ import type {
 } from "@/lib/shop/admin-types";
 import type { ProductLocaleContent } from "@/lib/shop/types";
 
-const PRODUCTS_FILE = "products.json";
 const PUBLIC_ID_PREFIX = "PRD-";
-const PRODUCTS_SEED_FALLBACK = productsSeedData as Product[];
+const PRODUCTS_SCHEMA_SQL = `
+CREATE TABLE IF NOT EXISTS products (
+  id TEXT PRIMARY KEY,
+  public_id TEXT NOT NULL UNIQUE,
+  display_order INTEGER NOT NULL DEFAULT 0,
+  sku TEXT NOT NULL UNIQUE,
+  name TEXT NOT NULL,
+  short_description TEXT NOT NULL DEFAULT '',
+  long_description TEXT NOT NULL DEFAULT '',
+  brand TEXT NOT NULL DEFAULT '',
+  category TEXT NOT NULL DEFAULT '',
+  tags_json JSONB NOT NULL DEFAULT '[]'::jsonb,
+  price NUMERIC(12, 2) NOT NULL DEFAULT 0,
+  original_price NUMERIC(12, 2) NULL,
+  stock INTEGER NOT NULL DEFAULT 0,
+  rating NUMERIC(6, 2) NOT NULL DEFAULT 0,
+  review_count INTEGER NOT NULL DEFAULT 0,
+  inventory_label TEXT NOT NULL DEFAULT 'Almacen local',
+  delivery_label TEXT NOT NULL DEFAULT 'Delivery disponible',
+  show_stock BOOLEAN NOT NULL DEFAULT TRUE,
+  images_json JSONB NOT NULL DEFAULT '[]'::jsonb,
+  is_active BOOLEAN NOT NULL DEFAULT TRUE,
+  is_visible BOOLEAN NOT NULL DEFAULT TRUE,
+  is_featured BOOLEAN NOT NULL DEFAULT FALSE,
+  is_top BOOLEAN NOT NULL DEFAULT FALSE,
+  attributes_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+  internal_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+  metrics_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL,
+  published_at TIMESTAMPTZ NULL,
+  stock_added_at TIMESTAMPTZ NULL,
+  last_sold_at TIMESTAMPTZ NULL,
+  sale_dates_json JSONB NOT NULL DEFAULT '[]'::jsonb,
+  updated_at TIMESTAMPTZ NOT NULL,
+  updated_by TEXT NOT NULL DEFAULT '',
+  translations_json JSONB NULL,
+  ai_json JSONB NULL
+);
 
-export type ProductsDataSource = "runtime-storage" | "seed-fallback";
+CREATE INDEX IF NOT EXISTS idx_products_active_visible
+  ON products (is_active, is_visible, published_at DESC, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_products_category
+  ON products (category);
+
+CREATE INDEX IF NOT EXISTS idx_products_updated_at
+  ON products (updated_at DESC);
+`;
+
+type RuntimeProductsStore = Product[];
+type ProductRow = QueryResultRow & {
+  id: string;
+  public_id: string;
+  display_order: number;
+  sku: string;
+  name: string;
+  short_description: string;
+  long_description: string;
+  brand: string;
+  category: string;
+  tags_json: string[] | null;
+  price: number | string;
+  original_price: number | string | null;
+  stock: number;
+  rating: number | string;
+  review_count: number;
+  inventory_label: string;
+  delivery_label: string;
+  show_stock: boolean;
+  images_json: ProductImage[] | null;
+  is_active: boolean;
+  is_visible: boolean;
+  is_featured: boolean;
+  is_top: boolean;
+  attributes_json: Record<string, string> | null;
+  internal_json: Partial<ProductInternalDetails> | null;
+  metrics_json: Partial<ProductMetrics> | null;
+  created_at: Date | string;
+  published_at: Date | string | null;
+  stock_added_at: Date | string | null;
+  last_sold_at: Date | string | null;
+  sale_dates_json: string[] | null;
+  updated_at: Date | string;
+  updated_by: string;
+  translations_json: Product["translations"] | null;
+  ai_json: Product["ai"] | null;
+};
+
+export type ProductsDataSource = "postgres" | "memory-seed";
+
+declare global {
+  // eslint-disable-next-line no-var
+  var __zorvyaRuntimeProductsStore__: RuntimeProductsStore | undefined;
+}
+
+const runtimeProductsStore =
+  globalThis.__zorvyaRuntimeProductsStore__ ??
+  (globalThis.__zorvyaRuntimeProductsStore__ = createEmbeddedSeedProducts());
+
+let productsPoolInstance: Pool | null = null;
+let productsSchemaReadyPromise: Promise<void> | null = null;
 
 function trimText(value: string | undefined) {
   return (value ?? "").trim();
@@ -228,33 +324,188 @@ function normalizeProduct(product: Product): Product {
   };
 }
 
-async function readProductsWithSource() {
-  const storedProducts = await readDataFile<Product[]>(PRODUCTS_FILE, []);
-  const source: ProductsDataSource =
-    storedProducts.length > 0 ? "runtime-storage" : "seed-fallback";
-  const products = storedProducts.length > 0 ? storedProducts : PRODUCTS_SEED_FALLBACK;
-  let nextPublicIdValue = products.reduce((highest, product) => {
-    const parsed = parsePublicIdNumber(product.publicId);
-    return parsed ? Math.max(highest, parsed) : highest;
-  }, 0);
+function toIsoString(value: Date | string | null | undefined) {
+  if (!value) {
+    return null;
+  }
 
-  const normalizedProducts = products.map((product) => {
-    const normalized = normalizeProduct(product);
+  return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
+}
 
-    if (normalized.publicId) {
-      return normalized;
+function getPostgresConnectionString() {
+  return (
+    process.env.DATABASE_URL ||
+    process.env.POSTGRES_URL ||
+    process.env.SUPABASE_DB_URL ||
+    ""
+  ).trim();
+}
+
+function isPlaceholderConnectionString(value: string) {
+  return !value || value.includes("[YOUR-PASSWORD]");
+}
+
+function shouldUseSsl(connectionString: string) {
+  if (process.env.PGSSL === "disable") {
+    return false;
+  }
+
+  return connectionString.includes("supabase") || process.env.NODE_ENV === "production";
+}
+
+function isProductsDatabaseConfigured() {
+  const connectionString = getPostgresConnectionString();
+  return Boolean(connectionString) && !isPlaceholderConnectionString(connectionString);
+}
+
+async function getProductsPool() {
+  const connectionString = getPostgresConnectionString();
+
+  if (!isProductsDatabaseConfigured()) {
+    throw new Error("PRODUCTS_DB_NOT_CONFIGURED");
+  }
+
+  if (!productsPoolInstance) {
+    productsPoolInstance = new Pool({
+      connectionString,
+      max: 10,
+      idleTimeoutMillis: 30_000,
+      ssl: shouldUseSsl(connectionString) ? { rejectUnauthorized: false } : undefined,
+    });
+  }
+
+  if (!productsSchemaReadyPromise) {
+    productsSchemaReadyPromise = ensureProductsSchema(productsPoolInstance);
+  }
+
+  await productsSchemaReadyPromise;
+  return productsPoolInstance;
+}
+
+async function ensureProductsSchema(pool: Pool) {
+  await pool.query(PRODUCTS_SCHEMA_SQL);
+
+  const countResult = await pool.query<{ count: string }>(
+    "SELECT COUNT(*)::text AS count FROM products"
+  );
+
+  if (Number(countResult.rows[0]?.count ?? 0) > 0) {
+    return;
+  }
+
+  const client = await pool.connect();
+
+  try {
+    await client.query("BEGIN");
+
+    for (const product of createEmbeddedSeedProducts()) {
+      await upsertProductRecord(client, product);
     }
 
-    nextPublicIdValue += 1;
-    return {
-      ...normalized,
-      publicId: formatPublicId(nextPublicIdValue),
-    };
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+function productRowToProduct(row: ProductRow): Product {
+  return normalizeProduct({
+    id: row.id,
+    publicId: row.public_id,
+    displayOrder: Number(row.display_order ?? 0),
+    sku: row.sku,
+    name: row.name,
+    shortDescription: row.short_description,
+    longDescription: row.long_description,
+    brand: row.brand,
+    category: row.category,
+    tags: Array.isArray(row.tags_json) ? row.tags_json : [],
+    price: Number(row.price ?? 0),
+    originalPrice: row.original_price === null ? undefined : Number(row.original_price),
+    stock: Number(row.stock ?? 0),
+    rating: Number(row.rating ?? 0),
+    reviewCount: Number(row.review_count ?? 0),
+    inventoryLabel: row.inventory_label,
+    deliveryLabel: row.delivery_label,
+    showStock: Boolean(row.show_stock),
+    images: Array.isArray(row.images_json) ? row.images_json : [],
+    isActive: Boolean(row.is_active),
+    isVisible: Boolean(row.is_visible),
+    isFeatured: Boolean(row.is_featured),
+    isTop: Boolean(row.is_top),
+    attributes: row.attributes_json ?? {},
+    internal: normalizeInternalDetails(row.internal_json ?? {}),
+    metrics: createProductMetrics(
+      Number(row.price ?? 0),
+      Number(row.stock ?? 0),
+      Number((row.internal_json?.costPrice ?? 0) as number)
+    ),
+    createdAt: toIsoString(row.created_at) ?? new Date().toISOString(),
+    publishedAt: toIsoString(row.published_at),
+    stockAddedAt: toIsoString(row.stock_added_at),
+    lastSoldAt: toIsoString(row.last_sold_at),
+    saleDates: Array.isArray(row.sale_dates_json) ? row.sale_dates_json : [],
+    updatedAt: toIsoString(row.updated_at) ?? new Date().toISOString(),
+    updatedBy: row.updated_by,
+    translations: row.translations_json ?? undefined,
+    ai: row.ai_json ?? undefined,
   });
+}
+
+async function readProductsFromDatabase() {
+  const pool = await getProductsPool();
+  const result = await pool.query<ProductRow>(
+    `SELECT *
+     FROM products
+     ORDER BY published_at DESC NULLS LAST, created_at DESC, display_order ASC, updated_at DESC`
+  );
+
+  return result.rows.map(productRowToProduct);
+}
+
+function sortProducts(products: Product[]) {
+  return [...products].sort((left, right) => {
+    const rightPublishedAt = right.publishedAt ? new Date(right.publishedAt).getTime() : 0;
+    const leftPublishedAt = left.publishedAt ? new Date(left.publishedAt).getTime() : 0;
+
+    if (rightPublishedAt !== leftPublishedAt) {
+      return rightPublishedAt - leftPublishedAt;
+    }
+
+    const rightCreatedAt = new Date(right.createdAt).getTime();
+    const leftCreatedAt = new Date(left.createdAt).getTime();
+
+    if (rightCreatedAt !== leftCreatedAt) {
+      return rightCreatedAt - leftCreatedAt;
+    }
+
+    if (left.displayOrder !== right.displayOrder) {
+      return left.displayOrder - right.displayOrder;
+    }
+
+    return new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime();
+  });
+}
+
+async function readProductsWithSource() {
+  if (isProductsDatabaseConfigured()) {
+    try {
+      const products = await readProductsFromDatabase();
+      return {
+        products: sortProducts(products),
+        source: "postgres" as const,
+      };
+    } catch (error) {
+      console.error("[products] postgres read failed, falling back to embedded memory seed:", error);
+    }
+  }
 
   return {
-    products: normalizedProducts,
-    source,
+    products: sortProducts(runtimeProductsStore.map(normalizeProduct)),
+    source: "memory-seed" as const,
   };
 }
 
@@ -263,8 +514,260 @@ async function readProducts() {
   return products;
 }
 
-async function writeProducts(products: Product[]) {
-  await writeDataFile(PRODUCTS_FILE, products.map(normalizeProduct));
+async function upsertProductRecord(client: PoolClient, product: Product) {
+  await client.query(
+    `INSERT INTO products (
+      id, public_id, display_order, sku, name, short_description, long_description, brand,
+      category, tags_json, price, original_price, stock, rating, review_count,
+      inventory_label, delivery_label, show_stock, images_json, is_active, is_visible,
+      is_featured, is_top, attributes_json, internal_json, metrics_json, created_at,
+      published_at, stock_added_at, last_sold_at, sale_dates_json, updated_at, updated_by,
+      translations_json, ai_json
+    ) VALUES (
+      $1, $2, $3, $4, $5, $6, $7, $8,
+      $9, $10::jsonb, $11, $12, $13, $14, $15,
+      $16, $17, $18, $19::jsonb, $20, $21,
+      $22, $23, $24::jsonb, $25::jsonb, $26::jsonb, $27::timestamptz,
+      $28::timestamptz, $29::timestamptz, $30::timestamptz, $31::jsonb, $32::timestamptz, $33,
+      $34::jsonb, $35::jsonb
+    )
+    ON CONFLICT (id) DO UPDATE SET
+      public_id = EXCLUDED.public_id,
+      display_order = EXCLUDED.display_order,
+      sku = EXCLUDED.sku,
+      name = EXCLUDED.name,
+      short_description = EXCLUDED.short_description,
+      long_description = EXCLUDED.long_description,
+      brand = EXCLUDED.brand,
+      category = EXCLUDED.category,
+      tags_json = EXCLUDED.tags_json,
+      price = EXCLUDED.price,
+      original_price = EXCLUDED.original_price,
+      stock = EXCLUDED.stock,
+      rating = EXCLUDED.rating,
+      review_count = EXCLUDED.review_count,
+      inventory_label = EXCLUDED.inventory_label,
+      delivery_label = EXCLUDED.delivery_label,
+      show_stock = EXCLUDED.show_stock,
+      images_json = EXCLUDED.images_json,
+      is_active = EXCLUDED.is_active,
+      is_visible = EXCLUDED.is_visible,
+      is_featured = EXCLUDED.is_featured,
+      is_top = EXCLUDED.is_top,
+      attributes_json = EXCLUDED.attributes_json,
+      internal_json = EXCLUDED.internal_json,
+      metrics_json = EXCLUDED.metrics_json,
+      created_at = EXCLUDED.created_at,
+      published_at = EXCLUDED.published_at,
+      stock_added_at = EXCLUDED.stock_added_at,
+      last_sold_at = EXCLUDED.last_sold_at,
+      sale_dates_json = EXCLUDED.sale_dates_json,
+      updated_at = EXCLUDED.updated_at,
+      updated_by = EXCLUDED.updated_by,
+      translations_json = EXCLUDED.translations_json,
+      ai_json = EXCLUDED.ai_json`,
+    [
+      product.id,
+      product.publicId,
+      product.displayOrder,
+      product.sku,
+      product.name,
+      product.shortDescription,
+      product.longDescription,
+      product.brand,
+      product.category,
+      JSON.stringify(product.tags ?? []),
+      product.price,
+      product.originalPrice ?? null,
+      product.stock,
+      product.rating,
+      product.reviewCount,
+      product.inventoryLabel,
+      product.deliveryLabel,
+      product.showStock,
+      JSON.stringify(product.images ?? []),
+      product.isActive,
+      product.isVisible,
+      product.isFeatured,
+      product.isTop,
+      JSON.stringify(product.attributes ?? {}),
+      JSON.stringify(product.internal ?? {}),
+      JSON.stringify(product.metrics ?? {}),
+      product.createdAt,
+      product.publishedAt,
+      product.stockAddedAt,
+      product.lastSoldAt,
+      JSON.stringify(product.saleDates ?? []),
+      product.updatedAt,
+      product.updatedBy,
+      product.translations ? JSON.stringify(product.translations) : null,
+      product.ai ? JSON.stringify(product.ai) : null,
+    ]
+  );
+}
+
+async function writeProduct(product: Product) {
+  if (!isProductsDatabaseConfigured()) {
+    const nextProducts = runtimeProductsStore.filter((item) => item.id !== product.id);
+    nextProducts.push(normalizeProduct(product));
+    runtimeProductsStore.splice(0, runtimeProductsStore.length, ...sortProducts(nextProducts));
+    return;
+  }
+
+  const pool = await getProductsPool();
+  const client = await pool.connect();
+
+  try {
+    await upsertProductRecord(client, normalizeProduct(product));
+  } finally {
+    client.release();
+  }
+}
+
+async function deleteProductRecord(id: string) {
+  if (!isProductsDatabaseConfigured()) {
+    const nextProducts = runtimeProductsStore.filter((product) => product.id !== id);
+    runtimeProductsStore.splice(0, runtimeProductsStore.length, ...sortProducts(nextProducts));
+    return;
+  }
+
+  const pool = await getProductsPool();
+  await pool.query("DELETE FROM products WHERE id = $1", [id]);
+}
+
+function buildSeedProduct(input: {
+  id: string;
+  publicId: string;
+  sku: string;
+  name: string;
+  category: string;
+  price: number;
+  originalPrice?: number;
+  description: string;
+  imageUrl: string;
+  tags: string[];
+  isFeatured?: boolean;
+  isTop?: boolean;
+  stock?: number;
+  createdAt: string;
+}) {
+  const stock = input.stock ?? 8;
+  const internal = normalizeInternalDetails({
+    costPrice: Math.max(0, toMoney(input.price * 0.62)),
+    purchasePrice: Math.max(0, toMoney(input.price * 0.62)),
+    supplier: "ZorvyA Supply",
+    internalCode: input.sku,
+  });
+
+  return normalizeProduct({
+    id: input.id,
+    publicId: input.publicId,
+    displayOrder: parsePublicIdNumber(input.publicId) ?? 0,
+    sku: input.sku,
+    name: input.name,
+    shortDescription: buildShortDescription(input.description),
+    longDescription: input.description,
+    brand: "ZorvyA",
+    category: input.category,
+    tags: input.tags,
+    price: input.price,
+    originalPrice: input.originalPrice,
+    stock,
+    rating: 4.8,
+    reviewCount: 12,
+    inventoryLabel: "Almacen local",
+    deliveryLabel: "Delivery disponible",
+    showStock: true,
+    images: [
+      {
+        id: randomUUID(),
+        url: input.imageUrl,
+        alt: input.name,
+        isPrimary: true,
+      },
+    ],
+    isActive: true,
+    isVisible: true,
+    isFeatured: input.isFeatured ?? false,
+    isTop: input.isTop ?? false,
+    attributes: {},
+    internal,
+    metrics: createProductMetrics(input.price, stock, internal.costPrice),
+    createdAt: input.createdAt,
+    publishedAt: input.createdAt,
+    stockAddedAt: input.createdAt,
+    lastSoldAt: null,
+    saleDates: [],
+    updatedAt: input.createdAt,
+    updatedBy: "seed",
+  });
+}
+
+function createEmbeddedSeedProducts(): Product[] {
+  return [
+    buildSeedProduct({
+      id: "seed-product-1",
+      publicId: "PRD-000001",
+      sku: "HOME-BLENDER-01",
+      name: "Licuadora Lotus 2 en 1",
+      category: "Electrodomesticos",
+      price: 89,
+      originalPrice: 110,
+      description:
+        "Licuadora compacta con vaso resistente y potencia ideal para jugos, salsas y mezclas diarias. Practica, facil de limpiar y lista para cocina moderna.",
+      imageUrl:
+        "https://images.unsplash.com/photo-1570222094114-d054a817e56b?auto=format&fit=crop&w=1200&q=80",
+      tags: ["licuadora", "cocina", "electrodomesticos"],
+      isFeatured: true,
+      createdAt: "2026-05-01T10:00:00.000Z",
+    }),
+    buildSeedProduct({
+      id: "seed-product-2",
+      publicId: "PRD-000002",
+      sku: "KITCH-RICE-01",
+      name: "Arrocera Digital 12 en 1 Nippon",
+      category: "Electrodomesticos",
+      price: 149,
+      originalPrice: 179,
+      description:
+        "Arrocera digital multifuncion con modos automaticos, temporizador y mantenimiento de calor. Pensada para familias que buscan rapidez y resultado parejo.",
+      imageUrl:
+        "https://images.unsplash.com/photo-1586201375761-83865001e31b?auto=format&fit=crop&w=1200&q=80",
+      tags: ["arrocera", "nippon", "hogar"],
+      isTop: true,
+      createdAt: "2026-05-02T10:00:00.000Z",
+    }),
+    buildSeedProduct({
+      id: "seed-product-3",
+      publicId: "PRD-000003",
+      sku: "FURN-CHAIR-01",
+      name: "Silla Ergonomica de Oficina",
+      category: "Muebles",
+      price: 220,
+      originalPrice: 259,
+      description:
+        "Silla ergonomica con soporte lumbar, cabecera ajustable y acabado premium para jornadas largas de trabajo o estudio con mejor postura.",
+      imageUrl:
+        "https://images.unsplash.com/photo-1505843490701-5be5d65f37f4?auto=format&fit=crop&w=1200&q=80",
+      tags: ["oficina", "silla", "ergonomica"],
+      createdAt: "2026-05-03T10:00:00.000Z",
+    }),
+    buildSeedProduct({
+      id: "seed-product-4",
+      publicId: "PRD-000004",
+      sku: "COOK-BURNER-01",
+      name: "Hornilla Electrica Doble Oasis",
+      category: "Cocina",
+      price: 95,
+      originalPrice: 125,
+      description:
+        "Hornilla electrica doble con control independiente de temperatura, ideal para apartamentos, negocios pequenos y cocinas auxiliares.",
+      imageUrl:
+        "https://images.unsplash.com/photo-1517705008128-361805f42e86?auto=format&fit=crop&w=1200&q=80",
+      tags: ["hornilla", "cocina", "oasis"],
+      createdAt: "2026-05-04T10:00:00.000Z",
+    }),
+  ];
 }
 
 export async function getAllProducts(options?: {
@@ -295,27 +798,7 @@ export async function getAllProducts(options?: {
     );
   }
 
-  return products.sort((left, right) => {
-    const rightPublishedAt = right.publishedAt ? new Date(right.publishedAt).getTime() : 0;
-    const leftPublishedAt = left.publishedAt ? new Date(left.publishedAt).getTime() : 0;
-
-    if (rightPublishedAt !== leftPublishedAt) {
-      return rightPublishedAt - leftPublishedAt;
-    }
-
-    const rightCreatedAt = new Date(right.createdAt).getTime();
-    const leftCreatedAt = new Date(left.createdAt).getTime();
-
-    if (rightCreatedAt !== leftCreatedAt) {
-      return rightCreatedAt - leftCreatedAt;
-    }
-
-    if (left.displayOrder !== right.displayOrder) {
-      return left.displayOrder - right.displayOrder;
-    }
-
-    return new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime();
-  });
+  return sortProducts(products);
 }
 
 export async function getProductsDataSourceInfo(options?: {
@@ -432,7 +915,7 @@ export async function createProduct(
       purchasePrice: normalizedInternal.purchasePrice || normalizedInternal.costPrice,
       internalCode: normalizedInternal.internalCode || resolvedSku,
     },
-    metrics: createProductMetrics(input.price, input.stock, normalizedInternal.costPrice),
+    metrics: createProductMetrics(input.price, stock, normalizedInternal.costPrice),
     createdAt: now,
     publishedAt: isActive ? now : null,
     stockAddedAt: stock > 0 ? now : null,
@@ -443,8 +926,7 @@ export async function createProduct(
     ai: input.ai,
   });
 
-  products.push(product);
-  await writeProducts(products);
+  await writeProduct(product);
 
   return product;
 }
@@ -501,9 +983,7 @@ export async function updateProduct(
         ? now
         : nextIsActive && !product.isActive
           ? now
-          : nextIsActive
-            ? product.publishedAt
-            : product.publishedAt,
+          : product.publishedAt,
     stockAddedAt:
       nextStock > 0 && previousStock <= 0
         ? now
@@ -515,14 +995,13 @@ export async function updateProduct(
     metrics: product.metrics,
   });
 
-  await writeProducts(products.map((item) => (item.id === id ? updated : item)));
+  await writeProduct(updated);
 
   return updated;
 }
 
 export async function deleteProduct(id: string) {
-  const products = await readProducts();
-  await writeProducts(products.filter((product) => product.id !== id));
+  await deleteProductRecord(id);
 }
 
 export async function deactivateProduct(id: string, deactivatedBy: string) {
@@ -628,30 +1107,27 @@ export async function registerProductSalesFromOrder(input: {
     productId?: string | number;
   }>;
 }) {
-  const products = await readProducts();
-  let hasChanges = false;
   const soldAt = trimText(input.soldAt);
+  const products = await readProducts();
 
-  const nextProducts = products.map((product) => {
-    const matchedItem = input.items.find(
-      (item) => String(item.productId ?? "") === String(product.id)
-    );
+  await Promise.all(
+    products.map(async (product) => {
+      const matchedItem = input.items.find(
+        (item) => String(item.productId ?? "") === String(product.id)
+      );
 
-    if (!matchedItem) {
-      return product;
-    }
+      if (!matchedItem) {
+        return;
+      }
 
-    hasChanges = true;
-
-    return normalizeProduct({
-      ...product,
-      lastSoldAt: soldAt,
-      saleDates: [...product.saleDates, soldAt],
-      updatedAt: soldAt,
-    });
-  });
-
-  if (hasChanges) {
-    await writeProducts(nextProducts);
-  }
+      await writeProduct(
+        normalizeProduct({
+          ...product,
+          lastSoldAt: soldAt,
+          saleDates: [...product.saleDates, soldAt],
+          updatedAt: soldAt,
+        })
+      );
+    })
+  );
 }
