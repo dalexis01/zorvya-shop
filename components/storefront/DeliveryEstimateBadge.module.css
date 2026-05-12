@@ -1,0 +1,176 @@
+.badge {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 0.38rem;
+  border-radius: 999px;
+  overflow: hidden;
+  border: 1px solid transparent;
+  background:
+    linear-gradient(135deg, rgb(3 16 38 / 0.97), rgb(4 26 54 / 0.97)) padding-box,
+    linear-gradient(135deg, #19f5d0 0%, #12d5e7 50%, #1ea8ff 100%) border-box;
+  color: #e0fdfa;
+  transform-origin: left center;
+}
+
+/* shimmer sweep across the badge */
+.badge::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    108deg,
+    transparent 25%,
+    rgb(255 255 255 / 0.18) 50%,
+    transparent 75%
+  );
+  transform: translateX(-150%);
+  animation: shimmerSweep 4s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.card {
+  padding: 0.44rem 0.68rem;
+  animation:
+    cardFloat 4.4s ease-in-out infinite,
+    cardGlow 2.6s ease-in-out infinite;
+}
+
+.panel {
+  padding: 0.75rem 0.95rem;
+  animation:
+    panelDrift 5.6s ease-in-out infinite,
+    cardGlow 2.6s ease-in-out infinite;
+}
+
+.dot {
+  width: 0.46rem;
+  height: 0.46rem;
+  flex-shrink: 0;
+  border-radius: 999px;
+  background: radial-gradient(circle, #a5fff5 0%, #19f5d0 60%);
+  animation: dotPulse 1.85s ease-in-out infinite;
+}
+
+.text {
+  display: block;
+  flex-shrink: 0;
+  font-family: var(--font-inter), var(--font-manrope), sans-serif;
+  font-size: 10.5px;
+  font-weight: 900;
+  line-height: 1.06;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  background: linear-gradient(90deg, #b2fef7 0%, #e4fffe 45%, #c7e8ff 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: geometricPrecision;
+  white-space: nowrap;
+  text-wrap: nowrap;
+}
+
+.panelText {
+  font-size: 11px;
+}
+
+/* --- Animations --- */
+
+@keyframes shimmerSweep {
+  0%       { transform: translateX(-150%); }
+  30%, 100% { transform: translateX(250%); }
+}
+
+@keyframes cardFloat {
+  0%, 100% { transform: translateY(0px)   rotate(-0.5deg) scale(1);     }
+  25%       { transform: translateY(-2px)  rotate( 0.5deg) scale(1.012); }
+  55%       { transform: translateY(-3.5px) rotate(1deg)   scale(1.018); }
+  80%       { transform: translateY(-1px)  rotate(-0.3deg) scale(1.006); }
+}
+
+@keyframes cardGlow {
+  0%, 100% {
+    box-shadow:
+      0 0  8px rgb(25 245 208 / 0.18),
+      0 4px 16px rgb(2 6 23 / 0.45),
+      inset 0 1px 0 rgb(25 245 208 / 0.1);
+  }
+  50% {
+    box-shadow:
+      0 0 22px rgb(25 245 208 / 0.55),
+      0 0 44px rgb(18 213 231 / 0.22),
+      0 6px 20px rgb(2 6 23 / 0.4),
+      inset 0 1px 0 rgb(25 245 208 / 0.18);
+  }
+}
+
+@keyframes panelDrift {
+  0%, 100% { transform: rotate(-1.35deg) translateY(0);   }
+  50%       { transform: rotate( 1.45deg) translateY(-1px); }
+}
+
+@keyframes dotPulse {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow:
+      0 0  4px rgb(25 245 208 / 0.75),
+      0 0 10px rgb(25 245 208 / 0.3);
+  }
+  50% {
+    transform: scale(1.4);
+    box-shadow:
+      0 0  8px rgb(25 245 208 / 1),
+      0 0 20px rgb(25 245 208 / 0.55),
+      0 0 38px rgb(18 213 231 / 0.28);
+  }
+}
+
+/* --- Light theme --- */
+
+:global(html[data-client-theme="light"]) .badge {
+  background:
+    linear-gradient(135deg, rgb(240 253 250 / 0.97), rgb(204 251 241 / 0.97)) padding-box,
+    linear-gradient(135deg, #0d9488 0%, #0891b2 50%, #0369a1 100%) border-box;
+  color: #134e4a;
+}
+
+:global(html[data-client-theme="light"]) .badge::before {
+  background: linear-gradient(
+    108deg,
+    transparent 25%,
+    rgb(255 255 255 / 0.55) 50%,
+    transparent 75%
+  );
+}
+
+:global(html[data-client-theme="light"]) .card {
+  animation: cardFloat 4.4s ease-in-out infinite;
+}
+
+:global(html[data-client-theme="light"]) .panel {
+  animation: panelDrift 5.6s ease-in-out infinite;
+}
+
+:global(html[data-client-theme="light"]) .dot {
+  background: radial-gradient(circle, #5eead4 0%, #0891b2 65%);
+  box-shadow: 0 0 4px rgb(8 145 178 / 0.6);
+}
+
+:global(html[data-client-theme="light"]) .text {
+  background: linear-gradient(90deg, #0d6b5e 0%, #0e7490 45%, #1d4ed8 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+@media (max-width: 767px), (prefers-reduced-motion: reduce) {
+  .badge::before,
+  .card,
+  .panel,
+  .dot {
+    animation: none !important;
+  }
+}

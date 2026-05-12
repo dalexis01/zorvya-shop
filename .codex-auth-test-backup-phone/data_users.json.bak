@@ -1,0 +1,16 @@
+[
+  {
+    "id": "0fc49274-b526-49d4-a8af-492a77bee6f9",
+    "name": "dalexis hernandezz",
+    "email": "soydalexis@gmail.com",
+    "passwordHash": "39661c6b3a48417099f61624c06d661e:bd3ad407d90b1752a5a853bdc72bf8d18c4859716cddd1aeed3c4f8e0191cfae7e64252ca1e6e1d8529149863f4b6f3c340bc25cb1a38a10142d25d2e2de4675",
+    "phone": "6158945780",
+    "address": "Ringweg-Zuid 243, Paramaribo, Surinam",
+    "createdAt": "2026-04-20T21:49:16.694Z",
+    "updatedAt": "2026-04-29T18:02:14.372Z",
+    "isBlocked": false,
+    "blockedAt": null,
+    "acceptedTermsAt": null,
+    "acceptedTermsVersion": null
+  }
+]

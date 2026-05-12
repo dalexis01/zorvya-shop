@@ -1,0 +1,1111 @@
+import "server-only";
+
+import { readFile } from "node:fs/promises";
+import { stat } from "node:fs/promises";
+import path from "node:path";
+
+import { Pool, type PoolClient, type QueryResultRow } from "pg";
+
+import { summarizeOrders } from "@/lib/shop/order-status";
+import type {
+  DeliveryType,
+  StoredOrder,
+} from "@/lib/shop/types";
+import { readDataFile, writeDataFile } from "@/lib/server/storage";
+
+const ORDERS_FILE = "orders.json";
+const ORDERS_SCHEMA_FILE = path.join(
+  process.cwd(),
+  "db",
+  "migrations",
+  "001_orders_postgres.sql"
+);
+
+const USER_ORDERS_DEFAULT_LIMIT = 20;
+const USER_ORDERS_MAX_LIMIT = 50;
+const ADMIN_ORDERS_DEFAULT_LIMIT = 24;
+const ADMIN_ORDERS_MAX_LIMIT = 60;
+const ORDERS_PAGE_CACHE_TTL_MS = 15_000;
+const ORDER_RECORD_CACHE_TTL_MS = 30_000;
+
+type OrdersJsonCache = {
+  mtimeMs: number;
+  orders: StoredOrder[];
+  orderById: Map<string, StoredOrder>;
+  ordersByUserId: Map<string, StoredOrder[]>;
+};
+
+type OrderStatusFilter = "all" | "pending" | "completed" | "cancelled";
+type OrdersCursorPayload = {
+  createdAt: string;
+  id: string;
+};
+
+type OrderRow = QueryResultRow & {
+  id: string;
+  user_id: string | null;
+  customer_name: string;
+  customer_phone: string;
+  customer_email: string;
+  customer_address: string;
+  delivery_type: DeliveryType;
+  pickup_date: string | null;
+  pickup_time: string | null;
+  requested_agent_call: boolean;
+  items_json: StoredOrder["items"];
+  subtotal: number | string;
+  delivery_distance_km: number | string | null;
+  delivery_fee: number | string;
+  total: number | string;
+  payment_json: StoredOrder["payment"];
+  created_at: Date | string;
+  updated_at: Date | string;
+  cancelled_at: Date | string | null;
+  cancellation_reason: string | null;
+  cancelled_by: StoredOrder["cancelledBy"];
+  cancelled_by_name: string | null;
+  admin_reviewed_at: Date | string | null;
+  admin_status: StoredOrder["adminStatus"];
+  status_history_json: StoredOrder["statusHistory"];
+  issues_json: StoredOrder["issues"];
+};
+
+export type PaginatedOrdersResult = {
+  orders: StoredOrder[];
+  hasMore: boolean;
+  nextCursor: string | null;
+};
+
+export type PaginatedUserOrdersSummaryResult = PaginatedOrdersResult & {
+  latestOrder: StoredOrder | null;
+};
+
+export type PaginatedAdminOrdersResult = PaginatedOrdersResult;
+
+export type AdminOrdersMetaResult = {
+  newOrdersCount: number;
+  totalOrdersCount: number;
+  pendingOrdersCount: number;
+  completedOrdersCount: number;
+  cancelledOrdersCount: number;
+};
+
+export type AdminOrdersQueryInput = {
+  status?: OrderStatusFilter;
+  deliveryType?: DeliveryType | "all";
+  search?: string;
+  last4?: string;
+  cursor?: string | null;
+  limit?: number;
+};
+
+let poolInstance: Pool | null = null;
+let schemaReadyPromise: Promise<void> | null = null;
+let adminOrdersMetaCache: CacheEntry<AdminOrdersMetaResult> | null = null;
+let ordersJsonCache: OrdersJsonCache | null = null;
+const orderByIdCache = new Map<string, CacheEntry<StoredOrder>>();
+const paginatedUserOrdersCache = new Map<string, CacheEntry<PaginatedUserOrdersSummaryResult>>();
+const paginatedAdminOrdersCache = new Map<string, CacheEntry<PaginatedAdminOrdersResult>>();
+
+type CacheEntry<T> = {
+  expiresAt: number;
+  value: T;
+};
+
+function getPostgresConnectionString() {
+  return (
+    process.env.DATABASE_URL ||
+    process.env.POSTGRES_URL ||
+    process.env.SUPABASE_DB_URL ||
+    ""
+  ).trim();
+}
+
+export function isOrdersDatabaseConfigured() {
+  return Boolean(getPostgresConnectionString());
+}
+
+function shouldUseSsl(connectionString: string) {
+  if (process.env.PGSSL === "disable" || process.env.ORDERS_DB_SSL_DISABLE === "true") {
+    return false;
+  }
+
+  return connectionString.includes("supabase") || process.env.NODE_ENV === "production";
+}
+
+async function getOrdersPool() {
+  const connectionString = getPostgresConnectionString();
+
+  if (!connectionString) {
+    throw new Error("ORDERS_DB_NOT_CONFIGURED");
+  }
+
+  if (!poolInstance) {
+    poolInstance = new Pool({
+      connectionString,
+      max: 10,
+      idleTimeoutMillis: 30_000,
+      ssl: shouldUseSsl(connectionString) ? { rejectUnauthorized: false } : undefined,
+    });
+  }
+
+  if (!schemaReadyPromise) {
+    schemaReadyPromise = ensureOrdersSchema(poolInstance);
+  }
+
+  await schemaReadyPromise;
+  return poolInstance;
+}
+
+async function ensureOrdersSchema(pool: Pool) {
+  const sql = await readFile(ORDERS_SCHEMA_FILE, "utf8");
+  await pool.query(sql);
+}
+
+function orderRowToStoredOrder(row: OrderRow): StoredOrder {
+  return {
+    id: row.id,
+    userId: row.user_id,
+    customerName: row.customer_name,
+    customerPhone: row.customer_phone,
+    customerEmail: row.customer_email,
+    customerAddress: row.customer_address,
+    deliveryType: row.delivery_type,
+    pickupDate: row.pickup_date,
+    pickupTime: row.pickup_time,
+    requestedAgentCall: Boolean(row.requested_agent_call),
+    items: Array.isArray(row.items_json) ? row.items_json : [],
+    subtotal: toNumber(row.subtotal),
+    deliveryDistanceKm:
+      row.delivery_distance_km === null ? null : toNumber(row.delivery_distance_km),
+    deliveryFee: toNumber(row.delivery_fee),
+    total: toNumber(row.total),
+    payment: row.payment_json,
+    createdAt: toIsoString(row.created_at),
+    updatedAt: toIsoString(row.updated_at),
+    cancelledAt: row.cancelled_at ? toIsoString(row.cancelled_at) : null,
+    cancellationReason: row.cancellation_reason,
+    cancelledBy: row.cancelled_by ?? null,
+    cancelledByName: row.cancelled_by_name,
+    adminReviewedAt: row.admin_reviewed_at ? toIsoString(row.admin_reviewed_at) : null,
+    adminStatus: row.admin_status ?? null,
+    statusHistory: Array.isArray(row.status_history_json) ? row.status_history_json : [],
+    issues: Array.isArray(row.issues_json) ? row.issues_json : [],
+  };
+}
+
+function toNumber(value: number | string) {
+  return typeof value === "number" ? value : Number(value);
+}
+
+function toIsoString(value: Date | string) {
+  return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
+}
+
+function encodeOrdersCursor(input: OrdersCursorPayload) {
+  return Buffer.from(JSON.stringify(input), "utf8").toString("base64url");
+}
+
+function decodeOrdersCursor(cursor?: string | null): OrdersCursorPayload | null {
+  if (!cursor) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(Buffer.from(cursor, "base64url").toString("utf8")) as OrdersCursorPayload;
+
+    if (!parsed?.createdAt || !parsed?.id) {
+      return null;
+    }
+
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function clampLimit(limit: number | undefined, fallback: number, max: number) {
+  if (!limit || !Number.isFinite(limit)) {
+    return fallback;
+  }
+
+  return Math.max(1, Math.min(max, Math.trunc(limit)));
+}
+
+function getCacheValue<T>(entry: CacheEntry<T> | null | undefined) {
+  if (!entry) {
+    return null;
+  }
+
+  if (entry.expiresAt <= Date.now()) {
+    return null;
+  }
+
+  return entry.value;
+}
+
+function getMapCacheValue<T>(cache: Map<string, CacheEntry<T>>, key: string) {
+  const entry = cache.get(key);
+
+  if (!entry) {
+    return null;
+  }
+
+  if (entry.expiresAt <= Date.now()) {
+    cache.delete(key);
+    return null;
+  }
+
+  return entry.value;
+}
+
+function setMapCacheValue<T>(
+  cache: Map<string, CacheEntry<T>>,
+  key: string,
+  value: T,
+  ttlMs: number
+) {
+  cache.set(key, {
+    expiresAt: Date.now() + ttlMs,
+    value,
+  });
+}
+
+function clearOrdersStoreCaches(orderId?: string) {
+  paginatedUserOrdersCache.clear();
+  paginatedAdminOrdersCache.clear();
+  adminOrdersMetaCache = null;
+
+  if (orderId) {
+    orderByIdCache.delete(orderId);
+    return;
+  }
+
+  orderByIdCache.clear();
+}
+
+function buildUserOrdersCacheKey(input: {
+  userId: string;
+  cursor?: string | null;
+  limit: number;
+}) {
+  return JSON.stringify([input.userId, input.cursor ?? "", input.limit]);
+}
+
+function buildAdminOrdersCacheKey(input: AdminOrdersQueryInput & { limit: number }) {
+  return JSON.stringify([
+    input.status ?? "all",
+    input.deliveryType ?? "all",
+    input.search?.trim() ?? "",
+    input.last4?.trim().toUpperCase() ?? "",
+    input.cursor ?? "",
+    input.limit,
+  ]);
+}
+
+function getCompletedStatusSql() {
+  return `(
+    cancelled_at IS NULL AND (
+      admin_status = 'Pedido completado'
+      OR (
+        admin_status IS NULL
+        AND delivery_type = 'delivery'
+        AND created_at <= NOW() - INTERVAL '24 hours'
+      )
+    )
+  )`;
+}
+
+function applyAdminFilters(
+  baseClauses: string[],
+  params: Array<string | number | Date>,
+  input: AdminOrdersQueryInput
+) {
+  const status = input.status ?? "all";
+  const deliveryType = input.deliveryType ?? "all";
+  const search = input.search?.trim();
+  const last4 = input.last4?.trim().toUpperCase();
+
+  if (deliveryType !== "all") {
+    params.push(deliveryType);
+    baseClauses.push(`delivery_type = $${params.length}`);
+  }
+
+  if (status === "cancelled") {
+    baseClauses.push("cancelled_at IS NOT NULL");
+  } else if (status === "completed") {
+    baseClauses.push(getCompletedStatusSql());
+  } else if (status === "pending") {
+    baseClauses.push(`cancelled_at IS NULL AND NOT ${getCompletedStatusSql()}`);
+  }
+
+  if (search) {
+    params.push(`%${search}%`);
+    baseClauses.push(`(
+      id ILIKE $${params.length}
+      OR customer_name ILIKE $${params.length}
+      OR customer_email ILIKE $${params.length}
+      OR customer_phone ILIKE $${params.length}
+      OR customer_address ILIKE $${params.length}
+      OR COALESCE(admin_status, '') ILIKE $${params.length}
+    )`);
+  }
+
+  if (last4) {
+    params.push(`%${last4}`);
+    baseClauses.push(`right(id, 4) ILIKE $${params.length}`);
+  }
+}
+
+async function queryOrdersPageFromDatabase(input: {
+  whereClauses: string[];
+  params: Array<string | number | Date>;
+  cursor?: string | null;
+  limit: number;
+}) {
+  const pool = await getOrdersPool();
+  const whereClauses = [...input.whereClauses];
+  const params = [...input.params];
+  const cursor = decodeOrdersCursor(input.cursor);
+
+  if (cursor) {
+    params.push(cursor.createdAt);
+    const createdAtPosition = params.length;
+    params.push(cursor.id);
+    const idPosition = params.length;
+    whereClauses.push(
+      `(created_at < $${createdAtPosition}::timestamptz OR (created_at = $${createdAtPosition}::timestamptz AND id < $${idPosition}))`
+    );
+  }
+
+  params.push(input.limit + 1);
+  const rows = await pool.query<OrderRow>(
+    `
+      SELECT
+        id,
+        user_id,
+        customer_name,
+        customer_phone,
+        customer_email,
+        customer_address,
+        delivery_type,
+        pickup_date,
+        pickup_time,
+        requested_agent_call,
+        items_json,
+        subtotal,
+        delivery_distance_km,
+        delivery_fee,
+        total,
+        payment_json,
+        created_at,
+        updated_at,
+        cancelled_at,
+        cancellation_reason,
+        cancelled_by,
+        cancelled_by_name,
+        admin_reviewed_at,
+        admin_status,
+        status_history_json,
+        issues_json
+      FROM orders
+      ${whereClauses.length ? `WHERE ${whereClauses.join(" AND ")}` : ""}
+      ORDER BY created_at DESC, id DESC
+      LIMIT $${params.length}
+    `,
+    params
+  );
+
+  const hasMore = rows.rows.length > input.limit;
+  const visibleRows = hasMore ? rows.rows.slice(0, input.limit) : rows.rows;
+  const orders = visibleRows.map(orderRowToStoredOrder);
+  const tailOrder = visibleRows.at(-1);
+
+  return {
+    orders,
+    hasMore,
+    nextCursor:
+      hasMore && tailOrder
+        ? encodeOrdersCursor({
+            createdAt: toIsoString(tailOrder.created_at),
+            id: tailOrder.id,
+          })
+        : null,
+  };
+}
+
+async function readOrdersFromJsonFile() {
+  const filePath = path.join(process.cwd(), "data", ORDERS_FILE);
+
+  try {
+    const fileStat = await stat(filePath);
+    const cachedOrders = ordersJsonCache;
+
+    if (cachedOrders && cachedOrders.mtimeMs === fileStat.mtimeMs) {
+      return cachedOrders.orders;
+    }
+
+    const orders = await readDataFile<StoredOrder[]>(ORDERS_FILE, []);
+    const sortedOrders = [...orders].sort(
+      (left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime()
+    );
+    const orderById = new Map<string, StoredOrder>();
+    const ordersByUserId = new Map<string, StoredOrder[]>();
+
+    for (const order of sortedOrders) {
+      orderById.set(order.id, order);
+
+      if (!order.userId) {
+        continue;
+      }
+
+      const currentOrders = ordersByUserId.get(order.userId);
+
+      if (currentOrders) {
+        currentOrders.push(order);
+      } else {
+        ordersByUserId.set(order.userId, [order]);
+      }
+    }
+
+    ordersJsonCache = {
+      mtimeMs: fileStat.mtimeMs,
+      orders: sortedOrders,
+      orderById,
+      ordersByUserId,
+    };
+
+    return sortedOrders;
+  } catch {
+    const orders = await readDataFile<StoredOrder[]>(ORDERS_FILE, []);
+    return [...orders].sort(
+      (left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime()
+    );
+  }
+}
+
+async function writeOrdersToJsonFile(orders: StoredOrder[]) {
+  await writeDataFile(ORDERS_FILE, orders);
+  ordersJsonCache = null;
+}
+
+async function getJsonOrderById(orderId: string) {
+  await readOrdersFromJsonFile();
+  return ordersJsonCache?.orderById.get(orderId) ?? null;
+}
+
+async function getJsonOrdersByUserId(userId: string) {
+  await readOrdersFromJsonFile();
+  return ordersJsonCache?.ordersByUserId.get(userId) ?? [];
+}
+
+export async function loadAllOrdersFromStore() {
+  if (!isOrdersDatabaseConfigured()) {
+    return readOrdersFromJsonFile();
+  }
+
+  const pool = await getOrdersPool();
+  const result = await pool.query<OrderRow>(
+    `
+      SELECT
+        id,
+        user_id,
+        customer_name,
+        customer_phone,
+        customer_email,
+        customer_address,
+        delivery_type,
+        pickup_date,
+        pickup_time,
+        requested_agent_call,
+        items_json,
+        subtotal,
+        delivery_distance_km,
+        delivery_fee,
+        total,
+        payment_json,
+        created_at,
+        updated_at,
+        cancelled_at,
+        cancellation_reason,
+        cancelled_by,
+        cancelled_by_name,
+        admin_reviewed_at,
+        admin_status,
+        status_history_json,
+        issues_json
+      FROM orders
+      ORDER BY created_at DESC, id DESC
+    `
+  );
+
+  return result.rows.map(orderRowToStoredOrder);
+}
+
+export async function loadOrderByIdFromStore(orderId: string) {
+  if (!isOrdersDatabaseConfigured()) {
+    return getJsonOrderById(orderId);
+  }
+
+  const cachedOrder = getMapCacheValue(orderByIdCache, orderId);
+
+  if (cachedOrder) {
+    return cachedOrder;
+  }
+
+  const pool = await getOrdersPool();
+  const result = await pool.query<OrderRow>(
+    `
+      SELECT
+        id,
+        user_id,
+        customer_name,
+        customer_phone,
+        customer_email,
+        customer_address,
+        delivery_type,
+        pickup_date,
+        pickup_time,
+        requested_agent_call,
+        items_json,
+        subtotal,
+        delivery_distance_km,
+        delivery_fee,
+        total,
+        payment_json,
+        created_at,
+        updated_at,
+        cancelled_at,
+        cancellation_reason,
+        cancelled_by,
+        cancelled_by_name,
+        admin_reviewed_at,
+        admin_status,
+        status_history_json,
+        issues_json
+      FROM orders
+      WHERE id = $1
+      LIMIT 1
+    `,
+    [orderId]
+  );
+
+  const order = result.rows[0] ? orderRowToStoredOrder(result.rows[0]) : null;
+
+  if (order) {
+    setMapCacheValue(orderByIdCache, orderId, order, ORDER_RECORD_CACHE_TTL_MS);
+  }
+
+  return order;
+}
+
+export async function insertOrderIntoStore(order: StoredOrder) {
+  if (!isOrdersDatabaseConfigured()) {
+    const orders = await readOrdersFromJsonFile();
+    orders.push(order);
+    await writeOrdersToJsonFile(orders);
+    return;
+  }
+
+  const pool = await getOrdersPool();
+  await pool.query(
+    `
+      INSERT INTO orders (
+        id,
+        user_id,
+        customer_name,
+        customer_phone,
+        customer_email,
+        customer_address,
+        delivery_type,
+        pickup_date,
+        pickup_time,
+        requested_agent_call,
+        items_json,
+        subtotal,
+        delivery_distance_km,
+        delivery_fee,
+        total,
+        payment_json,
+        created_at,
+        updated_at,
+        cancelled_at,
+        cancellation_reason,
+        cancelled_by,
+        cancelled_by_name,
+        admin_reviewed_at,
+        admin_status,
+        status_history_json,
+        issues_json
+      ) VALUES (
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
+        $11::jsonb, $12, $13, $14, $15, $16::jsonb, $17::timestamptz, $18::timestamptz,
+        $19::timestamptz, $20, $21, $22, $23::timestamptz, $24, $25::jsonb, $26::jsonb
+      )
+      ON CONFLICT (id) DO NOTHING
+    `,
+    [
+      order.id,
+      order.userId,
+      order.customerName,
+      order.customerPhone,
+      order.customerEmail,
+      order.customerAddress,
+      order.deliveryType,
+      order.pickupDate,
+      order.pickupTime,
+      order.requestedAgentCall,
+      JSON.stringify(order.items),
+      order.subtotal,
+      order.deliveryDistanceKm,
+      order.deliveryFee,
+      order.total,
+      JSON.stringify(order.payment),
+      order.createdAt,
+      order.updatedAt,
+      order.cancelledAt,
+      order.cancellationReason,
+      order.cancelledBy,
+      order.cancelledByName,
+      order.adminReviewedAt,
+      order.adminStatus,
+      JSON.stringify(order.statusHistory),
+      JSON.stringify(order.issues),
+    ]
+  );
+
+  clearOrdersStoreCaches(order.id);
+  setMapCacheValue(orderByIdCache, order.id, order, ORDER_RECORD_CACHE_TTL_MS);
+}
+
+export async function updateOrderInStore(order: StoredOrder) {
+  if (!isOrdersDatabaseConfigured()) {
+    const orders = await readOrdersFromJsonFile();
+    const index = orders.findIndex((currentOrder) => currentOrder.id === order.id);
+
+    if (index === -1) {
+      throw new Error("ORDER_NOT_FOUND");
+    }
+
+    orders[index] = order;
+    await writeOrdersToJsonFile(orders);
+    return;
+  }
+
+  const pool = await getOrdersPool();
+  await pool.query(
+    `
+      UPDATE orders
+      SET
+        user_id = $2,
+        customer_name = $3,
+        customer_phone = $4,
+        customer_email = $5,
+        customer_address = $6,
+        delivery_type = $7,
+        pickup_date = $8,
+        pickup_time = $9,
+        requested_agent_call = $10,
+        items_json = $11::jsonb,
+        subtotal = $12,
+        delivery_distance_km = $13,
+        delivery_fee = $14,
+        total = $15,
+        payment_json = $16::jsonb,
+        created_at = $17::timestamptz,
+        updated_at = $18::timestamptz,
+        cancelled_at = $19::timestamptz,
+        cancellation_reason = $20,
+        cancelled_by = $21,
+        cancelled_by_name = $22,
+        admin_reviewed_at = $23::timestamptz,
+        admin_status = $24,
+        status_history_json = $25::jsonb,
+        issues_json = $26::jsonb
+      WHERE id = $1
+    `,
+    [
+      order.id,
+      order.userId,
+      order.customerName,
+      order.customerPhone,
+      order.customerEmail,
+      order.customerAddress,
+      order.deliveryType,
+      order.pickupDate,
+      order.pickupTime,
+      order.requestedAgentCall,
+      JSON.stringify(order.items),
+      order.subtotal,
+      order.deliveryDistanceKm,
+      order.deliveryFee,
+      order.total,
+      JSON.stringify(order.payment),
+      order.createdAt,
+      order.updatedAt,
+      order.cancelledAt,
+      order.cancellationReason,
+      order.cancelledBy,
+      order.cancelledByName,
+      order.adminReviewedAt,
+      order.adminStatus,
+      JSON.stringify(order.statusHistory),
+      JSON.stringify(order.issues),
+    ]
+  );
+
+  clearOrdersStoreCaches(order.id);
+  setMapCacheValue(orderByIdCache, order.id, order, ORDER_RECORD_CACHE_TTL_MS);
+}
+
+export async function loadOrdersByUserIdFromStore(userId: string) {
+  if (!isOrdersDatabaseConfigured()) {
+    return [...(await getJsonOrdersByUserId(userId))];
+  }
+
+  const result = await queryOrdersPageFromDatabase({
+    whereClauses: ["user_id = $1"],
+    params: [userId],
+    limit: 10_000,
+  });
+
+  return result.orders;
+}
+
+export async function loadPaginatedUserOrdersSummaryFromStore(input: {
+  userId: string;
+  cursor?: string | null;
+  limit?: number;
+}): Promise<PaginatedUserOrdersSummaryResult> {
+  const limit = clampLimit(input.limit, USER_ORDERS_DEFAULT_LIMIT, USER_ORDERS_MAX_LIMIT);
+  const cacheKey = buildUserOrdersCacheKey({
+    userId: input.userId,
+    cursor: input.cursor,
+    limit,
+  });
+
+  if (!isOrdersDatabaseConfigured()) {
+    const orders = await loadOrdersByUserIdFromStore(input.userId);
+    const cursor = decodeOrdersCursor(input.cursor);
+    const startIndex = cursor
+      ? orders.findIndex(
+          (order) => order.createdAt === cursor.createdAt && order.id === cursor.id
+        ) + 1
+      : 0;
+    const visibleOrders = orders.slice(Math.max(0, startIndex), Math.max(0, startIndex) + limit + 1);
+    const hasMore = visibleOrders.length > limit;
+    const pageOrders = hasMore ? visibleOrders.slice(0, limit) : visibleOrders;
+    const tailOrder = pageOrders.at(-1);
+
+    return {
+      latestOrder: !input.cursor ? orders[0] ?? null : null,
+      orders: pageOrders,
+      hasMore,
+      nextCursor:
+        hasMore && tailOrder
+          ? encodeOrdersCursor({ createdAt: tailOrder.createdAt, id: tailOrder.id })
+          : null,
+    };
+  }
+
+  const cachedPage = getMapCacheValue(paginatedUserOrdersCache, cacheKey);
+
+  if (cachedPage) {
+    return cachedPage;
+  }
+
+  const page = await queryOrdersPageFromDatabase({
+    whereClauses: ["user_id = $1"],
+    params: [input.userId],
+    cursor: input.cursor,
+    limit,
+  });
+
+  const result = {
+    latestOrder: !input.cursor ? page.orders[0] ?? null : null,
+    ...page,
+  };
+  setMapCacheValue(paginatedUserOrdersCache, cacheKey, result, ORDERS_PAGE_CACHE_TTL_MS);
+  return result;
+}
+
+export async function loadPaginatedAdminOrdersFromStore(
+  input: AdminOrdersQueryInput
+): Promise<PaginatedAdminOrdersResult> {
+  const limit = clampLimit(input.limit, ADMIN_ORDERS_DEFAULT_LIMIT, ADMIN_ORDERS_MAX_LIMIT);
+  const cacheKey = buildAdminOrdersCacheKey({
+    ...input,
+    limit,
+  });
+
+  if (!isOrdersDatabaseConfigured()) {
+    const orders = await readOrdersFromJsonFile();
+    const normalizedSearch = input.search?.trim().toLowerCase() ?? "";
+    const normalizedLast4 = input.last4?.trim().toUpperCase() ?? "";
+
+    const filteredOrders = orders
+      .filter((order) => {
+        if (input.deliveryType && input.deliveryType !== "all" && order.deliveryType !== input.deliveryType) {
+          return false;
+        }
+
+        if (input.status === "cancelled") {
+          return Boolean(order.cancelledAt);
+        }
+
+        const summary = summarizeOrders([order]).orders[0];
+
+        if (input.status === "completed" && !summary?.status.includes("complet")) {
+          return false;
+        }
+
+        if (input.status === "pending" && (summary?.status.includes("complet") || order.cancelledAt)) {
+          return false;
+        }
+
+        if (
+          normalizedSearch &&
+          ![
+            order.id,
+            order.customerName,
+            order.customerEmail,
+            order.customerPhone,
+            order.customerAddress,
+            order.adminStatus ?? "",
+          ]
+            .join(" ")
+            .toLowerCase()
+            .includes(normalizedSearch)
+        ) {
+          return false;
+        }
+
+        if (normalizedLast4 && !order.id.slice(-4).toUpperCase().includes(normalizedLast4)) {
+          return false;
+        }
+
+        return true;
+      })
+      .sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime());
+
+    const cursor = decodeOrdersCursor(input.cursor);
+    const startIndex = cursor
+      ? filteredOrders.findIndex(
+          (order) => order.createdAt === cursor.createdAt && order.id === cursor.id
+        ) + 1
+      : 0;
+    const visibleOrders = filteredOrders.slice(
+      Math.max(0, startIndex),
+      Math.max(0, startIndex) + limit + 1
+    );
+    const hasMore = visibleOrders.length > limit;
+    const pageOrders = hasMore ? visibleOrders.slice(0, limit) : visibleOrders;
+    const tailOrder = pageOrders.at(-1);
+
+    return {
+      orders: pageOrders,
+      hasMore,
+      nextCursor:
+        hasMore && tailOrder
+          ? encodeOrdersCursor({ createdAt: tailOrder.createdAt, id: tailOrder.id })
+          : null,
+    };
+  }
+
+  const cachedPage = getMapCacheValue(paginatedAdminOrdersCache, cacheKey);
+
+  if (cachedPage) {
+    return cachedPage;
+  }
+
+  const whereClauses: string[] = [];
+  const params: Array<string | number | Date> = [];
+  applyAdminFilters(whereClauses, params, input);
+  const page = await queryOrdersPageFromDatabase({
+    whereClauses,
+    params,
+    cursor: input.cursor,
+    limit,
+  });
+  setMapCacheValue(paginatedAdminOrdersCache, cacheKey, page, ORDERS_PAGE_CACHE_TTL_MS);
+  return page;
+}
+
+export async function loadAdminOrdersMetaFromStore(): Promise<AdminOrdersMetaResult> {
+  if (!isOrdersDatabaseConfigured()) {
+    const orders = await readOrdersFromJsonFile();
+    const summaries = summarizeOrders(orders).orders;
+
+    return {
+      newOrdersCount: summaries.filter((order) => !order.adminReviewedAt).length,
+      totalOrdersCount: summaries.length,
+      pendingOrdersCount: summaries.filter(
+        (order) => !order.cancelledAt && !order.status.includes("complet")
+      ).length,
+      completedOrdersCount: summaries.filter((order) => order.status.includes("complet")).length,
+      cancelledOrdersCount: summaries.filter((order) => Boolean(order.cancelledAt)).length,
+    };
+  }
+
+  const cachedMeta = getCacheValue(adminOrdersMetaCache);
+
+  if (cachedMeta) {
+    return cachedMeta;
+  }
+
+  const pool = await getOrdersPool();
+  const result = await pool.query<{
+    new_orders_count: number | string;
+    total_orders_count: number | string;
+    pending_orders_count: number | string;
+    completed_orders_count: number | string;
+    cancelled_orders_count: number | string;
+  }>(
+    `
+      SELECT
+        COUNT(*)::int AS total_orders_count,
+        COUNT(*) FILTER (WHERE admin_reviewed_at IS NULL)::int AS new_orders_count,
+        COUNT(*) FILTER (WHERE cancelled_at IS NOT NULL)::int AS cancelled_orders_count,
+        COUNT(*) FILTER (WHERE ${getCompletedStatusSql()})::int AS completed_orders_count,
+        COUNT(*) FILTER (
+          WHERE cancelled_at IS NULL AND NOT ${getCompletedStatusSql()}
+        )::int AS pending_orders_count
+      FROM orders
+    `
+  );
+
+  const row = result.rows[0];
+
+  const meta = {
+    newOrdersCount: toNumber(row.new_orders_count),
+    totalOrdersCount: toNumber(row.total_orders_count),
+    pendingOrdersCount: toNumber(row.pending_orders_count),
+    completedOrdersCount: toNumber(row.completed_orders_count),
+    cancelledOrdersCount: toNumber(row.cancelled_orders_count),
+  };
+  adminOrdersMetaCache = {
+    expiresAt: Date.now() + ORDERS_PAGE_CACHE_TTL_MS,
+    value: meta,
+  };
+  return meta;
+}
+
+export async function migrateOrdersJsonToStore() {
+  if (!isOrdersDatabaseConfigured()) {
+    throw new Error("ORDERS_DB_NOT_CONFIGURED");
+  }
+
+  const orders = await readOrdersFromJsonFile();
+  const pool = await getOrdersPool();
+  const client = await pool.connect();
+
+  try {
+    await client.query("BEGIN");
+
+    for (const order of orders) {
+      await upsertOrderWithClient(client, order);
+    }
+
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+
+  clearOrdersStoreCaches();
+}
+
+async function upsertOrderWithClient(client: PoolClient, order: StoredOrder) {
+  await client.query(
+    `
+      INSERT INTO orders (
+        id,
+        user_id,
+        customer_name,
+        customer_phone,
+        customer_email,
+        customer_address,
+        delivery_type,
+        pickup_date,
+        pickup_time,
+        requested_agent_call,
+        items_json,
+        subtotal,
+        delivery_distance_km,
+        delivery_fee,
+        total,
+        payment_json,
+        created_at,
+        updated_at,
+        cancelled_at,
+        cancellation_reason,
+        cancelled_by,
+        cancelled_by_name,
+        admin_reviewed_at,
+        admin_status,
+        status_history_json,
+        issues_json
+      ) VALUES (
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
+        $11::jsonb, $12, $13, $14, $15, $16::jsonb, $17::timestamptz, $18::timestamptz,
+        $19::timestamptz, $20, $21, $22, $23::timestamptz, $24, $25::jsonb, $26::jsonb
+      )
+      ON CONFLICT (id) DO UPDATE SET
+        user_id = EXCLUDED.user_id,
+        customer_name = EXCLUDED.customer_name,
+        customer_phone = EXCLUDED.customer_phone,
+        customer_email = EXCLUDED.customer_email,
+        customer_address = EXCLUDED.customer_address,
+        delivery_type = EXCLUDED.delivery_type,
+        pickup_date = EXCLUDED.pickup_date,
+        pickup_time = EXCLUDED.pickup_time,
+        requested_agent_call = EXCLUDED.requested_agent_call,
+        items_json = EXCLUDED.items_json,
+        subtotal = EXCLUDED.subtotal,
+        delivery_distance_km = EXCLUDED.delivery_distance_km,
+        delivery_fee = EXCLUDED.delivery_fee,
+        total = EXCLUDED.total,
+        payment_json = EXCLUDED.payment_json,
+        created_at = EXCLUDED.created_at,
+        updated_at = EXCLUDED.updated_at,
+        cancelled_at = EXCLUDED.cancelled_at,
+        cancellation_reason = EXCLUDED.cancellation_reason,
+        cancelled_by = EXCLUDED.cancelled_by,
+        cancelled_by_name = EXCLUDED.cancelled_by_name,
+        admin_reviewed_at = EXCLUDED.admin_reviewed_at,
+        admin_status = EXCLUDED.admin_status,
+        status_history_json = EXCLUDED.status_history_json,
+        issues_json = EXCLUDED.issues_json
+    `,
+    [
+      order.id,
+      order.userId,
+      order.customerName,
+      order.customerPhone,
+      order.customerEmail,
+      order.customerAddress,
+      order.deliveryType,
+      order.pickupDate,
+      order.pickupTime,
+      order.requestedAgentCall,
+      JSON.stringify(order.items),
+      order.subtotal,
+      order.deliveryDistanceKm,
+      order.deliveryFee,
+      order.total,
+      JSON.stringify(order.payment),
+      order.createdAt,
+      order.updatedAt,
+      order.cancelledAt,
+      order.cancellationReason,
+      order.cancelledBy,
+      order.cancelledByName,
+      order.adminReviewedAt,
+      order.adminStatus,
+      JSON.stringify(order.statusHistory),
+      JSON.stringify(order.issues),
+    ]
+  );
+}

@@ -1,0 +1,485 @@
+.card {
+  position: relative;
+  isolation: isolate;
+  content-visibility: auto;
+  contain-intrinsic-size: 16rem 16rem;
+  background: linear-gradient(145deg, #111827 0%, #1e293b 52%, #334155 100%);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.08),
+    inset 0 0 0 1px rgb(148 163 184 / 0.1);
+}
+
+.cardBackdrop,
+.cardOverlay {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+.cardBackdrop {
+  overflow: hidden;
+  transform: scale(1.06);
+  filter: blur(9px) saturate(120%) brightness(1.08);
+  opacity: 0.84;
+  background:
+    radial-gradient(circle at 12% 24%, rgb(255 255 255 / 0.82) 0 1px, transparent 2px),
+    radial-gradient(circle at 28% 60%, rgb(255 255 255 / 0.7) 0 1.2px, transparent 2.2px),
+    radial-gradient(circle at 46% 18%, rgb(255 255 255 / 0.88) 0 1px, transparent 2px),
+    radial-gradient(circle at 66% 42%, rgb(255 255 255 / 0.78) 0 1.4px, transparent 2.4px),
+    radial-gradient(circle at 84% 20%, rgb(255 255 255 / 0.72) 0 1px, transparent 2px),
+    radial-gradient(circle at 18% 82%, rgb(255 255 255 / 0.76) 0 1.3px, transparent 2.3px),
+    radial-gradient(circle at 58% 76%, rgb(255 255 255 / 0.9) 0 1.4px, transparent 2.4px),
+    radial-gradient(circle at 90% 62%, rgb(255 255 255 / 0.68) 0 1.1px, transparent 2.1px),
+    linear-gradient(145deg, #172033 0%, #22314a 50%, #42536d 100%);
+}
+
+.cardBackdrop::before,
+.cardBackdrop::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+}
+
+.cardBackdrop::before {
+  background:
+    radial-gradient(circle at 20% 30%, rgb(255 255 255 / 0.1) 0%, transparent 50%),
+    repeating-conic-gradient(
+      from 0deg at 50% 50%,
+      rgb(255 255 255 / 0.05) 0deg 10deg,
+      transparent 10deg 30deg
+    ),
+    radial-gradient(circle at 8% 14%, rgb(255 255 255 / 0.62) 0 1px, transparent 2px),
+    radial-gradient(circle at 34% 52%, rgb(255 255 255 / 0.74) 0 1px, transparent 2px),
+    radial-gradient(circle at 55% 24%, rgb(255 255 255 / 0.58) 0 1.5px, transparent 2.5px),
+    radial-gradient(circle at 72% 68%, rgb(255 255 255 / 0.88) 0 1.2px, transparent 2.2px),
+    radial-gradient(circle at 88% 86%, rgb(255 255 255 / 0.66) 0 1px, transparent 2px),
+    radial-gradient(circle at 16% 72%, rgb(255 255 255 / 0.76) 0 1.5px, transparent 2.5px);
+}
+
+.cardBackdrop::after {
+  background:
+    radial-gradient(circle at 80% 70%, rgb(255 255 255 / 0.08) 0%, transparent 40%),
+    repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 42px,
+      rgb(255 255 255 / 0.03) 42px,
+      rgb(255 255 255 / 0.03) 44px,
+      transparent 44px,
+      transparent 52px
+    ),
+    repeating-linear-gradient(
+      90deg,
+      transparent,
+      transparent 42px,
+      rgb(255 255 255 / 0.03) 42px,
+      rgb(255 255 255 / 0.03) 44px,
+      transparent 44px,
+      transparent 52px
+    ),
+    radial-gradient(circle at 14% 28%, rgb(255 255 255 / 0.56) 0 1px, transparent 2px),
+    radial-gradient(circle at 38% 44%, rgb(255 255 255 / 0.78) 0 1.4px, transparent 2.4px),
+    radial-gradient(circle at 57% 62%, rgb(255 255 255 / 0.68) 0 1.2px, transparent 2.2px),
+    radial-gradient(circle at 76% 26%, rgb(255 255 255 / 0.88) 0 1px, transparent 2px),
+    radial-gradient(circle at 92% 46%, rgb(255 255 255 / 0.54) 0 1.3px, transparent 2.3px),
+    radial-gradient(circle at 22% 74%, rgb(255 255 255 / 0.74) 0 1.5px, transparent 2.5px);
+}
+
+.cardOverlay {
+  background:
+    radial-gradient(circle at top, rgb(96 165 250 / 0.18), transparent 34%),
+    radial-gradient(circle at 82% 18%, rgb(255 255 255 / 0.08), transparent 24%),
+    linear-gradient(180deg, rgb(15 23 42 / 0.1) 0%, rgb(15 23 42 / 0.22) 42%, rgb(15 23 42 / 0.68) 100%);
+  box-shadow:
+    inset 0 0 0 1px rgb(191 219 254 / 0.08),
+    inset 0 1px 0 rgb(255 255 255 / 0.09);
+}
+
+.cardContent {
+  position: relative;
+  z-index: 1;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  font-feature-settings:
+    "kern" 1,
+    "liga" 1,
+    "calt" 1;
+}
+
+.mediaShell {
+  background:
+    linear-gradient(180deg, rgb(17 24 39 / 0.28), rgb(15 23 42 / 0.54)),
+    rgb(15 23 42 / 0.52);
+}
+
+.eyebrow {
+  font-family: var(--font-inter), var(--font-manrope), sans-serif;
+  color: rgb(226 232 240 / 0.7);
+  text-shadow: 0 1px 8px rgb(255 255 255 / 0.03);
+}
+
+.badge {
+  background: rgb(2 6 23 / 0.55);
+  color: #fff;
+  backdrop-filter: blur(12px);
+}
+
+.topBadge {
+  background: #22d3ee;
+  color: #020617;
+}
+
+.newBadge {
+  border: 1px solid rgb(251 191 36 / 0.5);
+  background: linear-gradient(135deg, rgb(249 115 22 / 0.96), rgb(234 179 8 / 0.96));
+  color: #fff;
+  box-shadow: 0 16px 34px rgb(249 115 22 / 0.28);
+  backdrop-filter: blur(12px);
+}
+
+.title {
+  font-family: var(--font-sora), var(--font-manrope), sans-serif;
+  font-weight: 700;
+  letter-spacing: -0.018em;
+  color: #fff;
+  text-shadow:
+    0 1px 10px rgb(255 255 255 / 0.05),
+    0 10px 24px rgb(2 6 23 / 0.28);
+}
+
+.description {
+  font-family: var(--font-inter), var(--font-manrope), sans-serif;
+  font-weight: 500;
+  letter-spacing: 0.005em;
+  color: rgb(248 250 252 / 0.92);
+  text-wrap: pretty;
+}
+
+.chipText {
+  font-family: var(--font-inter), var(--font-manrope), sans-serif;
+  font-weight: 700;
+  color: rgb(248 250 252 / 0.94);
+}
+
+.ratingText {
+  font-family: var(--font-inter), var(--font-manrope), sans-serif;
+  font-weight: 600;
+  color: rgb(241 245 249 / 0.78);
+}
+
+.price {
+  font-family: var(--font-sora), var(--font-manrope), sans-serif;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  background: linear-gradient(135deg, #19f5d0 0%, #12d5e7 54%, #1ea8ff 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 0 6px rgb(25 245 208 / 0.32));
+}
+
+.priceScene {
+  perspective: 280px;
+  display: inline-block;
+}
+
+.priceCube {
+  display: inline-block;
+  position: relative;
+  transform-style: preserve-3d;
+  transition: transform 0.42s cubic-bezier(0.4, 0, 0.2, 1);
+  line-height: 1;
+}
+
+.card:hover .priceCube {
+  transform: rotateX(90deg);
+}
+
+.priceSideTop {
+  display: block;
+  backface-visibility: hidden;
+  transform: rotateX(0deg) translateZ(0.55em);
+}
+
+.priceSideFront {
+  display: block;
+  backface-visibility: hidden;
+  position: absolute;
+  top: 0;
+  left: 0;
+  white-space: nowrap;
+  transform: rotateX(-90deg) translateZ(0.55em);
+}
+
+.priceMuted {
+  font-family: var(--font-inter), var(--font-manrope), sans-serif;
+  color: rgb(226 232 240 / 0.62);
+}
+
+.iconActionButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.45rem;
+  height: 2.45rem;
+  border-radius: 999px;
+  border: 1.5px solid transparent;
+  background:
+    linear-gradient(145deg, rgb(2 8 28 / 0.88), rgb(5 18 48 / 0.88)) padding-box,
+    linear-gradient(135deg, #19f5d0 0%, #12d5e7 54%, #1ea8ff 100%) border-box;
+  color: #19f5d0;
+  box-shadow:
+    0 0 10px rgb(25 245 208 / 0.12),
+    0 6px 20px rgb(2 6 23 / 0.5),
+    inset 0 1px 0 rgb(25 245 208 / 0.08);
+  transition:
+    transform 0.22s ease,
+    box-shadow 0.26s ease,
+    background 0.26s ease,
+    color 0.22s ease;
+}
+
+.iconActionButton:hover {
+  transform: translateY(-2px) scale(1.07);
+  background:
+    linear-gradient(135deg, #19f5d0 0%, #12d5e7 54%, #1ea8ff 100%) padding-box,
+    linear-gradient(135deg, #19f5d0 0%, #12d5e7 54%, #1ea8ff 100%) border-box;
+  color: #020617;
+  box-shadow:
+    0 0 20px rgb(25 245 208 / 0.55),
+    0 0 40px rgb(18 213 231 / 0.2),
+    0 10px 24px rgb(2 6 23 / 0.4);
+}
+
+.iconActionButton:active {
+  transform: translateY(0) scale(0.97);
+}
+
+@media (min-width: 640px) {
+  .iconActionButton {
+    width: 2.9rem;
+    height: 2.9rem;
+  }
+}
+
+.iconActionButton:focus-visible {
+  outline: 2px solid rgb(25 245 208 / 0.9);
+  outline-offset: 3px;
+}
+
+.controlText {
+  font-family: var(--font-inter), var(--font-manrope), sans-serif;
+  font-weight: 700;
+  color: rgb(255 255 255 / 0.96);
+  text-shadow: 0 1px 8px rgb(15 23 42 / 0.22);
+}
+
+.surfaceChip {
+  border: 1px solid rgb(100 116 139 / 0.7);
+  background: rgb(16 26 47 / 0.85);
+}
+
+.deliveryChip {
+  border: 1px solid rgb(110 231 183 / 0.35);
+  background: rgb(74 222 128 / 0.12);
+  color: rgb(236 253 245 / 1);
+}
+
+.variantChip {
+  border: 1px solid rgb(196 181 253 / 0.35);
+  background: rgb(167 139 250 / 0.12);
+  color: rgb(245 243 255 / 1);
+}
+
+.colorChip {
+  border: 1px solid rgb(125 211 252 / 0.35);
+  background: rgb(34 211 238 / 0.12);
+  color: rgb(236 254 255 / 1);
+}
+
+.ghostButton {
+  border: 1px solid rgb(100 116 139 / 0.7);
+  background: rgb(16 26 47 / 0.85);
+}
+
+.ghostButton:hover {
+  border-color: rgb(103 232 249 / 0.8);
+  color: #fff;
+}
+
+@media (max-width: 767px) {
+  .cardBackdrop {
+    transform: none;
+    filter: none;
+    opacity: 0.45;
+  }
+
+  .cardOverlay {
+    box-shadow:
+      inset 0 0 0 1px rgb(191 219 254 / 0.06),
+      inset 0 1px 0 rgb(255 255 255 / 0.06);
+  }
+
+  .priceCube {
+    transition: none;
+  }
+
+  .card:hover .priceCube {
+    transform: none;
+  }
+
+  .iconActionButton:hover {
+    transform: none;
+    box-shadow:
+      0 0 10px rgb(25 245 208 / 0.12),
+      0 6px 20px rgb(2 6 23 / 0.5),
+      inset 0 1px 0 rgb(25 245 208 / 0.08);
+  }
+}
+
+:global(html[data-client-theme="light"]) .card {
+  background: linear-gradient(145deg, #ffffff 0%, #f8fbff 56%, #e8f0fb 100%);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.96),
+    inset 0 0 0 1px rgb(203 213 225 / 0.85);
+  border-color: rgb(203 213 225 / 0.95) !important;
+}
+
+:global(html[data-client-theme="light"]) .cardBackdrop {
+  filter: blur(10px) saturate(115%) brightness(1.04);
+  opacity: 0.55;
+  background:
+    radial-gradient(circle at 12% 24%, rgb(59 130 246 / 0.18) 0 1px, transparent 2px),
+    radial-gradient(circle at 28% 60%, rgb(15 23 42 / 0.12) 0 1.2px, transparent 2.2px),
+    radial-gradient(circle at 46% 18%, rgb(96 165 250 / 0.18) 0 1px, transparent 2px),
+    radial-gradient(circle at 66% 42%, rgb(148 163 184 / 0.14) 0 1.4px, transparent 2.4px),
+    radial-gradient(circle at 84% 20%, rgb(59 130 246 / 0.14) 0 1px, transparent 2px),
+    radial-gradient(circle at 18% 82%, rgb(30 41 59 / 0.12) 0 1.3px, transparent 2.3px),
+    radial-gradient(circle at 58% 76%, rgb(14 165 233 / 0.16) 0 1.4px, transparent 2.4px),
+    radial-gradient(circle at 90% 62%, rgb(30 41 59 / 0.1) 0 1.1px, transparent 2.1px),
+    linear-gradient(145deg, #ffffff 0%, #f5f9ff 56%, #e2ebf7 100%);
+}
+
+:global(html[data-client-theme="light"]) .cardOverlay {
+  background:
+    radial-gradient(circle at top, rgb(96 165 250 / 0.12), transparent 34%),
+    radial-gradient(circle at 82% 18%, rgb(255 255 255 / 0.55), transparent 24%),
+    linear-gradient(180deg, rgb(255 255 255 / 0.06) 0%, rgb(255 255 255 / 0.14) 42%, rgb(226 232 240 / 0.5) 100%);
+  box-shadow:
+    inset 0 0 0 1px rgb(255 255 255 / 0.72),
+    inset 0 1px 0 rgb(255 255 255 / 0.95);
+}
+
+:global(html[data-client-theme="light"]) .mediaShell {
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.42), rgb(226 232 240 / 0.58)),
+    rgb(241 245 249 / 0.72);
+}
+
+:global(html[data-client-theme="light"]) .badge {
+  background: rgb(15 23 42 / 0.92);
+  color: #ffffff;
+  border: 1px solid rgb(51 65 85 / 0.5);
+  box-shadow: 0 12px 24px rgb(15 23 42 / 0.18);
+}
+
+:global(html[data-client-theme="light"]) .topBadge {
+  background: #2563eb;
+  color: #ffffff;
+  box-shadow: 0 12px 24px rgb(37 99 235 / 0.2);
+}
+
+:global(html[data-client-theme="light"]) .newBadge {
+  border-color: rgb(234 88 12 / 0.18);
+  background: linear-gradient(135deg, #ea580c, #f59e0b);
+  color: #ffffff;
+  box-shadow: 0 12px 24px rgb(234 88 12 / 0.16);
+}
+
+:global(html[data-client-theme="light"]) .eyebrow {
+  color: #64748b !important;
+  text-shadow: none;
+}
+
+:global(html[data-client-theme="light"]) .title {
+  color: #0f172a !important;
+  text-shadow: none;
+}
+
+:global(html[data-client-theme="light"]) .description {
+  color: #334155 !important;
+}
+
+:global(html[data-client-theme="light"]) .chipText {
+  color: #0f172a !important;
+}
+
+:global(html[data-client-theme="light"]) .iconActionButton {
+  border-color: rgb(14 165 233 / 0.22);
+  background: linear-gradient(180deg, rgb(255 255 255 / 0.98), rgb(241 245 249 / 0.98));
+  color: #0f172a;
+  box-shadow:
+    0 12px 24px rgb(148 163 184 / 0.22),
+    inset 0 1px 0 rgb(255 255 255 / 0.94);
+}
+
+:global(html[data-client-theme="light"]) .iconActionButton:hover {
+  background: linear-gradient(180deg, rgb(14 165 233), rgb(2 132 199));
+  color: #ffffff;
+  box-shadow:
+    0 16px 28px rgb(14 165 233 / 0.2),
+    inset 0 1px 0 rgb(255 255 255 / 0.24);
+}
+
+:global(html[data-client-theme="light"]) .surfaceChip {
+  border-color: rgb(203 213 225 / 0.95);
+  background: rgb(255 255 255 / 0.94);
+}
+
+:global(html[data-client-theme="light"]) .deliveryChip {
+  border-color: rgb(16 185 129 / 0.2);
+  background: rgb(16 185 129 / 0.1);
+  color: #166534;
+}
+
+:global(html[data-client-theme="light"]) .variantChip {
+  border-color: rgb(139 92 246 / 0.2);
+  background: rgb(139 92 246 / 0.1);
+  color: #6d28d9;
+}
+
+:global(html[data-client-theme="light"]) .colorChip {
+  border-color: rgb(14 165 233 / 0.2);
+  background: rgb(14 165 233 / 0.1);
+  color: #0f766e;
+}
+
+:global(html[data-client-theme="light"]) .ratingText,
+:global(html[data-client-theme="light"]) .priceMuted {
+  color: #64748b !important;
+}
+
+:global(html[data-client-theme="light"]) .price {
+  background: linear-gradient(135deg, #0aa88f 0%, #0899a8 54%, #0e6bb0 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent !important;
+  filter: drop-shadow(0 0 4px rgb(10 168 143 / 0.22));
+}
+
+:global(html[data-client-theme="light"]) .controlText {
+  color: #0f172a !important;
+  text-shadow: none;
+}
+
+:global(html[data-client-theme="light"]) .ghostButton {
+  border-color: rgb(203 213 225 / 0.95);
+  background: rgb(255 255 255 / 0.94);
+}
+
+:global(html[data-client-theme="light"]) .ghostButton:hover {
+  color: #0f172a;
+}
