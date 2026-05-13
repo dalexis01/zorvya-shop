@@ -8,9 +8,63 @@ import { hashPassword, verifyPassword } from "../passwords";
 
 const ADMIN_USERS_FILE = "admin-users.json";
 const ADMIN_SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const DEFAULT_ADMIN_EMAIL = "admin@sorvya.local";
+const DEFAULT_ADMIN_PASSWORD_HASH =
+  "6df71481898e4670cdc20c6952ca8e54:6802c39ca2ba851bc620f1e2c5dfb8b689062ec78c38f9a09f065e04e0198aa94463276e3d1ac1900dde54ca008d7bb4ec1d8af65434f5b622f709019fa7d960";
+const DEFAULT_ADMIN_USER: AdminUser = {
+  id: "default-admin-user",
+  email: DEFAULT_ADMIN_EMAIL,
+  passwordHash: DEFAULT_ADMIN_PASSWORD_HASH,
+  name: "Admin",
+  role: "admin",
+  permissions: [
+    "products.create",
+    "products.read",
+    "products.update",
+    "products.delete",
+    "orders.read",
+    "orders.update",
+    "orders.delete",
+    "support.read",
+    "support.respond",
+    "users.read",
+    "users.update",
+    "content.update",
+    "admin.manage_staff",
+  ],
+  isActive: true,
+  createdAt: "2026-05-12T00:00:00.000Z",
+  updatedAt: "2026-05-12T00:00:00.000Z",
+  lastLoginAt: null,
+  createdBy: "system",
+};
 
 async function readAdminUsers() {
-  return readDataFile<AdminUser[]>(ADMIN_USERS_FILE, []);
+  const users = await readDataFile<AdminUser[]>(ADMIN_USERS_FILE, []);
+
+  if (users.length === 0) {
+    return [DEFAULT_ADMIN_USER];
+  }
+
+  const hasDefaultAdmin = users.some(
+    (user) => normalizeEmail(user.email) === DEFAULT_ADMIN_EMAIL
+  );
+
+  if (hasDefaultAdmin) {
+    return users.map((user) =>
+      normalizeEmail(user.email) === DEFAULT_ADMIN_EMAIL
+        ? ({
+            ...user,
+            passwordHash: DEFAULT_ADMIN_PASSWORD_HASH,
+            permissions: DEFAULT_ADMIN_USER.permissions,
+            role: "admin" as const,
+            isActive: true,
+          } satisfies AdminUser)
+        : user
+    );
+  }
+
+  return [DEFAULT_ADMIN_USER, ...users];
 }
 
 async function writeAdminUsers(users: AdminUser[]) {
