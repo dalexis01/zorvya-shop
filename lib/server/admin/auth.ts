@@ -1,20 +1,13 @@
 import "server-only";
 
-import { randomUUID } from "node:crypto";
+import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
 import { readDataFile, writeDataFile } from "../storage";
 
 import type { AdminPermission, AdminSessionUser, AdminUser } from "@/lib/shop/admin-types";
 import { hashPassword, verifyPassword } from "../passwords";
 
 const ADMIN_USERS_FILE = "admin-users.json";
-const ADMIN_SESSIONS_FILE = "admin-sessions.json";
-
-interface AdminStoredSession {
-  id: string;
-  adminUserId: string;
-  createdAt: string;
-  expiresAt: string;
-}
+const ADMIN_SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 async function readAdminUsers() {
   return readDataFile<AdminUser[]>(ADMIN_USERS_FILE, []);
@@ -24,16 +17,66 @@ async function writeAdminUsers(users: AdminUser[]) {
   await writeDataFile(ADMIN_USERS_FILE, users);
 }
 
-async function readAdminSessions() {
-  return readDataFile<AdminStoredSession[]>(ADMIN_SESSIONS_FILE, []);
-}
-
-async function writeAdminSessions(sessions: AdminStoredSession[]) {
-  await writeDataFile(ADMIN_SESSIONS_FILE, sessions);
-}
-
 function normalizeEmail(email: string) {
   return email.trim().toLowerCase();
+}
+
+function getAdminSessionSecret() {
+  return (
+    process.env.ADMIN_SESSION_SECRET ||
+    process.env.AUTH_SECRET ||
+    process.env.NEXTAUTH_SECRET ||
+    "zorvya-admin-session-secret"
+  );
+}
+
+function encodeAdminSessionToken(input: { adminUserId: string; expiresAt: string }) {
+  const payload = JSON.stringify(input);
+  const payloadBase64 = Buffer.from(payload, "utf8").toString("base64url");
+  const signature = createHmac("sha256", getAdminSessionSecret())
+    .update(payloadBase64)
+    .digest("base64url");
+
+  return `${payloadBase64}.${signature}`;
+}
+
+function decodeAdminSessionToken(token: string) {
+  const [payloadBase64, signature] = token.split(".");
+
+  if (!payloadBase64 || !signature) {
+    return null;
+  }
+
+  const expectedSignature = createHmac("sha256", getAdminSessionSecret())
+    .update(payloadBase64)
+    .digest("base64url");
+
+  const signatureBuffer = Buffer.from(signature);
+  const expectedBuffer = Buffer.from(expectedSignature);
+
+  if (
+    signatureBuffer.length !== expectedBuffer.length ||
+    !timingSafeEqual(signatureBuffer, expectedBuffer)
+  ) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(
+      Buffer.from(payloadBase64, "base64url").toString("utf8")
+    ) as { adminUserId?: string; expiresAt?: string };
+
+    if (!parsed.adminUserId || !parsed.expiresAt) {
+      return null;
+    }
+
+    return {
+      adminUserId: parsed.adminUserId,
+      expiresAt: parsed.expiresAt,
+    };
+  } catch {
+    return null;
+  }
 }
 
 export async function findAdminUserByEmail(email: string) {
@@ -71,25 +114,17 @@ export async function authenticateAdminUser(email: string, password: string) {
 }
 
 export async function createAdminSession(adminUserId: string) {
-  const sessionId = randomUUID();
   const now = new Date();
-  const expiresAt = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000); // 7 days
+  const expiresAt = new Date(now.getTime() + ADMIN_SESSION_TTL_MS);
 
-  const sessions = await readAdminSessions();
-  sessions.push({
-    id: sessionId,
+  return encodeAdminSessionToken({
     adminUserId,
-    createdAt: now.toISOString(),
     expiresAt: expiresAt.toISOString(),
   });
-
-  await writeAdminSessions(sessions);
-  return sessionId;
 }
 
 export async function findAdminSession(sessionId: string) {
-  const sessions = await readAdminSessions();
-  const session = sessions.find((s) => s.id === sessionId);
+  const session = decodeAdminSessionToken(sessionId);
 
   if (!session) {
     return null;
@@ -109,9 +144,7 @@ export async function findAdminSession(sessionId: string) {
 }
 
 export async function deleteAdminSession(sessionId: string) {
-  const sessions = await readAdminSessions();
-  const filtered = sessions.filter((s) => s.id !== sessionId);
-  await writeAdminSessions(filtered);
+  void sessionId;
 }
 
 export async function toAdminSessionUser(user: AdminUser): Promise<AdminSessionUser> {
