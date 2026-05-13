@@ -1,6 +1,8 @@
 import "server-only";
 
 import { randomUUID } from "node:crypto";
+import { readFile } from "node:fs/promises";
+import path from "node:path";
 
 import { Pool, type PoolClient, type QueryResultRow } from "pg";
 
@@ -63,7 +65,6 @@ CREATE INDEX IF NOT EXISTS idx_products_updated_at
   ON products (updated_at DESC);
 `;
 
-type RuntimeProductsStore = Product[];
 type ProductRow = QueryResultRow & {
   id: string;
   public_id: string;
@@ -102,19 +103,11 @@ type ProductRow = QueryResultRow & {
   ai_json: Product["ai"] | null;
 };
 
-export type ProductsDataSource = "postgres" | "memory-seed";
-
-declare global {
-  // eslint-disable-next-line no-var
-  var __zorvyaRuntimeProductsStore__: RuntimeProductsStore | undefined;
-}
-
-const runtimeProductsStore =
-  globalThis.__zorvyaRuntimeProductsStore__ ??
-  (globalThis.__zorvyaRuntimeProductsStore__ = createEmbeddedSeedProducts());
+export type ProductsDataSource = "postgres" | "postgres-required";
 
 let productsPoolInstance: Pool | null = null;
 let productsSchemaReadyPromise: Promise<void> | null = null;
+const LEGACY_PRODUCTS_FILE_PATH = path.join(process.cwd(), "data", "products.json");
 
 function trimText(value: string | undefined) {
   return (value ?? "").trim();
@@ -183,6 +176,17 @@ function buildNextPublicId(products: Product[]) {
   }, 0);
 
   return formatPublicId(highestValue + 1);
+}
+
+async function readLegacyProductsFile() {
+  try {
+    const raw = await readFile(LEGACY_PRODUCTS_FILE_PATH, "utf8");
+    const parsed = JSON.parse(raw) as unknown;
+    return Array.isArray(parsed) ? (parsed as Product[]) : [];
+  } catch (error) {
+    console.warn("[products] no se pudo leer data/products.json para bootstrap:", error);
+    return [];
+  }
 }
 
 function createProductMetrics(price: number, stock: number, costPrice: number): ProductMetrics {
@@ -393,16 +397,26 @@ async function ensureProductsSchema(pool: Pool) {
     return;
   }
 
+  const legacyProducts = (await readLegacyProductsFile()).map(normalizeProduct);
+
+  if (legacyProducts.length === 0) {
+    console.warn("[products] la tabla products esta vacia y no hay catalogo legacy para migrar.");
+    return;
+  }
+
   const client = await pool.connect();
 
   try {
     await client.query("BEGIN");
 
-    for (const product of createEmbeddedSeedProducts()) {
+    for (const product of legacyProducts) {
       await upsertProductRecord(client, product);
     }
 
     await client.query("COMMIT");
+    console.info(
+      `[products] bootstrap completado: ${legacyProducts.length} producto(s) migrados desde data/products.json`
+    );
   } catch (error) {
     await client.query("ROLLBACK");
     throw error;
@@ -491,22 +505,30 @@ function sortProducts(products: Product[]) {
 }
 
 async function readProductsWithSource() {
-  if (isProductsDatabaseConfigured()) {
-    try {
-      const products = await readProductsFromDatabase();
-      return {
-        products: sortProducts(products),
-        source: "postgres" as const,
-      };
-    } catch (error) {
-      console.error("[products] postgres read failed, falling back to embedded memory seed:", error);
-    }
+  if (!isProductsDatabaseConfigured()) {
+    console.error(
+      "[products] DATABASE_URL no esta configurado correctamente. Se requiere PostgreSQL/Supabase para cargar productos."
+    );
+
+    return {
+      products: [],
+      source: "postgres-required" as const,
+    };
   }
 
-  return {
-    products: sortProducts(runtimeProductsStore.map(normalizeProduct)),
-    source: "memory-seed" as const,
-  };
+  try {
+    const products = await readProductsFromDatabase();
+    return {
+      products: sortProducts(products),
+      source: "postgres" as const,
+    };
+  } catch (error) {
+    console.error("[products] postgres read failed:", error);
+    return {
+      products: [],
+      source: "postgres-required" as const,
+    };
+  }
 }
 
 async function readProducts() {
@@ -608,10 +630,7 @@ async function upsertProductRecord(client: PoolClient, product: Product) {
 
 async function writeProduct(product: Product) {
   if (!isProductsDatabaseConfigured()) {
-    const nextProducts = runtimeProductsStore.filter((item) => item.id !== product.id);
-    nextProducts.push(normalizeProduct(product));
-    runtimeProductsStore.splice(0, runtimeProductsStore.length, ...sortProducts(nextProducts));
-    return;
+    throw new Error("PRODUCTS_DB_NOT_CONFIGURED");
   }
 
   const pool = await getProductsPool();
@@ -626,148 +645,11 @@ async function writeProduct(product: Product) {
 
 async function deleteProductRecord(id: string) {
   if (!isProductsDatabaseConfigured()) {
-    const nextProducts = runtimeProductsStore.filter((product) => product.id !== id);
-    runtimeProductsStore.splice(0, runtimeProductsStore.length, ...sortProducts(nextProducts));
-    return;
+    throw new Error("PRODUCTS_DB_NOT_CONFIGURED");
   }
 
   const pool = await getProductsPool();
   await pool.query("DELETE FROM products WHERE id = $1", [id]);
-}
-
-function buildSeedProduct(input: {
-  id: string;
-  publicId: string;
-  sku: string;
-  name: string;
-  category: string;
-  price: number;
-  originalPrice?: number;
-  description: string;
-  imageUrl: string;
-  tags: string[];
-  isFeatured?: boolean;
-  isTop?: boolean;
-  stock?: number;
-  createdAt: string;
-}) {
-  const stock = input.stock ?? 8;
-  const internal = normalizeInternalDetails({
-    costPrice: Math.max(0, toMoney(input.price * 0.62)),
-    purchasePrice: Math.max(0, toMoney(input.price * 0.62)),
-    supplier: "ZorvyA Supply",
-    internalCode: input.sku,
-  });
-
-  return normalizeProduct({
-    id: input.id,
-    publicId: input.publicId,
-    displayOrder: parsePublicIdNumber(input.publicId) ?? 0,
-    sku: input.sku,
-    name: input.name,
-    shortDescription: buildShortDescription(input.description),
-    longDescription: input.description,
-    brand: "ZorvyA",
-    category: input.category,
-    tags: input.tags,
-    price: input.price,
-    originalPrice: input.originalPrice,
-    stock,
-    rating: 4.8,
-    reviewCount: 12,
-    inventoryLabel: "Almacen local",
-    deliveryLabel: "Delivery disponible",
-    showStock: true,
-    images: [
-      {
-        id: randomUUID(),
-        url: input.imageUrl,
-        alt: input.name,
-        isPrimary: true,
-      },
-    ],
-    isActive: true,
-    isVisible: true,
-    isFeatured: input.isFeatured ?? false,
-    isTop: input.isTop ?? false,
-    attributes: {},
-    internal,
-    metrics: createProductMetrics(input.price, stock, internal.costPrice),
-    createdAt: input.createdAt,
-    publishedAt: input.createdAt,
-    stockAddedAt: input.createdAt,
-    lastSoldAt: null,
-    saleDates: [],
-    updatedAt: input.createdAt,
-    updatedBy: "seed",
-  });
-}
-
-function createEmbeddedSeedProducts(): Product[] {
-  return [
-    buildSeedProduct({
-      id: "seed-product-1",
-      publicId: "PRD-000001",
-      sku: "HOME-BLENDER-01",
-      name: "Licuadora Lotus 2 en 1",
-      category: "Electrodomesticos",
-      price: 89,
-      originalPrice: 110,
-      description:
-        "Licuadora compacta con vaso resistente y potencia ideal para jugos, salsas y mezclas diarias. Practica, facil de limpiar y lista para cocina moderna.",
-      imageUrl:
-        "https://images.unsplash.com/photo-1570222094114-d054a817e56b?auto=format&fit=crop&w=1200&q=80",
-      tags: ["licuadora", "cocina", "electrodomesticos"],
-      isFeatured: true,
-      createdAt: "2026-05-01T10:00:00.000Z",
-    }),
-    buildSeedProduct({
-      id: "seed-product-2",
-      publicId: "PRD-000002",
-      sku: "KITCH-RICE-01",
-      name: "Arrocera Digital 12 en 1 Nippon",
-      category: "Electrodomesticos",
-      price: 149,
-      originalPrice: 179,
-      description:
-        "Arrocera digital multifuncion con modos automaticos, temporizador y mantenimiento de calor. Pensada para familias que buscan rapidez y resultado parejo.",
-      imageUrl:
-        "https://images.unsplash.com/photo-1586201375761-83865001e31b?auto=format&fit=crop&w=1200&q=80",
-      tags: ["arrocera", "nippon", "hogar"],
-      isTop: true,
-      createdAt: "2026-05-02T10:00:00.000Z",
-    }),
-    buildSeedProduct({
-      id: "seed-product-3",
-      publicId: "PRD-000003",
-      sku: "FURN-CHAIR-01",
-      name: "Silla Ergonomica de Oficina",
-      category: "Muebles",
-      price: 220,
-      originalPrice: 259,
-      description:
-        "Silla ergonomica con soporte lumbar, cabecera ajustable y acabado premium para jornadas largas de trabajo o estudio con mejor postura.",
-      imageUrl:
-        "https://images.unsplash.com/photo-1505843490701-5be5d65f37f4?auto=format&fit=crop&w=1200&q=80",
-      tags: ["oficina", "silla", "ergonomica"],
-      createdAt: "2026-05-03T10:00:00.000Z",
-    }),
-    buildSeedProduct({
-      id: "seed-product-4",
-      publicId: "PRD-000004",
-      sku: "COOK-BURNER-01",
-      name: "Hornilla Electrica Doble Oasis",
-      category: "Cocina",
-      price: 95,
-      originalPrice: 125,
-      description:
-        "Hornilla electrica doble con control independiente de temperatura, ideal para apartamentos, negocios pequenos y cocinas auxiliares.",
-      imageUrl:
-        "https://images.unsplash.com/photo-1517705008128-361805f42e86?auto=format&fit=crop&w=1200&q=80",
-      tags: ["hornilla", "cocina", "oasis"],
-      createdAt: "2026-05-04T10:00:00.000Z",
-    }),
-  ];
 }
 
 export async function getAllProducts(options?: {
