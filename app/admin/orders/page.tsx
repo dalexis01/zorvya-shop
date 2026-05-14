@@ -169,8 +169,7 @@ function OrderRow({
   const canceling = activeOrderId === order.id && pendingAction === "cancel-order";
   const { text: stText, cls: stCls } = statusBadge(order);
   const items    = order.items;
-  const packages = Math.max(1, items.reduce((s, i) => s + i.quantity, 0));
-  const rowBg    = rowIndex % 2 === 0 ? "bg-[#050816]" : "bg-[#070d1c]";
+  const rowBg = rowIndex % 2 === 0 ? "bg-[#050816]" : "bg-[#070d1c]";
   const pay      = paymentLabel(order);
 
   const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(order.customerAddress)}`;
@@ -179,19 +178,19 @@ function OrderRow({
     <tr className={`${rowBg} transition-colors hover:bg-[#0c1530]`}>
 
       {/* ── Estado + Fecha + ID + Parada (todo en una casilla) ── */}
-      <TD cls="w-40">
-        <div className="space-y-1.5">
+      <TD cls="w-48">
+        <div className="space-y-3">
           {stopInfo ? (
-            <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-cyan-500 text-[10px] font-bold text-slate-950">
+            <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-cyan-500 text-xs font-bold text-slate-950">
               {stopInfo.stopNumber}
             </span>
           ) : (
-            <span className="text-[10px] text-slate-500 font-mono">{rowIndex + 1}</span>
+            <span className="text-xs text-slate-500 font-mono">{rowIndex + 1}</span>
           )}
-          <span className={`block w-fit rounded border px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.1em] ${stCls}`}>
+          <span className={`block w-fit rounded border px-2.5 py-1 text-xs font-bold uppercase tracking-[0.1em] ${stCls}`}>
             {stText}
           </span>
-          <p className="font-mono text-[10px] text-slate-300">
+          <p className="font-mono text-xs text-slate-300 leading-relaxed">
             {formatDate(order.createdAt)}{" "}
             <span className="text-slate-500">
               {new Date(order.createdAt).toLocaleTimeString("es", { hour: "2-digit", minute: "2-digit" })}
@@ -200,7 +199,7 @@ function OrderRow({
           <Link
             href={`/admin/orders/${order.id}`}
             target="_blank"
-            className="block font-mono text-[11px] font-bold text-cyan-400 hover:text-cyan-200 hover:underline"
+            className="block font-mono text-sm font-bold text-cyan-400 hover:text-cyan-200 hover:underline"
           >
             ···{order.idTail}
           </Link>
@@ -319,9 +318,6 @@ function OrderRow({
         </div>
       </TD>
 
-      {/* Paquetes */}
-      <TD right cls="w-14 font-mono font-semibold text-slate-200">{packages}</TD>
-
       {/* Subtotal */}
       <TD right cls="w-28 font-mono text-slate-200">{formatCurrencySrd(order.subtotal)}</TD>
 
@@ -420,7 +416,6 @@ function OrdersTable({
             <TH>Cliente</TH>
             <TH>Direccion</TH>
             <TH>Productos</TH>
-            <TH right>Pkts</TH>
             <TH right>Subtotal</TH>
             <TH right>Delivery</TH>
             <TH right>Total</TH>
@@ -469,7 +464,7 @@ function BlocksTable({
   onSaveStatus: (o: AdminOrderRecord) => Promise<void>;
   onOpenCancel: (o: AdminOrderRecord) => void;
 }) {
-  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set(routeBlocks.map((b) => b.id)));
 
   function toggleBlock(id: string) {
     setCollapsed((prev) => {
@@ -479,7 +474,7 @@ function BlocksTable({
     });
   }
 
-  const COLS = 11; // Estado/Fecha/ID, Cliente, Dir, Productos, Pkts, Subtotal, Delivery, Total, Pago, Km, Acciones
+  const COLS = 10; // Estado/Fecha/ID, Cliente, Dir, Productos, Subtotal, Delivery, Total, Pago, Km, Acciones
 
   return (
     <div className="space-y-4">
@@ -496,7 +491,6 @@ function BlocksTable({
                 <TH>Cliente</TH>
                 <TH>Direccion</TH>
                 <TH>Productos</TH>
-                <TH right>Pkts</TH>
                 <TH right>Subtotal</TH>
                 <TH right>Delivery</TH>
                 <TH right>Total</TH>
@@ -617,7 +611,6 @@ function BlocksTable({
                   <TH>Cliente</TH>
                   <TH>Direccion</TH>
                   <TH>Productos</TH>
-                  <TH right>Pkts</TH>
                   <TH right>Subtotal</TH>
                   <TH right>Delivery</TH>
                   <TH right>Total</TH>
