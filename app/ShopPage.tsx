@@ -2200,7 +2200,7 @@ export default function ShopPage({
                 {isFiltering ? t.noSearchResults : t.loadingProducts}
               </div>
             ) : (
-              <div className="grid auto-rows-fr grid-cols-2 gap-2.5 sm:gap-3.5 md:grid-cols-3 lg:grid-cols-4 lg:gap-4 xl:grid-cols-5 2xl:grid-cols-6">
+              <div className="grid auto-rows-fr grid-cols-2 gap-2 sm:gap-2.5 md:grid-cols-4 md:gap-3 lg:grid-cols-5 lg:gap-3.5 xl:grid-cols-6 2xl:grid-cols-7">
                 {catalogProducts.map((product) => (
                   <ProductCard
                     key={String(product.id)}
