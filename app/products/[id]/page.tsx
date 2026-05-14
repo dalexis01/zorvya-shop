@@ -2,18 +2,11 @@ import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
 
 import ProductDetailClient from "@/components/storefront/ProductDetailClient";
-import { getStorefrontProductById, getStorefrontProducts } from "@/lib/server/catalog";
+import { getStorefrontProductById } from "@/lib/server/catalog";
 import { CLIENT_THEME_COOKIE_KEY, normalizeClientTheme } from "@/lib/shop/client-theme";
 
 export const revalidate = 60;
-
-export async function generateStaticParams() {
-  const products = await getStorefrontProducts();
-
-  return products.map((product) => ({
-    id: String(product.id),
-  }));
-}
+export const dynamic = "force-dynamic";
 
 export default async function ProductDetailPage({
   params,
