@@ -26,11 +26,20 @@ function getOrderIdTail(orderId: string) {
   return orderId.slice(-4).toUpperCase();
 }
 
-function resolveOrderItems(order: StoredOrder, products: Awaited<ReturnType<typeof getAllProducts>>) {
+function buildProductNameMap(products: Awaited<ReturnType<typeof getAllProducts>>) {
+  const map = new Map<string, Awaited<ReturnType<typeof getAllProducts>>[number]>();
+  for (const product of products) {
+    map.set(normalizeText(product.name), product);
+  }
+  return map;
+}
+
+function resolveOrderItems(
+  order: StoredOrder,
+  productsByName: Map<string, Awaited<ReturnType<typeof getAllProducts>>[number]>
+) {
   return order.items.map<AdminOrderItemRecord>((item, index) => {
-    const matchedProduct = products.find((product) => {
-      return normalizeText(product.name) === normalizeText(item.name);
-    });
+    const matchedProduct = productsByName.get(normalizeText(item.name));
 
     return {
       ...item,
@@ -44,13 +53,13 @@ function resolveOrderItems(order: StoredOrder, products: Awaited<ReturnType<type
 
 function toAdminOrderRecord(
   order: StoredOrder,
-  products: Awaited<ReturnType<typeof getAllProducts>>
+  productsByName: Map<string, Awaited<ReturnType<typeof getAllProducts>>[number]>
 ): AdminOrderRecord {
   const status = getOrderStatus(order);
 
   return {
     ...order,
-    items: resolveOrderItems(order, products),
+    items: resolveOrderItems(order, productsByName),
     status,
     statusDetail: getOrderStatusDetail(order),
     isPending: !order.cancelledAt && !isOrderCompletedStatus(status),
@@ -81,8 +90,9 @@ export async function getAdminOrders(options?: {
     getAllProducts(),
   ]);
 
+  const productsByName = buildProductNameMap(products);
   return {
-    orders: orders.map((order) => toAdminOrderRecord(order, products)),
+    orders: orders.map((order) => toAdminOrderRecord(order, productsByName)),
     hasMore,
     nextCursor,
   };
@@ -90,7 +100,8 @@ export async function getAdminOrders(options?: {
 
 export async function getAllAdminOrders() {
   const [orders, products] = await Promise.all([getAllOrders(), getAllProducts()]);
-  return orders.map((order) => toAdminOrderRecord(order, products));
+  const productsByName = buildProductNameMap(products);
+  return orders.map((order) => toAdminOrderRecord(order, productsByName));
 }
 
 export async function getAdminOrderById(orderId: string) {
@@ -100,7 +111,7 @@ export async function getAdminOrderById(orderId: string) {
     return null;
   }
 
-  return toAdminOrderRecord(order, products);
+  return toAdminOrderRecord(order, buildProductNameMap(products));
 }
 
 export async function getAdminOrdersMeta(): Promise<AdminOrdersMeta> {

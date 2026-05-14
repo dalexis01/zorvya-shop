@@ -109,6 +109,13 @@ let productsPoolInstance: Pool | null = null;
 let productsSchemaReadyPromise: Promise<void> | null = null;
 const LEGACY_PRODUCTS_FILE_PATH = path.join(process.cwd(), "data", "products.json");
 
+const PRODUCTS_LIST_CACHE_TTL_MS = 60_000;
+let productsListCache: { expiresAt: number; value: Product[] } | null = null;
+
+function clearProductsListCache() {
+  productsListCache = null;
+}
+
 function trimText(value: string | undefined) {
   return (value ?? "").trim();
 }
@@ -516,12 +523,14 @@ async function readProductsWithSource() {
     };
   }
 
+  if (productsListCache && productsListCache.expiresAt > Date.now()) {
+    return { products: productsListCache.value, source: "postgres" as const };
+  }
+
   try {
-    const products = await readProductsFromDatabase();
-    return {
-      products: sortProducts(products),
-      source: "postgres" as const,
-    };
+    const products = sortProducts(await readProductsFromDatabase());
+    productsListCache = { expiresAt: Date.now() + PRODUCTS_LIST_CACHE_TTL_MS, value: products };
+    return { products, source: "postgres" as const };
   } catch (error) {
     console.error("[products] postgres read failed:", error);
     return {
@@ -638,6 +647,7 @@ async function writeProduct(product: Product) {
 
   try {
     await upsertProductRecord(client, normalizeProduct(product));
+    clearProductsListCache();
   } finally {
     client.release();
   }
@@ -650,6 +660,7 @@ async function deleteProductRecord(id: string) {
 
   const pool = await getProductsPool();
   await pool.query("DELETE FROM products WHERE id = $1", [id]);
+  clearProductsListCache();
 }
 
 export async function getAllProducts(options?: {
