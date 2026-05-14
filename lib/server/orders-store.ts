@@ -1,17 +1,14 @@
 import "server-only";
 
 import { readFile } from "node:fs/promises";
-import { stat } from "node:fs/promises";
 import path from "node:path";
 
 import { Pool, type PoolClient, type QueryResultRow } from "pg";
 
-import { summarizeOrders } from "@/lib/shop/order-status";
 import type {
   DeliveryType,
   StoredOrder,
 } from "@/lib/shop/types";
-import { readDataFile, writeDataFile } from "@/lib/server/storage";
 
 const ORDERS_FILE = "orders.json";
 const ORDERS_SCHEMA_FILE = path.join(
@@ -20,6 +17,7 @@ const ORDERS_SCHEMA_FILE = path.join(
   "migrations",
   "001_orders_postgres.sql"
 );
+const LEGACY_ORDERS_FILE_PATH = path.join(process.cwd(), "data", ORDERS_FILE);
 
 const USER_ORDERS_DEFAULT_LIMIT = 20;
 const USER_ORDERS_MAX_LIMIT = 50;
@@ -27,13 +25,6 @@ const ADMIN_ORDERS_DEFAULT_LIMIT = 24;
 const ADMIN_ORDERS_MAX_LIMIT = 60;
 const ORDERS_PAGE_CACHE_TTL_MS = 15_000;
 const ORDER_RECORD_CACHE_TTL_MS = 30_000;
-
-type OrdersJsonCache = {
-  mtimeMs: number;
-  orders: StoredOrder[];
-  orderById: Map<string, StoredOrder>;
-  ordersByUserId: Map<string, StoredOrder[]>;
-};
 
 type OrderStatusFilter = "all" | "pending" | "completed" | "cancelled";
 type OrdersCursorPayload = {
@@ -102,7 +93,6 @@ export type AdminOrdersQueryInput = {
 let poolInstance: Pool | null = null;
 let schemaReadyPromise: Promise<void> | null = null;
 let adminOrdersMetaCache: CacheEntry<AdminOrdersMetaResult> | null = null;
-let ordersJsonCache: OrdersJsonCache | null = null;
 const orderByIdCache = new Map<string, CacheEntry<StoredOrder>>();
 const paginatedUserOrdersCache = new Map<string, CacheEntry<PaginatedUserOrdersSummaryResult>>();
 const paginatedAdminOrdersCache = new Map<string, CacheEntry<PaginatedAdminOrdersResult>>();
@@ -160,6 +150,68 @@ async function getOrdersPool() {
 async function ensureOrdersSchema(pool: Pool) {
   const sql = await readFile(ORDERS_SCHEMA_FILE, "utf8");
   await pool.query(sql);
+  const result = await pool.query<{ count: string }>("SELECT COUNT(*)::text AS count FROM orders");
+
+  if (Number(result.rows[0]?.count ?? "0") === 0) {
+    await bootstrapLegacyOrders(pool);
+  }
+}
+
+async function readLegacyOrdersFile() {
+  try {
+    const raw = await readFile(LEGACY_ORDERS_FILE_PATH, "utf8");
+    const parsed = JSON.parse(raw) as StoredOrder[];
+
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+
+    return parsed.sort(
+      (left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime()
+    );
+  } catch (error) {
+    if (
+      error &&
+      typeof error === "object" &&
+      "code" in error &&
+      (error.code === "ENOENT" || error.code === "ENOTDIR")
+    ) {
+      return [];
+    }
+
+    console.error("[orders] no se pudo leer data/orders.json para bootstrap:", error);
+    return [];
+  }
+}
+
+async function bootstrapLegacyOrders(pool: Pool) {
+  const orders = await readLegacyOrdersFile();
+
+  if (orders.length === 0) {
+    console.info("[orders] bootstrap omitido: no hay ordenes legacy para migrar.");
+    return;
+  }
+
+  const client = await pool.connect();
+
+  try {
+    await client.query("BEGIN");
+
+    for (const order of orders) {
+      await upsertOrderWithClient(client, order);
+    }
+
+    await client.query("COMMIT");
+    console.info(
+      `[orders] bootstrap completado: ${orders.length} orden(es) migradas desde data/orders.json`
+    );
+  } catch (error) {
+    await client.query("ROLLBACK");
+    console.error("[orders] fallo el bootstrap de ordenes legacy:", error);
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 function orderRowToStoredOrder(row: OrderRow): StoredOrder {
@@ -434,74 +486,9 @@ async function queryOrdersPageFromDatabase(input: {
   };
 }
 
-async function readOrdersFromJsonFile() {
-  const filePath = path.join(process.cwd(), "data", ORDERS_FILE);
-
-  try {
-    const fileStat = await stat(filePath);
-    const cachedOrders = ordersJsonCache;
-
-    if (cachedOrders && cachedOrders.mtimeMs === fileStat.mtimeMs) {
-      return cachedOrders.orders;
-    }
-
-    const orders = await readDataFile<StoredOrder[]>(ORDERS_FILE, []);
-    const sortedOrders = [...orders].sort(
-      (left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime()
-    );
-    const orderById = new Map<string, StoredOrder>();
-    const ordersByUserId = new Map<string, StoredOrder[]>();
-
-    for (const order of sortedOrders) {
-      orderById.set(order.id, order);
-
-      if (!order.userId) {
-        continue;
-      }
-
-      const currentOrders = ordersByUserId.get(order.userId);
-
-      if (currentOrders) {
-        currentOrders.push(order);
-      } else {
-        ordersByUserId.set(order.userId, [order]);
-      }
-    }
-
-    ordersJsonCache = {
-      mtimeMs: fileStat.mtimeMs,
-      orders: sortedOrders,
-      orderById,
-      ordersByUserId,
-    };
-
-    return sortedOrders;
-  } catch {
-    const orders = await readDataFile<StoredOrder[]>(ORDERS_FILE, []);
-    return [...orders].sort(
-      (left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime()
-    );
-  }
-}
-
-async function writeOrdersToJsonFile(orders: StoredOrder[]) {
-  await writeDataFile(ORDERS_FILE, orders);
-  ordersJsonCache = null;
-}
-
-async function getJsonOrderById(orderId: string) {
-  await readOrdersFromJsonFile();
-  return ordersJsonCache?.orderById.get(orderId) ?? null;
-}
-
-async function getJsonOrdersByUserId(userId: string) {
-  await readOrdersFromJsonFile();
-  return ordersJsonCache?.ordersByUserId.get(userId) ?? [];
-}
-
 export async function loadAllOrdersFromStore() {
   if (!isOrdersDatabaseConfigured()) {
-    return readOrdersFromJsonFile();
+    throw new Error("ORDERS_DB_NOT_CONFIGURED");
   }
 
   const pool = await getOrdersPool();
@@ -544,7 +531,7 @@ export async function loadAllOrdersFromStore() {
 
 export async function loadOrderByIdFromStore(orderId: string) {
   if (!isOrdersDatabaseConfigured()) {
-    return getJsonOrderById(orderId);
+    throw new Error("ORDERS_DB_NOT_CONFIGURED");
   }
 
   const cachedOrder = getMapCacheValue(orderByIdCache, orderId);
@@ -601,10 +588,7 @@ export async function loadOrderByIdFromStore(orderId: string) {
 
 export async function insertOrderIntoStore(order: StoredOrder) {
   if (!isOrdersDatabaseConfigured()) {
-    const orders = await readOrdersFromJsonFile();
-    orders.push(order);
-    await writeOrdersToJsonFile(orders);
-    return;
+    throw new Error("ORDERS_DB_NOT_CONFIGURED");
   }
 
   const pool = await getOrdersPool();
@@ -680,16 +664,7 @@ export async function insertOrderIntoStore(order: StoredOrder) {
 
 export async function updateOrderInStore(order: StoredOrder) {
   if (!isOrdersDatabaseConfigured()) {
-    const orders = await readOrdersFromJsonFile();
-    const index = orders.findIndex((currentOrder) => currentOrder.id === order.id);
-
-    if (index === -1) {
-      throw new Error("ORDER_NOT_FOUND");
-    }
-
-    orders[index] = order;
-    await writeOrdersToJsonFile(orders);
-    return;
+    throw new Error("ORDERS_DB_NOT_CONFIGURED");
   }
 
   const pool = await getOrdersPool();
@@ -760,7 +735,7 @@ export async function updateOrderInStore(order: StoredOrder) {
 
 export async function loadOrdersByUserIdFromStore(userId: string) {
   if (!isOrdersDatabaseConfigured()) {
-    return [...(await getJsonOrdersByUserId(userId))];
+    throw new Error("ORDERS_DB_NOT_CONFIGURED");
   }
 
   const result = await queryOrdersPageFromDatabase({
@@ -785,27 +760,7 @@ export async function loadPaginatedUserOrdersSummaryFromStore(input: {
   });
 
   if (!isOrdersDatabaseConfigured()) {
-    const orders = await loadOrdersByUserIdFromStore(input.userId);
-    const cursor = decodeOrdersCursor(input.cursor);
-    const startIndex = cursor
-      ? orders.findIndex(
-          (order) => order.createdAt === cursor.createdAt && order.id === cursor.id
-        ) + 1
-      : 0;
-    const visibleOrders = orders.slice(Math.max(0, startIndex), Math.max(0, startIndex) + limit + 1);
-    const hasMore = visibleOrders.length > limit;
-    const pageOrders = hasMore ? visibleOrders.slice(0, limit) : visibleOrders;
-    const tailOrder = pageOrders.at(-1);
-
-    return {
-      latestOrder: !input.cursor ? orders[0] ?? null : null,
-      orders: pageOrders,
-      hasMore,
-      nextCursor:
-        hasMore && tailOrder
-          ? encodeOrdersCursor({ createdAt: tailOrder.createdAt, id: tailOrder.id })
-          : null,
-    };
+    throw new Error("ORDERS_DB_NOT_CONFIGURED");
   }
 
   const cachedPage = getMapCacheValue(paginatedUserOrdersCache, cacheKey);
@@ -839,77 +794,7 @@ export async function loadPaginatedAdminOrdersFromStore(
   });
 
   if (!isOrdersDatabaseConfigured()) {
-    const orders = await readOrdersFromJsonFile();
-    const normalizedSearch = input.search?.trim().toLowerCase() ?? "";
-    const normalizedLast4 = input.last4?.trim().toUpperCase() ?? "";
-
-    const filteredOrders = orders
-      .filter((order) => {
-        if (input.deliveryType && input.deliveryType !== "all" && order.deliveryType !== input.deliveryType) {
-          return false;
-        }
-
-        if (input.status === "cancelled") {
-          return Boolean(order.cancelledAt);
-        }
-
-        const summary = summarizeOrders([order]).orders[0];
-
-        if (input.status === "completed" && !summary?.status.includes("complet")) {
-          return false;
-        }
-
-        if (input.status === "pending" && (summary?.status.includes("complet") || order.cancelledAt)) {
-          return false;
-        }
-
-        if (
-          normalizedSearch &&
-          ![
-            order.id,
-            order.customerName,
-            order.customerEmail,
-            order.customerPhone,
-            order.customerAddress,
-            order.adminStatus ?? "",
-          ]
-            .join(" ")
-            .toLowerCase()
-            .includes(normalizedSearch)
-        ) {
-          return false;
-        }
-
-        if (normalizedLast4 && !order.id.slice(-4).toUpperCase().includes(normalizedLast4)) {
-          return false;
-        }
-
-        return true;
-      })
-      .sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime());
-
-    const cursor = decodeOrdersCursor(input.cursor);
-    const startIndex = cursor
-      ? filteredOrders.findIndex(
-          (order) => order.createdAt === cursor.createdAt && order.id === cursor.id
-        ) + 1
-      : 0;
-    const visibleOrders = filteredOrders.slice(
-      Math.max(0, startIndex),
-      Math.max(0, startIndex) + limit + 1
-    );
-    const hasMore = visibleOrders.length > limit;
-    const pageOrders = hasMore ? visibleOrders.slice(0, limit) : visibleOrders;
-    const tailOrder = pageOrders.at(-1);
-
-    return {
-      orders: pageOrders,
-      hasMore,
-      nextCursor:
-        hasMore && tailOrder
-          ? encodeOrdersCursor({ createdAt: tailOrder.createdAt, id: tailOrder.id })
-          : null,
-    };
+    throw new Error("ORDERS_DB_NOT_CONFIGURED");
   }
 
   const cachedPage = getMapCacheValue(paginatedAdminOrdersCache, cacheKey);
@@ -933,18 +818,7 @@ export async function loadPaginatedAdminOrdersFromStore(
 
 export async function loadAdminOrdersMetaFromStore(): Promise<AdminOrdersMetaResult> {
   if (!isOrdersDatabaseConfigured()) {
-    const orders = await readOrdersFromJsonFile();
-    const summaries = summarizeOrders(orders).orders;
-
-    return {
-      newOrdersCount: summaries.filter((order) => !order.adminReviewedAt).length,
-      totalOrdersCount: summaries.length,
-      pendingOrdersCount: summaries.filter(
-        (order) => !order.cancelledAt && !order.status.includes("complet")
-      ).length,
-      completedOrdersCount: summaries.filter((order) => order.status.includes("complet")).length,
-      cancelledOrdersCount: summaries.filter((order) => Boolean(order.cancelledAt)).length,
-    };
+    throw new Error("ORDERS_DB_NOT_CONFIGURED");
   }
 
   const cachedMeta = getCacheValue(adminOrdersMetaCache);
@@ -995,7 +869,7 @@ export async function migrateOrdersJsonToStore() {
     throw new Error("ORDERS_DB_NOT_CONFIGURED");
   }
 
-  const orders = await readOrdersFromJsonFile();
+  const orders = await readLegacyOrdersFile();
   const pool = await getOrdersPool();
   const client = await pool.connect();
 

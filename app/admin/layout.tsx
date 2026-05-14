@@ -15,14 +15,6 @@ function getPathLabel(pathname: string) {
   return cleanPath;
 }
 
-function MenuGlyph({ code }: { code: string }) {
-  return (
-    <span className="relative inline-flex h-9 w-9 items-center justify-center rounded-xl border border-slate-800 bg-[#0a1020] text-[11px] font-semibold tracking-[0.2em] text-cyan-300">
-      {code}
-    </span>
-  );
-}
-
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AdminSessionUser | null>(null);
   const [loading, setLoading] = useState(true);

@@ -11,7 +11,6 @@ const READ_ONLY_FILE_SYSTEM_ERROR_CODES = new Set(["EROFS", "EPERM", "EACCES"]);
 type RuntimeDataStore = Map<string, string>;
 
 declare global {
-  // eslint-disable-next-line no-var
   var __zorvyaRuntimeDataStore__: RuntimeDataStore | undefined;
 }
 

@@ -1,14 +1,12 @@
 import "server-only";
 
-import { randomBytes } from "node:crypto";
+import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 
 import { cookies } from "next/headers";
 
 import type { StoredSession } from "@/lib/shop/types";
-import { readDataFile, writeDataFile } from "@/lib/server/storage";
 import { findUserById, toSessionUser } from "@/lib/server/users";
 
-const SESSIONS_FILE = "sessions.json";
 const SESSION_COOKIE_NAME = "sorvya_session";
 const SESSION_DURATION_MS = 30 * 24 * 60 * 60 * 1000;
 
@@ -23,55 +21,82 @@ function getCookieOptions(expiresAt: string) {
   };
 }
 
-async function readSessions() {
-  const sessions = await readDataFile<StoredSession[]>(SESSIONS_FILE, []);
-  const now = Date.now();
-  const activeSessions = sessions.filter(
-    (session) => new Date(session.expiresAt).getTime() > now
+function getSessionSecret() {
+  return (
+    process.env.SESSION_SECRET ||
+    process.env.AUTH_SECRET ||
+    process.env.NEXTAUTH_SECRET ||
+    "zorvya-customer-session-secret"
   );
-
-  if (activeSessions.length !== sessions.length) {
-    await writeDataFile(SESSIONS_FILE, activeSessions);
-  }
-
-  return activeSessions;
 }
 
-async function writeSessions(sessions: StoredSession[]) {
-  await writeDataFile(SESSIONS_FILE, sessions);
+function encodeSessionToken(input: StoredSession) {
+  const payload = Buffer.from(JSON.stringify(input), "utf8").toString("base64url");
+  const signature = createHmac("sha256", getSessionSecret())
+    .update(payload)
+    .digest("base64url");
+
+  return `${payload}.${signature}`;
+}
+
+function decodeSessionToken(token: string) {
+  const [payload, signature] = token.split(".");
+
+  if (!payload || !signature) {
+    return null;
+  }
+
+  const expectedSignature = createHmac("sha256", getSessionSecret())
+    .update(payload)
+    .digest("base64url");
+
+  const signatureBuffer = Buffer.from(signature);
+  const expectedBuffer = Buffer.from(expectedSignature);
+
+  if (
+    signatureBuffer.length !== expectedBuffer.length ||
+    !timingSafeEqual(signatureBuffer, expectedBuffer)
+  ) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(
+      Buffer.from(payload, "base64url").toString("utf8")
+    ) as StoredSession;
+
+    if (!parsed?.id || !parsed?.userId || !parsed?.createdAt || !parsed?.expiresAt) {
+      return null;
+    }
+
+    return parsed;
+  } catch {
+    return null;
+  }
 }
 
 export async function createSessionForUser(userId: string) {
-  const sessions = await readSessions();
   const createdAt = new Date();
   const expiresAt = new Date(createdAt.getTime() + SESSION_DURATION_MS);
-
-  const newSession: StoredSession = {
-    id: randomBytes(32).toString("hex"),
+  const session: StoredSession = {
+    id: randomBytes(24).toString("hex"),
     userId,
     createdAt: createdAt.toISOString(),
     expiresAt: expiresAt.toISOString(),
   };
 
-  sessions.push(newSession);
-  await writeSessions(sessions);
-
   const cookieStore = await cookies();
-  cookieStore.set(SESSION_COOKIE_NAME, newSession.id, getCookieOptions(newSession.expiresAt));
+  cookieStore.set(
+    SESSION_COOKIE_NAME,
+    encodeSessionToken(session),
+    getCookieOptions(session.expiresAt)
+  );
 
-  return newSession;
+  return session;
 }
 
 export async function destroyCurrentSession() {
   const cookieStore = await cookies();
-  const sessionId = cookieStore.get(SESSION_COOKIE_NAME)?.value;
-
-  if (sessionId) {
-    const sessions = await readSessions();
-    const remainingSessions = sessions.filter((session) => session.id !== sessionId);
-    await writeSessions(remainingSessions);
-  }
-
   cookieStore.set(SESSION_COOKIE_NAME, "", {
     httpOnly: true,
     maxAge: 0,
@@ -83,16 +108,20 @@ export async function destroyCurrentSession() {
 
 export async function getCurrentSession() {
   const cookieStore = await cookies();
-  const sessionId = cookieStore.get(SESSION_COOKIE_NAME)?.value;
+  const token = cookieStore.get(SESSION_COOKIE_NAME)?.value;
 
-  if (!sessionId) {
+  if (!token) {
     return null;
   }
 
-  const sessions = await readSessions();
-  const session = sessions.find((entry) => entry.id === sessionId) ?? null;
+  const session = decodeSessionToken(token);
 
   if (!session) {
+    await destroyCurrentSession();
+    return null;
+  }
+
+  if (new Date(session.expiresAt).getTime() <= Date.now()) {
     await destroyCurrentSession();
     return null;
   }
@@ -102,11 +131,13 @@ export async function getCurrentSession() {
 
 export async function getCurrentUser() {
   const session = await getCurrentSession();
+
   if (!session) {
     return null;
   }
 
   const user = await findUserById(session.userId);
+
   if (!user) {
     await destroyCurrentSession();
     return null;

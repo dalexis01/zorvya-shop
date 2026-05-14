@@ -146,8 +146,6 @@ export default function GoogleRouteMap({ stops, storeAddress, apiKey }: Props) {
     return () => {
       cancelled = true;
     };
-    // run only once on mount
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [apiKey]);
 
   // ── route calculation — re-runs when stops change ──────────────────────

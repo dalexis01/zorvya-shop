@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { getProductById } from "@/lib/server/admin/products";
 import { requireAdminRequestUser } from "@/lib/server/admin/request-auth";
-import { formatCurrencySrd } from "@/lib/shop/number-format";
 
 export type ProductAccountingEntry = {
   productId: string;

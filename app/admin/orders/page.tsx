@@ -94,10 +94,6 @@ function formatDate(iso: string) {
   return d.toLocaleDateString("es", { day: "2-digit", month: "2-digit", year: "2-digit" });
 }
 
-function formatDateFull(iso: string) {
-  const d = new Date(iso);
-  return d.toLocaleString("es", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" });
-}
 
 // ─── click-menu (address / phone) ────────────────────────────────────────────
 function ClickMenu({
@@ -474,11 +470,6 @@ function BlocksTable({
   onOpenCancel: (o: AdminOrderRecord) => void;
 }) {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
-
-  // Abre todos los bloques cada vez que llegan nuevos datos
-  useEffect(() => {
-    setCollapsed(new Set());
-  }, [routeBlocks]);
 
   function toggleBlock(id: string) {
     setCollapsed((prev) => {
@@ -923,6 +914,7 @@ export default function AdminOrdersPage() {
         </div>
       ) : activeTab === "blocks" && routePlan ? (
         <BlocksTable
+          key={routePlan.routeBlocks.map((block) => block.id).join("|")}
           routeBlocks={routePlan.routeBlocks}
           nonRouteOrders={routePlan.nonRouteOrders}
           sentBlocks={sentBlocks}

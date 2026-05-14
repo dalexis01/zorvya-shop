@@ -8,8 +8,9 @@
     "start": "next start",
     "lint": "eslint",
     "admin:create": "node scripts/create-admin.mjs",
-    "orders:migrate:postgres": "node scripts/migrate-orders-to-postgres.mjs",
-    "products:migrate:postgres": "node --env-file=.env.local scripts/migrate-products-to-postgres.mjs"
+    "orders:migrate:postgres": "node --env-file=.env.local scripts/migrate-orders-to-postgres.mjs",
+    "products:migrate:postgres": "node --env-file=.env.local scripts/migrate-products-to-postgres.mjs",
+    "users:migrate:postgres": "node --env-file=.env.local scripts/migrate-users-to-postgres.mjs"
   },
   "dependencies": {
     "@types/react-datepicker": "^6.2.0",

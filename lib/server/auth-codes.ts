@@ -2,46 +2,24 @@ import "server-only";
 
 import { createHash, randomInt, randomUUID } from "node:crypto";
 
-import { readDataFile, writeDataFile } from "@/lib/server/storage";
+import { getCustomerPool, normalizeCustomerEmail } from "@/lib/server/customer-db";
 
 type AuthCodePurpose = "verify-email" | "reset-password" | "change-email";
 
-type StoredAuthCode = {
-  id: string;
-  userId: string;
-  email: string;
-  purpose: AuthCodePurpose;
-  codeHash: string;
-  createdAt: string;
-  expiresAt: string;
-  consumedAt: string | null;
-};
-
-const AUTH_CODES_FILE = "auth-codes.json";
 const AUTH_CODE_DURATION_MINUTES = 15;
-
-function normalizeEmail(email: string) {
-  return email.trim().toLowerCase();
-}
 
 function hashCode(code: string) {
   return createHash("sha256").update(code).digest("hex");
 }
 
-async function readAuthCodes() {
-  const codes = await readDataFile<StoredAuthCode[]>(AUTH_CODES_FILE, []);
-  const now = Date.now();
-  const activeCodes = codes.filter((entry) => new Date(entry.expiresAt).getTime() > now);
-
-  if (activeCodes.length !== codes.length) {
-    await writeDataFile(AUTH_CODES_FILE, activeCodes);
-  }
-
-  return activeCodes;
-}
-
-async function writeAuthCodes(codes: StoredAuthCode[]) {
-  await writeDataFile(AUTH_CODES_FILE, codes);
+async function cleanupExpiredAuthCodes() {
+  const pool = await getCustomerPool();
+  await pool.query(
+    `
+      DELETE FROM auth_codes
+      WHERE expires_at < NOW() - INTERVAL '1 day'
+    `
+  );
 }
 
 export async function createAuthCode(input: {
@@ -49,33 +27,51 @@ export async function createAuthCode(input: {
   email: string;
   purpose: AuthCodePurpose;
 }) {
-  const codes = await readAuthCodes();
+  const pool = await getCustomerPool();
+  await cleanupExpiredAuthCodes();
+
   const now = new Date();
   const expiresAt = new Date(now.getTime() + AUTH_CODE_DURATION_MINUTES * 60 * 1000);
   const nextCode = String(randomInt(100000, 1000000));
-  const normalizedEmail = normalizeEmail(input.email);
-  const remainingCodes = codes.filter(
-    (entry) =>
-      !(
-        entry.userId === input.userId &&
-        entry.email === normalizedEmail &&
-        entry.purpose === input.purpose &&
-        entry.consumedAt === null
-      )
+  const normalizedEmail = normalizeCustomerEmail(input.email);
+
+  await pool.query(
+    `
+      DELETE FROM auth_codes
+      WHERE
+        user_id = $1
+        AND email = $2
+        AND purpose = $3
+        AND consumed_at IS NULL
+    `,
+    [input.userId, normalizedEmail, input.purpose]
   );
 
-  remainingCodes.push({
-    id: randomUUID(),
-    userId: input.userId,
-    email: normalizedEmail,
-    purpose: input.purpose,
-    codeHash: hashCode(nextCode),
-    createdAt: now.toISOString(),
-    expiresAt: expiresAt.toISOString(),
-    consumedAt: null,
-  });
-
-  await writeAuthCodes(remainingCodes);
+  await pool.query(
+    `
+      INSERT INTO auth_codes (
+        id,
+        user_id,
+        email,
+        purpose,
+        code_hash,
+        created_at,
+        expires_at,
+        consumed_at
+      ) VALUES (
+        $1, $2, $3, $4, $5, $6::timestamptz, $7::timestamptz, NULL
+      )
+    `,
+    [
+      randomUUID(),
+      input.userId,
+      normalizedEmail,
+      input.purpose,
+      hashCode(nextCode),
+      now.toISOString(),
+      expiresAt.toISOString(),
+    ]
+  );
 
   return {
     code: nextCode,
@@ -89,28 +85,32 @@ export async function verifyAuthCode(input: {
   purpose: AuthCodePurpose;
   code: string;
 }) {
-  const normalizedEmail = normalizeEmail(input.email);
-  const codes = await readAuthCodes();
+  const pool = await getCustomerPool();
+  await cleanupExpiredAuthCodes();
+
+  const normalizedEmail = normalizeCustomerEmail(input.email);
   const nextCodeHash = hashCode(input.code.trim());
-  const codeIndex = codes.findIndex(
-    (entry) =>
-      entry.userId === input.userId &&
-      entry.email === normalizedEmail &&
-      entry.purpose === input.purpose &&
-      entry.consumedAt === null &&
-      entry.codeHash === nextCodeHash
+  const result = await pool.query<{ id: string }>(
+    `
+      UPDATE auth_codes
+      SET consumed_at = NOW()
+      WHERE id = (
+        SELECT id
+        FROM auth_codes
+        WHERE
+          user_id = $1
+          AND email = $2
+          AND purpose = $3
+          AND consumed_at IS NULL
+          AND expires_at >= NOW()
+          AND code_hash = $4
+        ORDER BY created_at DESC
+        LIMIT 1
+      )
+      RETURNING id
+    `,
+    [input.userId, normalizedEmail, input.purpose, nextCodeHash]
   );
 
-  if (codeIndex === -1) {
-    return false;
-  }
-
-  const updatedCodes = [...codes];
-  updatedCodes[codeIndex] = {
-    ...updatedCodes[codeIndex],
-    consumedAt: new Date().toISOString(),
-  };
-  await writeAuthCodes(updatedCodes);
-
-  return true;
+  return Boolean(result.rows[0]);
 }

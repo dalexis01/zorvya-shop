@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useState } from "react";
 
 import { formatCurrencySrd, formatKilometers } from "@/lib/shop/number-format";
-import { ADMIN_ORDER_STATUS_OPTIONS } from "@/lib/shop/order-status";
 import type { AdminOrderRouteBlock, AdminOrderRouteStop } from "@/lib/shop/admin-order-routing";
 import type { AdminOrderRecord } from "@/lib/shop/admin-types";
 

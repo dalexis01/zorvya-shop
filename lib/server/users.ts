@@ -3,46 +3,116 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 
 import type { SessionUser, StoredUser } from "@/lib/shop/types";
+import { getCustomerPool, normalizeCustomerEmail, normalizeCustomerPhone, trimCustomerText } from "@/lib/server/customer-db";
 import { hashPassword, verifyPassword } from "@/lib/server/passwords";
-import { readDataFile, writeDataFile } from "@/lib/server/storage";
 
-const USERS_FILE = "users.json";
+type StoredUserRow = {
+  id: string;
+  name: string;
+  email: string;
+  password_hash: string;
+  phone: string;
+  address: string;
+  is_blocked: boolean;
+  blocked_at: Date | string | null;
+  accepted_terms_at: Date | string | null;
+  accepted_terms_version: string | null;
+  email_verified_at: Date | string | null;
+  created_at: Date | string;
+  updated_at: Date | string;
+};
 
-function normalizeEmail(email: string) {
-  return email.trim().toLowerCase();
+function toIsoString(value: Date | string | null | undefined) {
+  if (!value) {
+    return null;
+  }
+
+  return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
 }
 
-function normalizePhone(phone: string) {
-  const trimmedPhone = phone.trim();
-  const hasLeadingPlus = trimmedPhone.startsWith("+");
-  const digitsOnly = trimmedPhone.replace(/[^\d]/g, "");
-
-  return `${hasLeadingPlus ? "+" : ""}${digitsOnly}`;
-}
-
-function trimText(value: string) {
-  return value.trim().replace(/\s+/g, " ");
-}
-
-function normalizeStoredUser(user: StoredUser): StoredUser {
+function rowToStoredUser(row: StoredUserRow): StoredUser {
   return {
-    ...user,
-    isBlocked: Boolean(user.isBlocked),
-    blockedAt: user.blockedAt ?? null,
-    acceptedTermsAt: user.acceptedTermsAt ?? null,
-    acceptedTermsVersion: user.acceptedTermsVersion ?? null,
-    emailVerifiedAt:
-      "emailVerifiedAt" in user ? user.emailVerifiedAt ?? null : user.createdAt,
+    id: row.id,
+    name: row.name,
+    email: row.email,
+    passwordHash: row.password_hash,
+    phone: row.phone,
+    address: row.address,
+    isBlocked: Boolean(row.is_blocked),
+    blockedAt: toIsoString(row.blocked_at),
+    acceptedTermsAt: toIsoString(row.accepted_terms_at),
+    acceptedTermsVersion: row.accepted_terms_version ?? null,
+    emailVerifiedAt: toIsoString(row.email_verified_at),
+    createdAt: toIsoString(row.created_at) ?? new Date().toISOString(),
+    updatedAt: toIsoString(row.updated_at) ?? new Date().toISOString(),
   };
 }
 
-async function readUsers() {
-  const users = await readDataFile<StoredUser[]>(USERS_FILE, []);
-  return users.map(normalizeStoredUser);
+async function findUserByField(field: "id" | "email" | "phone_normalized", value: string) {
+  const pool = await getCustomerPool();
+  const result = await pool.query<StoredUserRow>(
+    `
+      SELECT
+        id,
+        name,
+        email,
+        password_hash,
+        phone,
+        address,
+        is_blocked,
+        blocked_at,
+        accepted_terms_at,
+        accepted_terms_version,
+        email_verified_at,
+        created_at,
+        updated_at
+      FROM users
+      WHERE ${field} = $1
+      LIMIT 1
+    `,
+    [value]
+  );
+
+  return result.rows[0] ? rowToStoredUser(result.rows[0]) : null;
 }
 
-async function writeUsers(users: StoredUser[]) {
-  await writeDataFile(USERS_FILE, users);
+async function syncDefaultAddress(userId: string, address: string, updatedAt: string) {
+  const pool = await getCustomerPool();
+  const normalizedAddress = trimCustomerText(address);
+
+  if (!normalizedAddress) {
+    await pool.query("DELETE FROM addresses WHERE user_id = $1 AND is_default = TRUE", [userId]);
+    return;
+  }
+
+  await pool.query(
+    `
+      INSERT INTO addresses (
+        id,
+        user_id,
+        label,
+        address_line,
+        city,
+        country,
+        reference,
+        latitude,
+        longitude,
+        is_default,
+        created_at,
+        updated_at
+      ) VALUES (
+        $1, $2, 'Principal', $3, 'Paramaribo', 'Suriname', NULL, NULL, NULL, TRUE, $4::timestamptz, $5::timestamptz
+      )
+      ON CONFLICT (id) DO UPDATE SET
+        address_line = EXCLUDED.address_line,
+        city = EXCLUDED.city,
+        country = EXCLUDED.country,
+        reference = EXCLUDED.reference,
+        is_default = TRUE,
+        updated_at = EXCLUDED.updated_at
+    `,
+    [`addr-${userId}`, userId, normalizedAddress, updatedAt, updatedAt]
+  );
 }
 
 export function toSessionUser(user: StoredUser): SessionUser {
@@ -57,25 +127,21 @@ export function toSessionUser(user: StoredUser): SessionUser {
 }
 
 export async function findUserById(userId: string) {
-  const users = await readUsers();
-  return users.find((user) => user.id === userId) ?? null;
+  return findUserByField("id", userId);
 }
 
 export async function findUserByEmail(email: string) {
-  const users = await readUsers();
-  const normalizedEmail = normalizeEmail(email);
-  return users.find((user) => user.email === normalizedEmail) ?? null;
+  return findUserByField("email", normalizeCustomerEmail(email));
 }
 
 export async function findUserByPhone(phone: string) {
-  const users = await readUsers();
-  const normalizedPhone = normalizePhone(phone);
+  const normalizedPhone = normalizeCustomerPhone(phone);
 
   if (!normalizedPhone) {
     return null;
   }
 
-  return users.find((user) => normalizePhone(user.phone) === normalizedPhone) ?? null;
+  return findUserByField("phone_normalized", normalizedPhone);
 }
 
 export async function findUserByLoginIdentifier(identifier: string) {
@@ -96,25 +162,25 @@ export async function createUser(input: {
   acceptedTermsAt: string;
   acceptedTermsVersion: string;
 }) {
-  const users = await readUsers();
-  const normalizedEmail = normalizeEmail(input.email);
-  const normalizedPhone = normalizePhone(input.phone);
+  const pool = await getCustomerPool();
+  const normalizedEmail = normalizeCustomerEmail(input.email);
+  const normalizedPhone = normalizeCustomerPhone(input.phone);
 
-  if (users.some((user) => user.email === normalizedEmail)) {
+  if (await findUserByEmail(normalizedEmail)) {
     throw new Error("EMAIL_ALREADY_EXISTS");
   }
 
-  if (normalizedPhone && users.some((user) => normalizePhone(user.phone) === normalizedPhone)) {
+  if (normalizedPhone && (await findUserByPhone(input.phone))) {
     throw new Error("PHONE_ALREADY_EXISTS");
   }
 
   const now = new Date().toISOString();
   const newUser: StoredUser = {
     id: randomUUID(),
-    name: trimText(input.name),
+    name: trimCustomerText(input.name),
     email: normalizedEmail,
     passwordHash: await hashPassword(input.password),
-    phone: trimText(input.phone),
+    phone: trimCustomerText(input.phone),
     address: "",
     isBlocked: false,
     blockedAt: null,
@@ -125,8 +191,41 @@ export async function createUser(input: {
     updatedAt: now,
   };
 
-  users.push(newUser);
-  await writeUsers(users);
+  await pool.query(
+    `
+      INSERT INTO users (
+        id,
+        name,
+        email,
+        password_hash,
+        phone,
+        phone_normalized,
+        address,
+        is_blocked,
+        blocked_at,
+        accepted_terms_at,
+        accepted_terms_version,
+        email_verified_at,
+        created_at,
+        updated_at
+      ) VALUES (
+        $1, $2, $3, $4, $5, $6, $7, FALSE, NULL, $8::timestamptz, $9, NULL, $10::timestamptz, $11::timestamptz
+      )
+    `,
+    [
+      newUser.id,
+      newUser.name,
+      newUser.email,
+      newUser.passwordHash,
+      newUser.phone,
+      normalizedPhone,
+      newUser.address,
+      newUser.acceptedTermsAt,
+      newUser.acceptedTermsVersion,
+      newUser.createdAt,
+      newUser.updatedAt,
+    ]
+  );
 
   return newUser;
 }
@@ -169,6 +268,7 @@ export async function authenticateUser(
   }
 
   const passwordMatches = await verifyPassword(password, user.passwordHash);
+
   if (!passwordMatches) {
     return {
       success: false,
@@ -191,132 +291,242 @@ export async function updateUserContact(
     address?: string;
   }
 ) {
-  const users = await readUsers();
-  const index = users.findIndex((user) => user.id === userId);
+  const currentUser = await findUserById(userId);
 
-  if (index === -1) {
+  if (!currentUser) {
     return null;
   }
 
-  const currentUser = users[index];
+  const pool = await getCustomerPool();
   const nextPhone =
-    typeof input.phone === "string" ? trimText(input.phone) : currentUser.phone;
-  const normalizedPhone = normalizePhone(nextPhone);
-  const conflictingPhoneUser = users.find(
-    (user) => user.id !== userId && normalizedPhone && normalizePhone(user.phone) === normalizedPhone
-  );
+    typeof input.phone === "string" ? trimCustomerText(input.phone) : currentUser.phone;
+  const normalizedPhone = normalizeCustomerPhone(nextPhone);
 
-  if (conflictingPhoneUser) {
-    throw new Error("PHONE_ALREADY_EXISTS");
+  if (normalizedPhone) {
+    const conflictingPhoneUser = await pool.query<{ id: string }>(
+      `
+        SELECT id
+        FROM users
+        WHERE id <> $1 AND phone_normalized = $2
+        LIMIT 1
+      `,
+      [userId, normalizedPhone]
+    );
+
+    if (conflictingPhoneUser.rows[0]) {
+      throw new Error("PHONE_ALREADY_EXISTS");
+    }
   }
 
-  const updatedUser: StoredUser = {
-    ...currentUser,
-    name: input.name ? trimText(input.name) : currentUser.name,
-    phone: nextPhone,
-    address:
-      typeof input.address === "string" ? trimText(input.address) : currentUser.address,
-    updatedAt: new Date().toISOString(),
-  };
+  const updatedAt = new Date().toISOString();
+  const nextAddress =
+    typeof input.address === "string" ? trimCustomerText(input.address) : currentUser.address;
 
-  users[index] = updatedUser;
-  await writeUsers(users);
+  const result = await pool.query<StoredUserRow>(
+    `
+      UPDATE users
+      SET
+        name = $2,
+        phone = $3,
+        phone_normalized = $4,
+        address = $5,
+        updated_at = $6::timestamptz
+      WHERE id = $1
+      RETURNING
+        id,
+        name,
+        email,
+        password_hash,
+        phone,
+        address,
+        is_blocked,
+        blocked_at,
+        accepted_terms_at,
+        accepted_terms_version,
+        email_verified_at,
+        created_at,
+        updated_at
+    `,
+    [
+      userId,
+      input.name ? trimCustomerText(input.name) : currentUser.name,
+      nextPhone,
+      normalizedPhone,
+      nextAddress,
+      updatedAt,
+    ]
+  );
+
+  const updatedUser = result.rows[0] ? rowToStoredUser(result.rows[0]) : null;
+
+  if (updatedUser) {
+    await syncDefaultAddress(userId, updatedUser.address, updatedUser.updatedAt);
+  }
 
   return updatedUser;
 }
 
 export async function updateUserEmail(userId: string, email: string) {
-  const users = await readUsers();
-  const index = users.findIndex((user) => user.id === userId);
+  const pool = await getCustomerPool();
+  const normalizedEmail = normalizeCustomerEmail(email);
 
-  if (index === -1) {
-    return null;
-  }
-
-  const normalizedEmail = normalizeEmail(email);
-  const conflictingEmailUser = users.find(
-    (user) => user.id !== userId && user.email === normalizedEmail
+  const conflictingEmailUser = await pool.query<{ id: string }>(
+    `
+      SELECT id
+      FROM users
+      WHERE id <> $1 AND email = $2
+      LIMIT 1
+    `,
+    [userId, normalizedEmail]
   );
 
-  if (conflictingEmailUser) {
+  if (conflictingEmailUser.rows[0]) {
     throw new Error("EMAIL_ALREADY_EXISTS");
   }
 
-  const updatedUser: StoredUser = {
-    ...users[index],
-    email: normalizedEmail,
-    emailVerifiedAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  };
+  const result = await pool.query<StoredUserRow>(
+    `
+      UPDATE users
+      SET
+        email = $2,
+        email_verified_at = NOW(),
+        updated_at = NOW()
+      WHERE id = $1
+      RETURNING
+        id,
+        name,
+        email,
+        password_hash,
+        phone,
+        address,
+        is_blocked,
+        blocked_at,
+        accepted_terms_at,
+        accepted_terms_version,
+        email_verified_at,
+        created_at,
+        updated_at
+    `,
+    [userId, normalizedEmail]
+  );
 
-  users[index] = updatedUser;
-  await writeUsers(users);
-
-  return updatedUser;
+  return result.rows[0] ? rowToStoredUser(result.rows[0]) : null;
 }
 
 export async function getAllUsers() {
-  return readUsers();
+  const pool = await getCustomerPool();
+  const result = await pool.query<StoredUserRow>(
+    `
+      SELECT
+        id,
+        name,
+        email,
+        password_hash,
+        phone,
+        address,
+        is_blocked,
+        blocked_at,
+        accepted_terms_at,
+        accepted_terms_version,
+        email_verified_at,
+        created_at,
+        updated_at
+      FROM users
+      ORDER BY created_at DESC, id DESC
+    `
+  );
+
+  return result.rows.map(rowToStoredUser);
 }
 
 export async function updateUserBlockedState(userId: string, isBlocked: boolean) {
-  const users = await readUsers();
-  const index = users.findIndex((user) => user.id === userId);
+  const pool = await getCustomerPool();
+  const result = await pool.query<StoredUserRow>(
+    `
+      UPDATE users
+      SET
+        is_blocked = $2,
+        blocked_at = CASE WHEN $2 THEN NOW() ELSE NULL END,
+        updated_at = NOW()
+      WHERE id = $1
+      RETURNING
+        id,
+        name,
+        email,
+        password_hash,
+        phone,
+        address,
+        is_blocked,
+        blocked_at,
+        accepted_terms_at,
+        accepted_terms_version,
+        email_verified_at,
+        created_at,
+        updated_at
+    `,
+    [userId, isBlocked]
+  );
 
-  if (index === -1) {
-    return null;
-  }
-
-  const currentUser = users[index];
-  const updatedUser: StoredUser = {
-    ...currentUser,
-    isBlocked,
-    blockedAt: isBlocked ? new Date().toISOString() : null,
-    updatedAt: new Date().toISOString(),
-  };
-
-  users[index] = updatedUser;
-  await writeUsers(users);
-
-  return updatedUser;
+  return result.rows[0] ? rowToStoredUser(result.rows[0]) : null;
 }
 
 export async function markUserEmailVerified(userId: string) {
-  const users = await readUsers();
-  const index = users.findIndex((user) => user.id === userId);
+  const pool = await getCustomerPool();
+  const result = await pool.query<StoredUserRow>(
+    `
+      UPDATE users
+      SET
+        email_verified_at = COALESCE(email_verified_at, NOW()),
+        updated_at = NOW()
+      WHERE id = $1
+      RETURNING
+        id,
+        name,
+        email,
+        password_hash,
+        phone,
+        address,
+        is_blocked,
+        blocked_at,
+        accepted_terms_at,
+        accepted_terms_version,
+        email_verified_at,
+        created_at,
+        updated_at
+    `,
+    [userId]
+  );
 
-  if (index === -1) {
-    return null;
-  }
-
-  const updatedUser: StoredUser = {
-    ...users[index],
-    emailVerifiedAt: users[index].emailVerifiedAt ?? new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  };
-
-  users[index] = updatedUser;
-  await writeUsers(users);
-
-  return updatedUser;
+  return result.rows[0] ? rowToStoredUser(result.rows[0]) : null;
 }
 
 export async function updateUserPassword(userId: string, password: string) {
-  const users = await readUsers();
-  const index = users.findIndex((user) => user.id === userId);
+  const pool = await getCustomerPool();
+  const passwordHash = await hashPassword(password);
+  const result = await pool.query<StoredUserRow>(
+    `
+      UPDATE users
+      SET
+        password_hash = $2,
+        updated_at = NOW()
+      WHERE id = $1
+      RETURNING
+        id,
+        name,
+        email,
+        password_hash,
+        phone,
+        address,
+        is_blocked,
+        blocked_at,
+        accepted_terms_at,
+        accepted_terms_version,
+        email_verified_at,
+        created_at,
+        updated_at
+    `,
+    [userId, passwordHash]
+  );
 
-  if (index === -1) {
-    return null;
-  }
-
-  const updatedUser: StoredUser = {
-    ...users[index],
-    passwordHash: await hashPassword(password),
-    updatedAt: new Date().toISOString(),
-  };
-
-  users[index] = updatedUser;
-  await writeUsers(users);
-
-  return updatedUser;
+  return result.rows[0] ? rowToStoredUser(result.rows[0]) : null;
 }
