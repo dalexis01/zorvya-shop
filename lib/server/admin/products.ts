@@ -379,14 +379,18 @@ async function getProductsPool() {
   if (!productsPoolInstance) {
     productsPoolInstance = new Pool({
       connectionString,
-      max: 10,
+      max: 3,
       idleTimeoutMillis: 30_000,
+      connectionTimeoutMillis: 8_000,
       ssl: shouldUseSsl(connectionString) ? { rejectUnauthorized: false } : undefined,
     });
   }
 
   if (!productsSchemaReadyPromise) {
-    productsSchemaReadyPromise = ensureProductsSchema(productsPoolInstance);
+    productsSchemaReadyPromise = ensureProductsSchema(productsPoolInstance).catch((err) => {
+      productsSchemaReadyPromise = null;
+      throw err;
+    });
   }
 
   await productsSchemaReadyPromise;

@@ -681,10 +681,12 @@ export default function AdminOrdersPage() {
     setNextCursor(null);
 
     async function load() {
+      const abort = new AbortController();
+      const timer = setTimeout(() => abort.abort(), 12_000);
       try {
         const [ordRes, metaRes] = await Promise.all([
-          fetch(apiUrl({ status, deliveryType, last4 }), { cache: "no-store" }),
-          fetch("/api/admin/orders/meta", { cache: "no-store" }),
+          fetch(apiUrl({ status, deliveryType, last4 }), { cache: "no-store", signal: abort.signal }),
+          fetch("/api/admin/orders/meta", { cache: "no-store", signal: abort.signal }),
         ]);
         const [ordData, metaData] = await Promise.all([
           ordRes.json() as Promise<AdminOrdersResponse>,
@@ -723,7 +725,12 @@ export default function AdminOrdersPage() {
           }
         }
         if (metaData.success) setMeta(metaData.meta ?? null);
+      } catch (err) {
+        if (!alive) return;
+        const isTimeout = err instanceof DOMException && err.name === "AbortError";
+        setNotice({ tone: "error", message: isTimeout ? "Tiempo de espera agotado. Intenta de nuevo." : "Error al cargar ordenes." });
       } finally {
+        clearTimeout(timer);
         if (alive) setLoading(false);
       }
     }
