@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import {
+  Fragment,
   useCallback,
   useDeferredValue,
   useEffect,
@@ -137,6 +138,92 @@ type AssistantBubble = {
   id: string;
   message: string;
 };
+
+const PROMO_BADGES = ["40% OFF", "HOT DEAL", "SOLO HOY", "TOP OFFER"] as const;
+
+function shouldUseDirectStorefrontImage(src: string) {
+  return src.startsWith("data:") || src.startsWith("/api/products/");
+}
+
+function CatalogPromoBanner({
+  products,
+  onOpen,
+}: {
+  products: StorefrontProduct[];
+  onOpen: (product: StorefrontProduct) => void;
+}) {
+  const [activeIndex, setActiveIndex] = useState(0);
+
+  useEffect(() => {
+    if (products.length <= 1) {
+      return;
+    }
+
+    const intervalId = window.setInterval(() => {
+      setActiveIndex((current) => (current + 1) % products.length);
+    }, 3400);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [products.length]);
+
+  const activeProduct = products[activeIndex] ?? products[0] ?? null;
+
+  if (!activeProduct) {
+    return null;
+  }
+
+  return (
+    <article className="relative col-span-2 row-span-2 overflow-hidden rounded-[1.15rem] border border-rose-400/40 bg-[#050816] shadow-[0_18px_50px_rgba(2,6,23,0.46)] sm:rounded-[1.35rem] md:col-span-2 lg:col-span-2 xl:col-span-2">
+      <button
+        type="button"
+        onClick={() => onOpen(activeProduct)}
+        className="relative block h-full min-h-[16.5rem] w-full overflow-hidden text-left sm:min-h-[19rem] lg:min-h-[20rem]"
+      >
+        {products.map((product, index) => {
+          const isActive = index === activeIndex;
+
+          return (
+            <div
+              key={`promo-${product.id}`}
+              className={`absolute inset-0 transition-all duration-700 ${
+                isActive ? "opacity-100 scale-100" : "pointer-events-none opacity-0 scale-[1.035]"
+              }`}
+            >
+              <Image
+                src={product.image}
+                alt={product.name}
+                fill
+                quality={96}
+                unoptimized={shouldUseDirectStorefrontImage(product.image)}
+                sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 40vw"
+                className="object-cover"
+              />
+            </div>
+          );
+        })}
+
+        <div className="absolute inset-0 bg-gradient-to-t from-black/18 via-transparent to-black/10" />
+
+        <span className="absolute left-3 top-3 rounded-full border border-rose-300/35 bg-rose-600 px-3 py-1 text-[10px] font-black uppercase tracking-[0.22em] text-white shadow-[0_8px_24px_rgba(225,29,72,0.45)] sm:left-4 sm:top-4">
+          {PROMO_BADGES[activeIndex % PROMO_BADGES.length]}
+        </span>
+
+        <div className="absolute bottom-3 left-1/2 flex -translate-x-1/2 items-center gap-1.5 rounded-full bg-black/35 px-2.5 py-1 backdrop-blur-sm">
+          {products.map((product, index) => (
+            <span
+              key={`promo-dot-${product.id}`}
+              className={`h-1.5 rounded-full transition-all ${
+                index === activeIndex ? "w-5 bg-white" : "w-1.5 bg-white/45"
+              }`}
+            />
+          ))}
+        </div>
+      </button>
+    </article>
+  );
+}
 
 type QuickViewState = {
   productId: string;
@@ -764,6 +851,10 @@ export default function ShopPage({
         : visibleHomepageSections.flatMap((section) => section.products),
     [filteredProducts, isFiltering, visibleHomepageSections]
   );
+  const catalogPromoProducts = useMemo(() => {
+    const source = catalogProducts.length > 5 ? catalogProducts.slice(1, 9) : catalogProducts;
+    return source.filter((product) => Boolean(product.image)).slice(0, 4);
+  }, [catalogProducts]);
 
   const marqueeItems = useMemo(() => {
     const source = localizedSettings.promoBarText || "";
@@ -2201,15 +2292,22 @@ export default function ShopPage({
               </div>
             ) : (
               <div className="grid auto-rows-fr grid-cols-2 gap-2 sm:gap-2.5 md:grid-cols-4 md:gap-3 lg:grid-cols-5 lg:gap-3.5 xl:grid-cols-6 2xl:grid-cols-7">
-                {catalogProducts.map((product) => (
-                  <ProductCard
-                    key={String(product.id)}
-                    locale={locale}
-                    product={product}
-                    deliveryEstimateText={deliveryEstimateText}
-                    onAdd={addToCart}
-                    onOpen={openProduct}
-                  />
+                {catalogProducts.map((product, index) => (
+                  <Fragment key={`catalog-item-${product.id}`}>
+                    <ProductCard
+                      locale={locale}
+                      product={product}
+                      deliveryEstimateText={deliveryEstimateText}
+                      onAdd={addToCart}
+                      onOpen={openProduct}
+                    />
+                    {index === 4 && catalogPromoProducts.length > 0 ? (
+                      <CatalogPromoBanner
+                        products={catalogPromoProducts}
+                        onOpen={openProduct}
+                      />
+                    ) : null}
+                  </Fragment>
                 ))}
               </div>
             )}

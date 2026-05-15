@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Inter, Manrope, Sora } from "next/font/google";
 import { cookies } from "next/headers";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 
 import { STORE_BRAND } from "@/lib/shop/config";
 import { CLIENT_THEME_COOKIE_KEY, normalizeClientTheme } from "@/lib/shop/client-theme";
@@ -60,6 +61,7 @@ export default async function RootLayout({
       <body className="min-h-full flex flex-col bg-[#02030a] text-slate-100">
         {children}
         {modal}
+        <SpeedInsights />
       </body>
     </html>
   );
