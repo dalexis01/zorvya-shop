@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import {
   createDeliveryBlock,
+  ensurePendingOrdersAssignedToBlocks,
   listDeliveryBlocks,
   MAX_ORDERS_PER_BLOCK,
 } from "@/lib/server/admin/delivery-blocks-store";
@@ -14,8 +15,9 @@ export async function GET() {
   const auth = await requireAdminRequestUser();
   if (!auth.user) return NextResponse.json({ success: false, error: auth.error }, { status: auth.status });
 
+  const assignment = await ensurePendingOrdersAssignedToBlocks();
   const blocks = await listDeliveryBlocks();
-  return NextResponse.json({ success: true, blocks });
+  return NextResponse.json({ success: true, blocks, assignment });
 }
 
 export async function POST(request: Request) {

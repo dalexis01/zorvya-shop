@@ -446,3 +446,103 @@ export async function getAssignedOrderIds(): Promise<Set<string>> {
   );
   return new Set(res.rows.map((r) => r.order_id));
 }
+
+export async function ensurePendingOrdersAssignedToBlocks(): Promise<{
+  assignedCount: number;
+  createdBlocks: number;
+}> {
+  const pool = await getBlocksPool();
+  const client = await pool.connect();
+  const now = new Date().toISOString();
+
+  try {
+    await client.query("BEGIN");
+    await client.query(`SELECT pg_advisory_xact_lock(91732541)`);
+
+    const availableBlocksRes = await client.query<{
+      id: string;
+      name: string;
+      status: BlockStatus;
+      order_count: number;
+    }>(
+      `SELECT
+         db.id,
+         db.name,
+         db.status,
+         COUNT(dbo.order_id)::int AS order_count
+       FROM delivery_blocks db
+       LEFT JOIN delivery_block_orders dbo ON dbo.block_id = db.id
+       WHERE db.status IN ('draft', 'ready')
+       GROUP BY db.id, db.name, db.status, db.created_at
+       ORDER BY db.created_at ASC`
+    );
+
+    const unassignedOrdersRes = await client.query<{ id: string }>(
+      `SELECT o.id
+       FROM orders o
+       LEFT JOIN delivery_block_orders dbo ON dbo.order_id = o.id
+       WHERE dbo.order_id IS NULL
+         AND o.delivery_type = 'delivery'
+         AND o.cancelled_at IS NULL
+         AND COALESCE(o.admin_status, '') <> 'Pedido completado'
+       ORDER BY o.created_at DESC`
+    );
+
+    if (unassignedOrdersRes.rows.length === 0) {
+      await client.query("COMMIT");
+      return { assignedCount: 0, createdBlocks: 0 };
+    }
+
+    const availableBlocks = availableBlocksRes.rows.map((row) => ({
+      id: row.id,
+      count: Number(row.order_count ?? 0),
+    }));
+
+    let assignedCount = 0;
+    let createdBlocks = 0;
+
+    for (const order of unassignedOrdersRes.rows) {
+      let target = availableBlocks.find((block) => block.count < MAX_ORDERS_PER_BLOCK);
+
+      if (!target) {
+        const blockId = `BLK-${randomUUID().slice(0, 8).toUpperCase()}`;
+        createdBlocks += 1;
+        await client.query(
+          `INSERT INTO delivery_blocks (
+             id, name, status, total_amount, total_delivery_fee, created_at, updated_at, created_by
+           ) VALUES ($1, $2, 'draft', 0, 0, $3::timestamptz, $3::timestamptz, $4)`,
+          [
+            blockId,
+            `Bloque auto ${String(createdBlocks).padStart(2, "0")}`,
+            now,
+            "system",
+          ]
+        );
+        target = { id: blockId, count: 0 };
+        availableBlocks.push(target);
+      }
+
+      await client.query(
+        `INSERT INTO delivery_block_orders (block_id, order_id, position, created_at)
+         VALUES ($1, $2, $3, $4::timestamptz)
+         ON CONFLICT (order_id) DO NOTHING`,
+        [target.id, order.id, target.count, now]
+      );
+
+      target.count += 1;
+      assignedCount += 1;
+    }
+
+    for (const block of availableBlocks) {
+      await recalculateBlockTotals(client, block.id, now);
+    }
+
+    await client.query("COMMIT");
+    return { assignedCount, createdBlocks };
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
