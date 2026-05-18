@@ -142,6 +142,7 @@ type ProductSummaryRow = QueryResultRow & {
   updated_at: Date | string;
   updated_by: string;
   translations_json: Product["translations"] | null;
+  first_image_url: string | null;
 };
 
 export type ProductsDataSource = "postgres" | "postgres-required";
@@ -634,9 +635,18 @@ function parseSummaryColors(value: string | null | undefined) {
 
 function productSummaryRowToProduct(row: ProductSummaryRow): Product {
   const updatedAt = toIsoString(row.updated_at) ?? null;
-  const images = row.has_images
-    ? createSummaryImages(buildProductMediaProxyUrl(row.id, "0", updatedAt))
-    : [];
+
+  // Prefer the real Blob URL stored in images_json[0].url (absolute, works on mobile).
+  // Fall back to the media proxy only when the stored URL is still base64.
+  const rawFirstUrl = trimText(row.first_image_url ?? "");
+  const firstImageUrl =
+    rawFirstUrl && !rawFirstUrl.startsWith("data:")
+      ? rawFirstUrl
+      : rawFirstUrl.startsWith("data:")
+        ? buildProductMediaProxyUrl(row.id, "0", updatedAt)
+        : null;
+
+  const images = firstImageUrl ? createSummaryImages(firstImageUrl) : [];
   const internal = normalizeInternalDetails({
     supplier: row.supplier_value ?? "",
     supplierPhone: row.supplier_phone_value ?? "",
@@ -735,6 +745,7 @@ async function readProductSummariesFromDatabase(options?: {
         delivery_label,
         show_stock,
         CASE WHEN jsonb_array_length(images_json) > 0 THEN TRUE ELSE FALSE END AS has_images,
+        images_json -> 0 ->> 'url' AS first_image_url,
         is_active,
         is_visible,
         is_featured,
