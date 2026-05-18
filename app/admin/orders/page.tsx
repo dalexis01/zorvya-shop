@@ -693,6 +693,9 @@ function BlocksTable({
                           <span className="text-slate-500">Cobro:</span>
                           <span className="font-mono font-bold text-cyan-300">{formatCurrencySrd(block.totalAmount)}</span>
                           <span className="text-slate-600">·</span>
+                          <span className="text-slate-500">Delivery:</span>
+                          <span className="font-mono font-bold text-emerald-300">{formatCurrencySrd(block.deliveryFees)}</span>
+                          <span className="text-slate-600">·</span>
                           <span className="text-slate-500">Ganancia:</span>
                           <span className={`font-mono font-bold ${profit.profit >= 0 ? "text-emerald-300" : "text-rose-400"}`}>
                             {formatCurrencySrd(profit.profit)}
