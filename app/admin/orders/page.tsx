@@ -1281,13 +1281,14 @@ export default function AdminOrdersPage() {
         })}
       </div>
 
-      {search && (
-        <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/10 px-4 py-3 text-sm text-cyan-200">
-          {isIdSearch(search)
-            ? <>Buscando pedido con ID <strong>···{search.toUpperCase()}</strong></>
-            : <>Resultados para <strong>&ldquo;{search}&rdquo;</strong> — nombre, teléfono, email</>}
-        </div>
-      )}
+      <div className="rounded-xl border border-slate-800 bg-[#050816] px-4 py-2.5 text-xs text-slate-500">
+        {search
+          ? isIdSearch(search)
+            ? <span className="text-cyan-300">Buscando ID <strong>···{search.toUpperCase()}</strong> en todo el historial</span>
+            : <span className="text-cyan-300">Resultados para <strong>&ldquo;{search}&rdquo;</strong> — buscando en todo el historial</span>
+          : <>Mostrando pedidos de las <strong className="text-slate-300">últimas 24 horas</strong> · Usa el buscador para encontrar pedidos anteriores</>
+        }
+      </div>
 
       {/* ── Notice ── */}
       {notice && (

@@ -69,6 +69,7 @@ export async function getAdminOrders(options?: {
   cursor?: string | null;
   limit?: number;
   autoMode?: boolean;
+  windowHours?: number;
 }) {
   const autoMode = options?.autoMode ?? false;
   const { orders, hasMore, nextCursor } = await loadPaginatedAdminOrdersFromStore({
@@ -79,6 +80,7 @@ export async function getAdminOrders(options?: {
     cursor: options?.cursor,
     limit: options?.limit,
     autoMode,
+    windowHours: options?.windowHours,
   });
   return {
     orders: orders.map((order) => toAdminOrderRecord(order, autoMode)),

@@ -12,11 +12,21 @@ import { requireAdminRequestUser } from "@/lib/server/admin/request-auth";
 
 export const dynamic = "force-dynamic";
 
+// Throttle the expensive auto-assign call: run at most once every 20 seconds per instance.
+let lastAssignTs = 0;
+const ASSIGN_THROTTLE_MS = 20_000;
+
 export async function GET() {
   const auth = await requireAdminRequestUser();
   if (!auth.user) return NextResponse.json({ success: false, error: auth.error }, { status: auth.status });
 
-  const assignment = await ensurePendingOrdersAssignedToBlocks();
+  const now = Date.now();
+  let assignment = { assignedCount: 0, createdBlocks: 0 };
+  if (now - lastAssignTs > ASSIGN_THROTTLE_MS) {
+    assignment = await ensurePendingOrdersAssignedToBlocks();
+    lastAssignTs = now;
+  }
+
   const blocks = await listDeliveryBlocks();
   const orderIds = Array.from(
     new Set(

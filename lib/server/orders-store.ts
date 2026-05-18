@@ -89,6 +89,7 @@ export type AdminOrdersQueryInput = {
   cursor?: string | null;
   limit?: number;
   autoMode?: boolean;
+  windowHours?: number; // when set, only return orders created within this many hours
 };
 
 let poolInstance: Pool | null = null;
@@ -416,6 +417,12 @@ function applyAdminFilters(
   if (last4) {
     params.push(`%${last4}`);
     baseClauses.push(`right(id, 4) ILIKE $${params.length}`);
+  }
+
+  // Time window — only applies when there is no search/last4 (search always scans all history)
+  if (input.windowHours && input.windowHours > 0 && !search && !last4) {
+    params.push(input.windowHours);
+    baseClauses.push(`created_at >= NOW() - ($${params.length} || ' hours')::INTERVAL`);
   }
 }
 
