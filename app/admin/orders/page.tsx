@@ -738,9 +738,10 @@ export default function AdminOrdersPage() {
   async function loadPersistentBlocks() {
     setPersistentBlocksLoading(true);
     try {
+      // Use two proper GET endpoints — the HEAD endpoint was broken (HTTP spec strips body).
       const [blocksRes, assignedRes] = await Promise.all([
         fetch("/api/admin/blocks", { cache: "no-store" }),
-        fetch("/api/admin/blocks", { method: "HEAD", cache: "no-store" }),
+        fetch("/api/admin/blocks/assigned", { cache: "no-store" }),
       ]);
       const blocksData = (await blocksRes.json()) as { success?: boolean; blocks?: DeliveryBlock[] };
       const assignedData = (await assignedRes.json()) as { success?: boolean; assignedOrderIds?: string[] };
@@ -1099,32 +1100,39 @@ export default function AdminOrdersPage() {
         <div className="rounded-xl border border-slate-800 bg-[#050816] py-16 text-center text-xs uppercase tracking-[0.3em] text-slate-600">
           Cargando...
         </div>
-      ) : orders.length === 0 ? (
-        <div className="rounded-xl border border-slate-800 bg-[#050816] py-16 text-center text-sm text-slate-500">
-          No hay ordenes.
-        </div>
-      ) : activeTab === "blocks" && routePlan ? (
+      ) : activeTab === "blocks" ? (
+        // Blocks tab: always render PersistentBlocksPanel first, then route blocks.
+        // "No hay ordenes" must NOT hide the persistent blocks panel.
         <>
-          {/* ── Persistent blocks panel ── */}
           <PersistentBlocksPanel
             blocks={persistentBlocks}
             loading={persistentBlocksLoading}
             onCreateBlock={() => setShowCreateBlock(true)}
             onManageBlock={(id) => void handleOpenBlockManager(id)}
           />
-          <BlocksTable
-          key={routePlan.routeBlocks.map((block) => block.id).join("|")}
-          routeBlocks={routePlan.routeBlocks}
-          nonRouteOrders={routePlan.nonRouteOrders}
-          sentBlocks={sentBlocks}
-          sendingBlockId={sendingBlockId}
-          bulkingBlockId={bulkingBlockId}
-          onViewRoute={setActiveModalBlock}
-          onSend={handleSendBlock}
-          onBulkStatus={handleBulkBlockStatus}
-          {...commonTableProps}
-        />
+          {orders.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-slate-700 bg-[#050816] px-8 py-12 text-center text-sm text-slate-500">
+              No hay pedidos de delivery pendientes para organizar en bloques automáticos.
+            </div>
+          ) : routePlan ? (
+            <BlocksTable
+              key={routePlan.routeBlocks.map((block) => block.id).join("|")}
+              routeBlocks={routePlan.routeBlocks}
+              nonRouteOrders={routePlan.nonRouteOrders}
+              sentBlocks={sentBlocks}
+              sendingBlockId={sendingBlockId}
+              bulkingBlockId={bulkingBlockId}
+              onViewRoute={setActiveModalBlock}
+              onSend={handleSendBlock}
+              onBulkStatus={handleBulkBlockStatus}
+              {...commonTableProps}
+            />
+          ) : null}
         </>
+      ) : orders.length === 0 ? (
+        <div className="rounded-xl border border-slate-800 bg-[#050816] py-16 text-center text-sm text-slate-500">
+          No hay ordenes.
+        </div>
       ) : (
         <OrdersTable orders={orders} {...commonTableProps} />
       )}

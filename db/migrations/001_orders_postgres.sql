@@ -50,3 +50,21 @@ CREATE INDEX IF NOT EXISTS idx_orders_customer_email
 
 CREATE INDEX IF NOT EXISTS idx_orders_id_tail
   ON orders ((right(id, 4)));
+
+-- Composite indexes for common admin tab queries (004_orders_indexes)
+CREATE INDEX IF NOT EXISTS idx_orders_delivery_pending
+  ON orders (delivery_type, created_at DESC, id DESC)
+  WHERE cancelled_at IS NULL;
+
+CREATE INDEX IF NOT EXISTS idx_orders_type_created
+  ON orders (delivery_type, cancelled_at, created_at DESC, id DESC);
+
+CREATE INDEX IF NOT EXISTS idx_orders_customer_name_lower
+  ON orders (lower(customer_name));
+
+CREATE INDEX IF NOT EXISTS idx_orders_customer_phone
+  ON orders (customer_phone);
+
+CREATE INDEX IF NOT EXISTS idx_orders_pending_created
+  ON orders (created_at DESC, id DESC)
+  WHERE cancelled_at IS NULL AND admin_status IS DISTINCT FROM 'Pedido completado';

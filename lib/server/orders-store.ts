@@ -633,6 +633,29 @@ export async function getDashboardOrderStats() {
   };
 }
 
+// Load a specific set of orders by their IDs — bypasses pagination limits.
+// Used by block creation and autoroute to get accurate data for any order.
+export async function loadOrdersByIdsFromStore(orderIds: string[]) {
+  if (!isOrdersDatabaseConfigured() || orderIds.length === 0) return [];
+
+  const pool = await getOrdersPool();
+  const result = await pool.query<OrderRow>(
+    `SELECT
+        id, user_id, customer_name, customer_phone, customer_email, customer_address,
+        delivery_type, pickup_date, pickup_time, requested_agent_call,
+        items_json, subtotal, delivery_distance_km, delivery_fee, total,
+        payment_json, created_at, updated_at, cancelled_at, cancellation_reason,
+        cancelled_by, cancelled_by_name, admin_reviewed_at, admin_status,
+        status_history_json, issues_json
+     FROM orders
+     WHERE id = ANY($1)
+     ORDER BY created_at DESC, id DESC`,
+    [orderIds]
+  );
+
+  return result.rows.map(orderRowToStoredOrder);
+}
+
 export async function loadOrderByIdFromStore(orderId: string) {
   if (!isOrdersDatabaseConfigured()) {
     throw new Error("ORDERS_DB_NOT_CONFIGURED");

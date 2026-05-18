@@ -2,7 +2,7 @@ import { estimateDeliveryDistance, STORE_ADDRESS } from "@/helpers/delivery";
 import type { AdminOrderRecord } from "@/lib/shop/admin-types";
 
 export const TARGET_ROUTE_BLOCK_SIZE = 5;
-export const MAX_ROUTE_BLOCKS = 3;
+export const MAX_ROUTE_BLOCKS = 10; // supports up to 50 pending delivery orders
 
 const AVERAGE_SPEED_KMH = 25;
 const SERVICE_MINUTES_PER_STOP = 5;

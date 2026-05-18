@@ -1,7 +1,7 @@
 import "server-only";
 
 import { getProductsForOrderLookup } from "@/lib/server/admin/products";
-import { getAllOrders, getOrderById } from "@/lib/server/orders";
+import { getAllOrders, getOrderById, getOrdersByIds } from "@/lib/server/orders";
 import {
   loadAdminOrdersMetaFromStore,
   loadPaginatedAdminOrdersFromStore,
@@ -125,4 +125,16 @@ export async function getAdminOrderById(orderId: string) {
 
 export async function getAdminOrdersMeta(): Promise<AdminOrdersMeta> {
   return loadAdminOrdersMetaFromStore();
+}
+
+// Loads specific orders by their IDs — no pagination limit.
+// Used by block creation and autoroute to get accurate data regardless of order count.
+export async function getAdminOrdersByIds(ids: string[]): Promise<AdminOrderRecord[]> {
+  if (ids.length === 0) return [];
+  const [orders, products] = await Promise.all([
+    getOrdersByIds(ids),
+    getProductsForOrderLookup(),
+  ]);
+  const productsByName = buildProductNameMap(products);
+  return orders.map((order) => toAdminOrderRecord(order, productsByName));
 }

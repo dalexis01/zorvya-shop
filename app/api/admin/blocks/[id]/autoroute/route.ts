@@ -6,7 +6,7 @@ import {
 } from "@/lib/server/admin/delivery-blocks-store";
 import { geocodeAddressForAdmin, getStoreCoordinates } from "@/lib/server/delivery-quote";
 import { requireAdminRequestUser } from "@/lib/server/admin/request-auth";
-import { getAdminOrders } from "@/lib/server/admin/orders";
+import { getAdminOrdersByIds } from "@/lib/server/admin/orders";
 import { STORE_ADDRESS } from "@/helpers/delivery";
 
 export const dynamic = "force-dynamic";
@@ -42,12 +42,9 @@ export async function POST(_req: Request, ctx: RouteContext) {
       return NextResponse.json({ success: false, error: "El bloque no tiene ordenes." }, { status: 400 });
     }
 
-    // Get orders to access addresses
-    const { orders: allOrders } = await getAdminOrders({ status: "all", deliveryType: "delivery" });
+    // Load block orders by their specific IDs — no pagination limit.
     const blockOrderIds = block.orders.map((s) => s.orderId);
-    const blockOrders = blockOrderIds
-      .map((oid) => allOrders.find((o) => o.id === oid))
-      .filter(Boolean);
+    const blockOrders = await getAdminOrdersByIds(blockOrderIds);
 
     if (blockOrders.length === 0) {
       return NextResponse.json({ success: false, error: "No se encontraron las ordenes del bloque." }, { status: 400 });
@@ -56,7 +53,7 @@ export async function POST(_req: Request, ctx: RouteContext) {
     // Geocode all addresses in parallel
     const [storeCoords, ...orderCoords] = await Promise.all([
       getStoreCoordinates(),
-      ...blockOrders.map((o) => geocodeAddressForAdmin(o!.customerAddress)),
+      ...blockOrders.map((o) => geocodeAddressForAdmin(o.customerAddress)),
     ]);
 
     // Build waypoint list: store → orders
@@ -102,7 +99,7 @@ export async function POST(_req: Request, ctx: RouteContext) {
     // Build leg data
     const legs = route.legs ?? [];
     const legData = blockOrders.map((order, i) => ({
-      orderId: order!.id,
+      orderId: order.id,
       distanceKm: Number(((legs[i]?.distance ?? 0) / 1000).toFixed(2)),
       durationMinutes: Math.round((legs[i]?.duration ?? 0) / 60),
     }));
@@ -120,7 +117,7 @@ export async function POST(_req: Request, ctx: RouteContext) {
     });
 
     // Build Google Maps link (addresses, no API key needed)
-    const addresses = [STORE_ADDRESS, ...blockOrders.map((o) => o!.customerAddress), STORE_ADDRESS];
+    const addresses = [STORE_ADDRESS, ...blockOrders.map((o) => o.customerAddress), STORE_ADDRESS];
     const gmapsUrl = buildGoogleMapsUrl(addresses);
 
     return NextResponse.json({

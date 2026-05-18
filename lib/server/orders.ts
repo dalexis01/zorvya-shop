@@ -10,6 +10,7 @@ import {
   insertOrderIntoStore,
   loadAllOrdersFromStore,
   loadOrderByIdFromStore,
+  loadOrdersByIdsFromStore,
   loadOrdersByUserIdFromStore,
   loadPaginatedUserOrdersSummaryFromStore,
   type PaginatedUserOrdersSummaryResult,
@@ -361,6 +362,12 @@ function buildStatusHistoryEntry(input: {
 
 export async function getAllOrders(options?: { windowDays?: number }) {
   return readOrders(options);
+}
+
+export async function getOrdersByIds(ids: string[]) {
+  if (ids.length === 0) return [];
+  const orders = await loadOrdersByIdsFromStore(ids);
+  return orders.map(normalizeStoredOrder);
 }
 
 export async function getOrderById(orderId: string) {
