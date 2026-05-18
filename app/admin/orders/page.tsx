@@ -1101,51 +1101,54 @@ export default function AdminOrdersPage() {
           Cargando...
         </div>
       ) : activeTab === "blocks" ? (
-        // Blocks tab: always render PersistentBlocksPanel first, then route blocks.
-        // "No hay ordenes" must NOT hide the persistent blocks panel.
         <>
-          <PersistentBlocksPanel
-            blocks={persistentBlocks}
-            loading={persistentBlocksLoading}
-            onCreateBlock={() => setShowCreateBlock(true)}
-            onManageBlock={(id) => void handleOpenBlockManager(id)}
-          />
-          {orders.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-slate-700 bg-[#050816] px-8 py-12 text-center text-sm text-slate-500">
-              No hay pedidos de delivery pendientes para organizar en bloques automáticos.
-            </div>
-          ) : routePlan ? (
-            <div className="flex flex-wrap items-center gap-3 rounded-xl border border-slate-800 bg-[#050816] px-4 py-2.5 text-xs">
-              <span className="font-semibold text-slate-300">
-                {orders.length} delivery pendiente{orders.length !== 1 ? "s" : ""} cargado{orders.length !== 1 ? "s" : ""}
-              </span>
-              <span className="text-slate-600">·</span>
-              {routePlan.routeBlocks.length > 0 ? (
-                <span className="text-cyan-300">
-                  <strong>{routePlan.routeOrders.length}</strong> organizados en <strong>{routePlan.routeBlocks.length}</strong> bloque{routePlan.routeBlocks.length !== 1 ? "s" : ""}
+          {/* ── Blocks header bar ── */}
+          <div className="flex flex-wrap items-center gap-3 rounded-xl border border-slate-800 bg-[#050816] px-4 py-2.5 text-xs">
+            {orders.length === 0 ? (
+              <span className="text-slate-500">No hay pedidos de delivery pendientes.</span>
+            ) : routePlan ? (
+              <>
+                <span className="font-semibold text-slate-300">
+                  {orders.length} delivery pendiente{orders.length !== 1 ? "s" : ""}
                 </span>
-              ) : (
-                <span className="text-amber-400 font-semibold">
-                  ⚠ 0 bloques creados — {routePlan.nonRouteOrders.length} pedidos sin bloque
-                </span>
-              )}
-              {routePlan.nonRouteOrders.length > 0 && routePlan.routeBlocks.length > 0 && (
-                <>
-                  <span className="text-slate-600">·</span>
-                  <span className="text-amber-300">
-                    <strong>{routePlan.nonRouteOrders.length}</strong> sin bloque (recogida o exceden límite)
+                <span className="text-slate-600">·</span>
+                {routePlan.routeBlocks.length > 0 ? (
+                  <span className="text-cyan-300">
+                    <strong>{routePlan.routeOrders.length}</strong> en <strong>{routePlan.routeBlocks.length}</strong> bloque{routePlan.routeBlocks.length !== 1 ? "s" : ""}
                   </span>
-                </>
-              )}
+                ) : (
+                  <span className="text-amber-400 font-semibold">
+                    ⚠ 0 bloques — {routePlan.nonRouteOrders.length} pedidos sin asignar
+                  </span>
+                )}
+                {routePlan.nonRouteOrders.length > 0 && routePlan.routeBlocks.length > 0 && (
+                  <>
+                    <span className="text-slate-600">·</span>
+                    <span className="text-amber-300">
+                      <strong>{routePlan.nonRouteOrders.length}</strong> sin bloque
+                    </span>
+                  </>
+                )}
+              </>
+            ) : null}
+            <div className="ml-auto flex gap-2">
+              <button
+                type="button"
+                onClick={() => setShowCreateBlock(true)}
+                className="rounded-md border border-cyan-500/40 bg-cyan-500/10 px-3 py-1 text-[11px] font-semibold text-cyan-300 hover:bg-cyan-500/20"
+              >
+                + Crear bloque
+              </button>
               <button
                 type="button"
                 onClick={() => setRefreshKey((k) => k + 1)}
-                className="ml-auto rounded-md border border-slate-700 bg-[#0a1020] px-2.5 py-1 text-[10px] font-semibold text-slate-400 hover:border-cyan-500 hover:text-white"
+                className="rounded-md border border-slate-700 bg-[#0a1020] px-2.5 py-1 text-[10px] font-semibold text-slate-400 hover:border-slate-500 hover:text-white"
               >
                 ↻ Actualizar
               </button>
             </div>
-          ) : null}
+          </div>
+
           {orders.length > 0 && routePlan ? (
             <BlocksTable
               key={routePlan.routeBlocks.map((block) => block.id).join("|")}
