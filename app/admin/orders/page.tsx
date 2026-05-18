@@ -476,7 +476,8 @@ function BlocksTable({
   onSaveStatus: (o: AdminOrderRecord) => Promise<void>;
   onOpenCancel: (o: AdminOrderRecord) => void;
 }) {
-  const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set(routeBlocks.map((b) => b.id)));
+  // Start all blocks OPEN so orders are immediately visible when the tab loads.
+  const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
 
   function toggleBlock(id: string) {
     setCollapsed((prev) => {
@@ -1114,7 +1115,34 @@ export default function AdminOrdersPage() {
             <div className="rounded-xl border border-dashed border-slate-700 bg-[#050816] px-8 py-12 text-center text-sm text-slate-500">
               No hay pedidos de delivery pendientes para organizar en bloques automáticos.
             </div>
-          ) : routePlan ? (
+          ) : routePlan && (
+            // Status bar: shows exactly how many orders are in blocks vs without block
+            <div className="flex flex-wrap items-center gap-3 rounded-xl border border-slate-800 bg-[#050816] px-4 py-2.5 text-xs">
+              <span className="font-semibold text-slate-300">
+                {orders.length} pedido{orders.length !== 1 ? "s" : ""} cargado{orders.length !== 1 ? "s" : ""}
+              </span>
+              <span className="text-slate-600">·</span>
+              <span className="text-cyan-300">
+                <strong>{routePlan.routeOrders.length}</strong> en {routePlan.routeBlocks.length} bloque{routePlan.routeBlocks.length !== 1 ? "s" : ""}
+              </span>
+              {routePlan.nonRouteOrders.length > 0 && (
+                <>
+                  <span className="text-slate-600">·</span>
+                  <span className="text-amber-300">
+                    <strong>{routePlan.nonRouteOrders.length}</strong> sin bloque
+                  </span>
+                </>
+              )}
+              <button
+                type="button"
+                onClick={() => setRefreshKey((k) => k + 1)}
+                className="ml-auto rounded-md border border-slate-700 bg-[#0a1020] px-2.5 py-1 text-[10px] font-semibold text-slate-400 hover:border-cyan-500 hover:text-white"
+              >
+                ↻ Actualizar
+              </button>
+            </div>
+          )}
+          {orders.length > 0 && routePlan ? (
             <BlocksTable
               key={routePlan.routeBlocks.map((block) => block.id).join("|")}
               routeBlocks={routePlan.routeBlocks}
