@@ -3,11 +3,13 @@ import "server-only";
 import { unstable_cache } from "next/cache";
 
 import {
-  getAllProducts,
   getProductById,
+  getProductGalleryImageSource,
+  getProductSummaries,
   getProductsDataSourceInfo,
   type ProductsDataSource,
 } from "@/lib/server/admin/products";
+import type { Product } from "@/lib/shop/admin-types";
 import type { StorefrontProduct, StorefrontProductVariant } from "@/lib/shop/types";
 
 const STOREFRONT_PRODUCTS_TAG = "storefront-products";
@@ -111,7 +113,7 @@ function normalizeColors(value: string | undefined) {
     .filter(Boolean);
 }
 
-function hasFreeDelivery(product: Awaited<ReturnType<typeof getAllProducts>>[number]) {
+function hasFreeDelivery(product: Product) {
   const rawFlag = product.attributes?.freeDelivery;
 
   if (rawFlag === "true") {
@@ -123,7 +125,7 @@ function hasFreeDelivery(product: Awaited<ReturnType<typeof getAllProducts>>[num
   );
 }
 
-export function toStorefrontProduct(product: Awaited<ReturnType<typeof getAllProducts>>[number]): StorefrontProduct {
+export function toStorefrontProduct(product: Product): StorefrontProduct {
   const images = product.images
     .map((image, index) =>
       toStorefrontMediaUrl(product.id, image.url, "gallery", String(index), product.updatedAt)
@@ -165,7 +167,7 @@ export function toStorefrontProduct(product: Awaited<ReturnType<typeof getAllPro
 }
 
 async function readStorefrontProductsUncached(): Promise<StorefrontProductsResult> {
-  const products = await getAllProducts({ onlyActive: true });
+  const products = await getProductSummaries({ onlyActive: true });
   const info = await getProductsDataSourceInfo({ onlyActive: true });
 
   console.info(
@@ -210,8 +212,13 @@ export function getStorefrontSnapshotTimestamp() {
 }
 
 export async function getStorefrontProductById(productId: string) {
-  const products = await getStorefrontProducts();
-  return products.find((product) => String(product.id) === String(productId)) ?? null;
+  const product = await getProductById(productId);
+
+  if (!product || !product.isActive || !product.isVisible) {
+    return null;
+  }
+
+  return toStorefrontProduct(product);
 }
 
 export async function getStorefrontRecommendedProducts(
@@ -244,8 +251,7 @@ export async function getStorefrontProductMediaSource(
       return null;
     }
 
-    const imageUrl = product.images[imageIndex]?.url;
-    return typeof imageUrl === "string" ? imageUrl.trim() : null;
+    return getProductGalleryImageSource(productId, imageIndex);
   }
 
   if (kind === "variant") {

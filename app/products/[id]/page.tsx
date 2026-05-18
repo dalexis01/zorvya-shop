@@ -6,7 +6,6 @@ import { getStorefrontProductById } from "@/lib/server/catalog";
 import { CLIENT_THEME_COOKIE_KEY, normalizeClientTheme } from "@/lib/shop/client-theme";
 
 export const revalidate = 60;
-export const dynamic = "force-dynamic";
 
 export default async function ProductDetailPage({
   params,

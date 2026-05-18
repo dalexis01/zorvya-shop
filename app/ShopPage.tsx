@@ -238,6 +238,11 @@ type ShopPageProps = {
   paypalClientId: string | null;
 };
 
+type ProductDetailResponse = {
+  success?: boolean;
+  product?: StorefrontProduct;
+};
+
 const texts = {
   es: {
     searchHint: "Sugerencias en tiempo real",
@@ -655,6 +660,7 @@ export default function ShopPage({
   const [lastOverlayOpened, setLastOverlayOpened] = useState<"cart" | "chat" | null>(null);
   const [chatPanelMode, setChatPanelMode] = useState<"assistant" | "support">("assistant");
   const [quickViewState, setQuickViewState] = useState<QuickViewState | null>(null);
+  const [productDetailCache, setProductDetailCache] = useState<Record<string, StorefrontProduct>>({});
   const [relatedSearchQuery, setRelatedSearchQuery] = useState("");
   const [relatedRefreshIndex, setRelatedRefreshIndex] = useState(0);
   const [checkoutData, setCheckoutData] = useState<CheckoutCustomerData | null>(null);
@@ -883,10 +889,46 @@ export default function ShopPage({
       return null;
     }
 
+    const cachedProduct = productDetailCache[quickViewState.productId];
+
+    if (cachedProduct) {
+      return localizeProduct(cachedProduct, locale);
+    }
+
     return (
       localizedProducts.find((product) => String(product.id) === quickViewState.productId) ?? null
     );
-  }, [localizedProducts, quickViewState]);
+  }, [localizedProducts, locale, productDetailCache, quickViewState]);
+
+  useEffect(() => {
+    if (!quickViewState || productDetailCache[quickViewState.productId]) {
+      return;
+    }
+
+    const controller = new AbortController();
+    const productId = quickViewState.productId;
+    void fetch(`/api/products/${encodeURIComponent(productId)}?includeExtras=false`, {
+      cache: "force-cache",
+      signal: controller.signal,
+    })
+      .then((response) => response.json() as Promise<ProductDetailResponse>)
+      .then((payload) => {
+        if (!payload.success || !payload.product) {
+          return;
+        }
+
+        setProductDetailCache((currentCache) => ({
+          ...currentCache,
+          [productId]: payload.product!,
+        }));
+      })
+      .catch(() => undefined)
+      .finally(() => undefined);
+
+    return () => {
+      controller.abort();
+    };
+  }, [productDetailCache, quickViewState]);
 
   const relatedProducts = useMemo<RelatedProductEntry[]>(() => {
     if (!selectedProduct) {
@@ -1212,16 +1254,6 @@ export default function ShopPage({
   }, []);
 
   useEffect(() => {
-    if (!sessionReady || !sessionUser?.id) {
-      return;
-    }
-
-    void fetch("/api/account/orders", {
-      cache: "no-store",
-    }).catch(() => undefined);
-  }, [sessionReady, sessionUser?.id]);
-
-  useEffect(() => {
     const storedCart = readStoredCart();
     const hydratedCart = hydrateStoredCart(storedCart, products);
     const payableKeys = hydratedCart
@@ -1440,7 +1472,7 @@ export default function ShopPage({
   );
 
   useEffect(() => {
-    if (!sessionReady) {
+    if (!sessionReady || !assistantOpen || !showingSupportChat) {
       return;
     }
 
@@ -1464,7 +1496,7 @@ export default function ShopPage({
 
     const intervalId = window.setInterval(() => {
       void refreshConversation(false);
-    }, assistantOpen && showingSupportChat ? 25000 : 45000);
+    }, 90000);
 
     const handleFocus = () => {
       void refreshConversation(false);

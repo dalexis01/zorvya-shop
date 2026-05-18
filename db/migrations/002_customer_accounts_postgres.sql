@@ -63,3 +63,25 @@ CREATE INDEX IF NOT EXISTS idx_auth_codes_lookup
 
 CREATE INDEX IF NOT EXISTS idx_auth_codes_expires_at
   ON auth_codes (expires_at);
+
+CREATE TABLE IF NOT EXISTS auth_security_events (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NULL REFERENCES users(id) ON DELETE SET NULL,
+  email TEXT NOT NULL,
+  event_type TEXT NOT NULL,
+  success BOOLEAN NOT NULL DEFAULT TRUE,
+  ip_address TEXT NULL,
+  user_agent TEXT NULL,
+  device_fingerprint TEXT NULL,
+  metadata_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_auth_security_events_user_created
+  ON auth_security_events (user_id, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_auth_security_events_email_created
+  ON auth_security_events (email, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_auth_security_events_type_created
+  ON auth_security_events (event_type, created_at DESC);

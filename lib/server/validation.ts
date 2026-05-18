@@ -532,7 +532,7 @@ export function validateOrderPayload(
     addFieldError(errors, "address", "Solo se permiten direcciones reales de Suriname.");
   }
 
-  if (rawEmail && !isValidEmail(rawEmail)) {
+  if (!customerEmail || !isValidEmail(customerEmail)) {
     addFieldError(errors, "email", "El correo del pedido no es valido.");
   }
 

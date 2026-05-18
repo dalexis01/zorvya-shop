@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { getProductById } from "@/lib/server/admin/products";
+import { getProductAccountingEntriesByIds } from "@/lib/server/admin/products";
 import { requireAdminRequestUser } from "@/lib/server/admin/request-auth";
 
 export type ProductAccountingEntry = {
@@ -40,25 +40,7 @@ export async function POST(request: NextRequest) {
     .filter((id): id is string => typeof id === "string" && id.length > 0)
     .slice(0, 50);
 
-  const results = await Promise.allSettled(ids.map((id) => getProductById(id)));
-
-  const entries: ProductAccountingEntry[] = results
-    .map((result, i) => {
-      if (result.status === "rejected" || !result.value) return null;
-      const product = result.value;
-      return {
-        productId: ids[i],
-        name: product.name,
-        supplier: product.internal.supplier ?? "",
-        supplierPhone: product.internal.supplierPhone ?? "",
-        costPrice: product.internal.costPrice ?? 0,
-        purchasePrice: product.internal.purchasePrice ?? 0,
-        shippingFee: product.internal.shippingFee ?? 0,
-        internalCode: product.internal.internalCode ?? "",
-        internalNotes: product.internal.internalNotes ?? "",
-      } satisfies ProductAccountingEntry;
-    })
-    .filter((e): e is ProductAccountingEntry => e !== null);
+  const entries = (await getProductAccountingEntriesByIds(ids)) satisfies ProductAccountingEntry[];
 
   return NextResponse.json({ success: true, entries });
 }

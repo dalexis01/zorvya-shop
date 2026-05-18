@@ -279,6 +279,10 @@ interface CheckoutModalProps {
   onSubmit: (data: CheckoutCustomerData) => void;
 }
 
+function isValidEmailAddress(value: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
+}
+
 export default function CheckoutModal({
   locale,
   subtotal,
@@ -436,6 +440,7 @@ export default function CheckoutModal({
   const isFormValid =
     name.trim().length >= 2 &&
     phone.trim().length >= 7 &&
+    isValidEmailAddress(email) &&
     isValidSurinameAddress &&
     paypalSelectionIsValid &&
     (effectiveDeliveryType === "delivery"

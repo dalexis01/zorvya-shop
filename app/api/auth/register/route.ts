@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 
 import { createAuthCode } from "@/lib/server/auth-codes";
-import { sendVerificationCodeEmail } from "@/lib/server/auth-email";
+import { recordAuthSecurityEvent, buildRequestSecurityContext } from "@/lib/server/auth-security";
+import { sendVerificationCodeEmail, sendWelcomeSecurityEmail } from "@/lib/server/auth-email";
 import { createUser } from "@/lib/server/users";
 import { validateRegistrationPayload } from "@/lib/server/validation";
 import type { Locale } from "@/lib/shop/types";
@@ -9,6 +10,7 @@ import type { Locale } from "@/lib/shop/types";
 export async function POST(request: Request) {
   try {
     const payload = (await request.json()) as unknown;
+    const securityContext = buildRequestSecurityContext(request);
     const validation = validateRegistrationPayload(payload);
     const locale =
       payload && typeof payload === "object" && "locale" in payload
@@ -27,6 +29,13 @@ export async function POST(request: Request) {
 
     try {
       const user = await createUser(validation.data);
+      await recordAuthSecurityEvent({
+        userId: user.id,
+        email: user.email,
+        eventType: "account-created",
+        success: true,
+        ...securityContext,
+      });
       const verificationCode = await createAuthCode({
         userId: user.id,
         email: user.email,
@@ -39,6 +48,11 @@ export async function POST(request: Request) {
           email: user.email,
           name: user.name,
           code: verificationCode.code,
+          locale,
+        });
+        await sendWelcomeSecurityEmail({
+          email: user.email,
+          name: user.name,
           locale,
         });
       } catch {
@@ -62,7 +76,7 @@ export async function POST(request: Request) {
           {
             success: false,
             errors: {
-              email: ["Este correo ya esta registrado."],
+              email: ["Este correo ya esta registrado. Inicia sesion o recupera tu cuenta."],
             },
           },
           { status: 409 }

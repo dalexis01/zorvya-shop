@@ -103,6 +103,47 @@ type ProductRow = QueryResultRow & {
   ai_json: Product["ai"] | null;
 };
 
+type ProductSummaryRow = QueryResultRow & {
+  id: string;
+  public_id: string;
+  display_order: number;
+  sku: string;
+  name: string;
+  short_description: string;
+  brand: string;
+  category: string;
+  tags_json: string[] | null;
+  price: number | string;
+  original_price: number | string | null;
+  stock: number;
+  rating: number | string;
+  review_count: number;
+  inventory_label: string;
+  delivery_label: string;
+  show_stock: boolean;
+  has_images: boolean;
+  is_active: boolean;
+  is_visible: boolean;
+  is_featured: boolean;
+  is_top: boolean;
+  colors_value: string | null;
+  variants_value: string | null;
+  supplier_value: string | null;
+  supplier_phone_value: string | null;
+  cost_price_value: string | number | null;
+  purchase_price_value: string | number | null;
+  shipping_fee_value: string | number | null;
+  internal_code_value: string | null;
+  internal_notes_value: string | null;
+  created_at: Date | string;
+  published_at: Date | string | null;
+  stock_added_at: Date | string | null;
+  last_sold_at: Date | string | null;
+  updated_at: Date | string;
+  updated_by: string;
+  translations_json: Product["translations"] | null;
+};
+
 export type ProductsDataSource = "postgres" | "postgres-required";
 
 let productsPoolInstance: Pool | null = null;
@@ -491,6 +532,205 @@ async function readProductsFromDatabase() {
   return result.rows.map(productRowToProduct);
 }
 
+function createSummaryImages(firstImageUrl: string | null) {
+  const normalized = trimText(firstImageUrl ?? "");
+
+  if (!normalized) {
+    return [];
+  }
+
+  return [
+    {
+      id: "summary-primary",
+      url: normalized,
+      alt: "Imagen principal",
+      isPrimary: true,
+    },
+  ];
+}
+
+function parseSummaryJson<T>(value: string | null | undefined, fallback: T): T {
+  if (!value) {
+    return fallback;
+  }
+
+  try {
+    return JSON.parse(value) as T;
+  } catch {
+    return fallback;
+  }
+}
+
+function buildProductMediaProxyUrl(productId: string, key: string, updatedAt?: string | null) {
+  const params = new URLSearchParams({
+    kind: "gallery",
+    key,
+  });
+
+  if (updatedAt) {
+    params.set("v", updatedAt);
+  }
+
+  return `/api/products/${productId}/media?${params.toString()}`;
+}
+
+function parseSummaryVariants(value: string | null | undefined) {
+  return parseSummaryJson<Array<Partial<{
+    id: string;
+    name: string;
+    price: number;
+    color: string;
+  }>>>(value ?? undefined, [])
+    .map((variant, index) => ({
+      id: String(variant.id ?? `variant-${index + 1}`),
+      name: trimText(String(variant.name ?? "")),
+      price: Number(variant.price ?? 0),
+      color: trimText(String(variant.color ?? "")),
+      details: "",
+      imageUrl: "",
+    }))
+    .filter((variant) => variant.name || variant.price > 0 || variant.color);
+}
+
+function parseSummaryColors(value: string | null | undefined) {
+  return parseSummaryJson<string[]>(value ?? undefined, [])
+    .map((color) => trimText(String(color)))
+    .filter(Boolean);
+}
+
+function productSummaryRowToProduct(row: ProductSummaryRow): Product {
+  const updatedAt = toIsoString(row.updated_at) ?? null;
+  const images = row.has_images
+    ? createSummaryImages(buildProductMediaProxyUrl(row.id, "0", updatedAt))
+    : [];
+  const internal = normalizeInternalDetails({
+    supplier: row.supplier_value ?? "",
+    supplierPhone: row.supplier_phone_value ?? "",
+    costPrice: Number(row.cost_price_value ?? 0),
+    purchasePrice: Number(row.purchase_price_value ?? 0),
+    shippingFee: Number(row.shipping_fee_value ?? 0),
+    internalCode: row.internal_code_value ?? "",
+    internalNotes: row.internal_notes_value ?? "",
+  });
+
+  return normalizeProduct({
+    id: row.id,
+    publicId: row.public_id,
+    displayOrder: Number(row.display_order ?? 0),
+    sku: row.sku,
+    name: row.name,
+    shortDescription: row.short_description,
+    longDescription: row.short_description,
+    brand: row.brand,
+    category: row.category,
+    tags: Array.isArray(row.tags_json) ? row.tags_json : [],
+    price: Number(row.price ?? 0),
+    originalPrice: row.original_price === null ? undefined : Number(row.original_price),
+    stock: Number(row.stock ?? 0),
+    rating: Number(row.rating ?? 0),
+    reviewCount: Number(row.review_count ?? 0),
+    inventoryLabel: row.inventory_label,
+    deliveryLabel: row.delivery_label,
+    showStock: Boolean(row.show_stock),
+    images,
+    isActive: Boolean(row.is_active),
+    isVisible: Boolean(row.is_visible),
+    isFeatured: Boolean(row.is_featured),
+    isTop: Boolean(row.is_top),
+    attributes: {
+      colors: JSON.stringify(parseSummaryColors(row.colors_value)),
+      variants: JSON.stringify(parseSummaryVariants(row.variants_value)),
+    },
+    internal,
+    metrics: createProductMetrics(Number(row.price ?? 0), Number(row.stock ?? 0), internal.costPrice),
+    createdAt: toIsoString(row.created_at) ?? new Date().toISOString(),
+    publishedAt: toIsoString(row.published_at),
+    stockAddedAt: toIsoString(row.stock_added_at),
+    lastSoldAt: toIsoString(row.last_sold_at),
+    saleDates: [],
+    updatedAt: toIsoString(row.updated_at) ?? new Date().toISOString(),
+    updatedBy: row.updated_by,
+    translations: row.translations_json ?? undefined,
+  });
+}
+
+async function readProductSummariesFromDatabase(options?: {
+  onlyActive?: boolean;
+  category?: string;
+  search?: string;
+}) {
+  const pool = await getProductsPool();
+  const whereClauses: string[] = [];
+  const params: Array<string | boolean> = [];
+
+  if (options?.onlyActive) {
+    whereClauses.push("is_active = TRUE", "is_visible = TRUE");
+  }
+
+  if (options?.category) {
+    params.push(options.category);
+    whereClauses.push(`category = $${params.length}`);
+  }
+
+  if (options?.search) {
+    params.push(`%${options.search.trim().toLowerCase()}%`);
+    const position = params.length;
+    whereClauses.push(
+      `(LOWER(name) LIKE $${position} OR LOWER(public_id) LIKE $${position} OR LOWER(sku) LIKE $${position} OR LOWER(brand) LIKE $${position} OR LOWER(category) LIKE $${position} OR EXISTS (SELECT 1 FROM jsonb_array_elements_text(tags_json) AS tag WHERE LOWER(tag) LIKE $${position}))`
+    );
+  }
+
+  const result = await pool.query<ProductSummaryRow>(
+    `
+      SELECT
+        id,
+        public_id,
+        display_order,
+        sku,
+        name,
+        short_description,
+        brand,
+        category,
+        tags_json,
+        price,
+        original_price,
+        stock,
+        rating,
+        review_count,
+        inventory_label,
+        delivery_label,
+        show_stock,
+        CASE WHEN jsonb_array_length(images_json) > 0 THEN TRUE ELSE FALSE END AS has_images,
+        is_active,
+        is_visible,
+        is_featured,
+        is_top,
+        attributes_json ->> 'colors' AS colors_value,
+        attributes_json ->> 'variants' AS variants_value,
+        internal_json ->> 'supplier' AS supplier_value,
+        internal_json ->> 'supplierPhone' AS supplier_phone_value,
+        internal_json ->> 'costPrice' AS cost_price_value,
+        internal_json ->> 'purchasePrice' AS purchase_price_value,
+        internal_json ->> 'shippingFee' AS shipping_fee_value,
+        internal_json ->> 'internalCode' AS internal_code_value,
+        internal_json ->> 'internalNotes' AS internal_notes_value,
+        created_at,
+        published_at,
+        stock_added_at,
+        last_sold_at,
+        updated_at,
+        updated_by,
+        translations_json
+      FROM products
+      ${whereClauses.length ? `WHERE ${whereClauses.join(" AND ")}` : ""}
+      ORDER BY published_at DESC NULLS LAST, created_at DESC, display_order ASC, updated_at DESC
+    `,
+    params
+  );
+
+  return result.rows.map(productSummaryRowToProduct);
+}
+
 function sortProducts(products: Product[]) {
   return [...products].sort((left, right) => {
     const rightPublishedAt = right.publishedAt ? new Date(right.publishedAt).getTime() : 0;
@@ -698,13 +938,30 @@ export async function getAllProducts(options?: {
   return sortProducts(products);
 }
 
+export async function getProductSummaries(options?: {
+  onlyActive?: boolean;
+  category?: string;
+  search?: string;
+}) {
+  if (!isProductsDatabaseConfigured()) {
+    return [];
+  }
+
+  try {
+    return await readProductSummariesFromDatabase(options);
+  } catch (error) {
+    console.error("[products] summary read failed:", error);
+    return [];
+  }
+}
+
 export async function getProductsDataSourceInfo(options?: {
   onlyActive?: boolean;
   category?: string;
   search?: string;
 }) {
   const { source } = await readProductsWithSource();
-  const products = await getAllProducts(options);
+  const products = await getProductSummaries(options);
 
   return {
     source,
@@ -713,13 +970,135 @@ export async function getProductsDataSourceInfo(options?: {
 }
 
 export async function getProductById(id: string) {
-  const products = await readProducts();
-  return products.find((product) => product.id === id) ?? null;
+  if (!isProductsDatabaseConfigured()) {
+    return null;
+  }
+
+  try {
+    const pool = await getProductsPool();
+    const result = await pool.query<ProductRow>(
+      `
+        SELECT *
+        FROM products
+        WHERE id = $1
+        LIMIT 1
+      `,
+      [id]
+    );
+
+    return result.rows[0] ? productRowToProduct(result.rows[0]) : null;
+  } catch (error) {
+    console.error("[products] getProductById failed:", error);
+    return null;
+  }
 }
 
 export async function getProductBySku(sku: string) {
-  const products = await readProducts();
-  return products.find((product) => product.sku === sku) ?? null;
+  if (!isProductsDatabaseConfigured()) {
+    return null;
+  }
+
+  try {
+    const pool = await getProductsPool();
+    const result = await pool.query<ProductRow>(
+      `
+        SELECT *
+        FROM products
+        WHERE sku = $1
+        LIMIT 1
+      `,
+      [sku]
+    );
+
+    return result.rows[0] ? productRowToProduct(result.rows[0]) : null;
+  } catch (error) {
+    console.error("[products] getProductBySku failed:", error);
+    return null;
+  }
+}
+
+export async function getProductAccountingEntriesByIds(productIds: string[]) {
+  if (!isProductsDatabaseConfigured() || productIds.length === 0) {
+    return [];
+  }
+
+  const pool = await getProductsPool();
+  const ids = productIds.slice(0, 50);
+  const result = await pool.query<
+    QueryResultRow & {
+      id: string;
+      name: string;
+      supplier_value: string | null;
+      supplier_phone_value: string | null;
+      cost_price_value: string | number | null;
+      purchase_price_value: string | number | null;
+      shipping_fee_value: string | number | null;
+      internal_code_value: string | null;
+      internal_notes_value: string | null;
+    }
+  >(
+    `
+      SELECT
+        id,
+        name,
+        internal_json ->> 'supplier' AS supplier_value,
+        internal_json ->> 'supplierPhone' AS supplier_phone_value,
+        internal_json ->> 'costPrice' AS cost_price_value,
+        internal_json ->> 'purchasePrice' AS purchase_price_value,
+        internal_json ->> 'shippingFee' AS shipping_fee_value,
+        internal_json ->> 'internalCode' AS internal_code_value,
+        internal_json ->> 'internalNotes' AS internal_notes_value
+      FROM products
+      WHERE id = ANY($1::text[])
+    `,
+    [ids]
+  );
+
+  return result.rows.map((row) => ({
+    productId: row.id,
+    name: row.name,
+    supplier: row.supplier_value ?? "",
+    supplierPhone: row.supplier_phone_value ?? "",
+    costPrice: Number(row.cost_price_value ?? 0),
+    purchasePrice: Number(row.purchase_price_value ?? 0),
+    shippingFee: Number(row.shipping_fee_value ?? 0),
+    internalCode: row.internal_code_value ?? "",
+    internalNotes: row.internal_notes_value ?? "",
+  }));
+}
+
+export async function getProductGalleryImageSource(productId: string, imageIndex: number) {
+  if (!isProductsDatabaseConfigured()) {
+    return null;
+  }
+
+  const pool = await getProductsPool();
+  const result = await pool.query<
+    QueryResultRow & {
+      is_active: boolean;
+      is_visible: boolean;
+      image_url: string | null;
+    }
+  >(
+    `
+      SELECT
+        is_active,
+        is_visible,
+        images_json -> $2 ->> 'url' AS image_url
+      FROM products
+      WHERE id = $1
+      LIMIT 1
+    `,
+    [productId, imageIndex]
+  );
+
+  const row = result.rows[0];
+
+  if (!row || !row.is_active || !row.is_visible) {
+    return null;
+  }
+
+  return trimText(row.image_url ?? "") || null;
 }
 
 export async function createProduct(

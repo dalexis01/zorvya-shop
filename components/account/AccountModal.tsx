@@ -24,6 +24,9 @@ type FormErrors = Record<string, string[]>;
 type AuthResponse = {
   success?: boolean;
   user?: SessionUser | null;
+  nextStep?: "verify-email" | "reset-password";
+  email?: string;
+  message?: string;
   errors?: FormErrors;
 };
 
@@ -88,6 +91,8 @@ function clearCachedAccountOrders(userId?: string | null) {
   accountOrdersCache.clear();
 }
 
+type AuthMode = "login" | "register" | "verify-email" | "forgot-password" | "reset-password";
+
 type OrderActionResult = {
   success: boolean;
   errorMessage?: string;
@@ -98,6 +103,9 @@ const texts = {
     account: "Cuenta",
     login: "Iniciar sesion",
     register: "Crear cuenta",
+    forgotPassword: "Olvide mi contrasena",
+    verifyEmail: "Verificar cuenta",
+    resetPassword: "Restablecer contrasena",
     profile: "Perfil",
     orders: "Ordenes",
     logout: "Cerrar sesion",
@@ -107,6 +115,15 @@ const texts = {
     address: "Direccion",
     password: "Contrasena",
     confirmPassword: "Confirmar contrasena",
+    codeSent: "Te enviamos un codigo de seguridad a tu correo.",
+    sendCode: "Enviar codigo",
+    verifyCode: "Verificar codigo",
+    backToLogin: "Volver a iniciar sesion",
+    newPassword: "Nueva contrasena",
+    recoveryHint: "Escribe tu correo y te enviaremos un codigo real para recuperar la cuenta.",
+    verifyHint: "Ingresa el codigo que enviamos a tu correo para activar tu cuenta.",
+    resetHint: "Ingresa el codigo y crea tu nueva contrasena.",
+    phoneRequired: "Telefono",
     memberSince: "Miembro desde",
     loading: "Cargando cuenta...",
     noData: "No registrado todavia.",
@@ -135,6 +152,9 @@ const texts = {
     account: "Account",
     login: "Inloggen",
     register: "Account maken",
+    forgotPassword: "Wachtwoord vergeten",
+    verifyEmail: "Account verifieren",
+    resetPassword: "Wachtwoord herstellen",
     profile: "Profiel",
     orders: "Bestellingen",
     logout: "Uitloggen",
@@ -144,6 +164,15 @@ const texts = {
     address: "Adres",
     password: "Wachtwoord",
     confirmPassword: "Wachtwoord bevestigen",
+    codeSent: "We hebben een beveiligingscode naar je e-mail gestuurd.",
+    sendCode: "Code verzenden",
+    verifyCode: "Code verifieren",
+    backToLogin: "Terug naar inloggen",
+    newPassword: "Nieuw wachtwoord",
+    recoveryHint: "Vul je e-mail in en we sturen een echte code om je account te herstellen.",
+    verifyHint: "Voer de code in die we naar je e-mail hebben gestuurd om je account te activeren.",
+    resetHint: "Voer de code in en maak je nieuwe wachtwoord.",
+    phoneRequired: "Telefoon",
     memberSince: "Lid sinds",
     loading: "Account laden...",
     noData: "Nog niet ingevuld.",
@@ -172,6 +201,9 @@ const texts = {
     account: "Account",
     login: "Log in",
     register: "Create account",
+    forgotPassword: "Forgot password",
+    verifyEmail: "Verify account",
+    resetPassword: "Reset password",
     profile: "Profile",
     orders: "Orders",
     logout: "Log out",
@@ -181,6 +213,15 @@ const texts = {
     address: "Address",
     password: "Password",
     confirmPassword: "Confirm password",
+    codeSent: "We sent a security code to your email.",
+    sendCode: "Send code",
+    verifyCode: "Verify code",
+    backToLogin: "Back to log in",
+    newPassword: "New password",
+    recoveryHint: "Enter your email and we will send a real code to recover your account.",
+    verifyHint: "Enter the code we sent to your email to activate your account.",
+    resetHint: "Enter the code and create your new password.",
+    phoneRequired: "Phone",
     memberSince: "Member since",
     loading: "Loading account...",
     noData: "Not provided yet.",
@@ -209,6 +250,9 @@ const texts = {
     account: "Conta",
     login: "Entrar",
     register: "Criar conta",
+    forgotPassword: "Esqueci minha senha",
+    verifyEmail: "Verificar conta",
+    resetPassword: "Redefinir senha",
     profile: "Perfil",
     orders: "Pedidos",
     logout: "Sair",
@@ -218,6 +262,15 @@ const texts = {
     address: "Endereco",
     password: "Senha",
     confirmPassword: "Confirmar senha",
+    codeSent: "Enviamos um codigo de seguranca para seu e-mail.",
+    sendCode: "Enviar codigo",
+    verifyCode: "Verificar codigo",
+    backToLogin: "Voltar ao login",
+    newPassword: "Nova senha",
+    recoveryHint: "Digite seu e-mail e enviaremos um codigo real para recuperar sua conta.",
+    verifyHint: "Digite o codigo enviado ao seu e-mail para ativar sua conta.",
+    resetHint: "Digite o codigo e crie sua nova senha.",
+    phoneRequired: "Telefone",
     memberSince: "Membro desde",
     loading: "Carregando conta...",
     noData: "Ainda nao informado.",
@@ -315,7 +368,7 @@ export default function AccountModal({
   const languageMenuRef = useRef<HTMLDivElement | null>(null);
   const ordersRef = useRef<OrderSummary[]>([]);
   const latestOrderRef = useRef<OrderSummary | null>(null);
-  const [mode, setMode] = useState<"login" | "register">("login");
+  const [mode, setMode] = useState<AuthMode>("login");
   const [activeTab, setActiveTab] = useState<"profile" | "orders">(
     user ? "orders" : "profile"
   );
@@ -323,10 +376,18 @@ export default function AccountModal({
   const [loginPassword, setLoginPassword] = useState("");
   const [registerName, setRegisterName] = useState("");
   const [registerEmail, setRegisterEmail] = useState("");
+  const [registerPhone, setRegisterPhone] = useState("");
   const [registerPassword, setRegisterPassword] = useState("");
   const [registerConfirmPassword, setRegisterConfirmPassword] = useState("");
   const [registerAcceptedTerms, setRegisterAcceptedTerms] = useState(false);
   const [authErrors, setAuthErrors] = useState<FormErrors>({});
+  const [authInfo, setAuthInfo] = useState("");
+  const [verificationEmail, setVerificationEmail] = useState("");
+  const [verificationCode, setVerificationCode] = useState("");
+  const [recoveryEmail, setRecoveryEmail] = useState("");
+  const [resetCode, setResetCode] = useState("");
+  const [resetPassword, setResetPassword] = useState("");
+  const [resetConfirmPassword, setResetConfirmPassword] = useState("");
   const [orders, setOrders] = useState<OrderSummary[]>([]);
   const [latestOrder, setLatestOrder] = useState<OrderSummary | null>(null);
   const [ordersLoading, setOrdersLoading] = useState(false);
@@ -578,6 +639,7 @@ export default function AccountModal({
   ) {
     setSubmitting(true);
     setAuthErrors({});
+    setAuthInfo("");
 
     try {
       const response = await fetch(endpoint, {
@@ -585,10 +647,33 @@ export default function AccountModal({
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(body),
+        body: JSON.stringify({
+          ...body,
+          locale,
+        }),
       });
 
       const payload = (await response.json()) as AuthResponse;
+
+      if (response.ok && payload.nextStep === "verify-email" && payload.email) {
+        setVerificationEmail(payload.email);
+        setRecoveryEmail(payload.email);
+        setMode("verify-email");
+        setAuthInfo(payload.message ?? t.codeSent);
+        setLoginPassword("");
+        setRegisterPassword("");
+        setRegisterConfirmPassword("");
+        return;
+      }
+
+      if (!response.ok && payload.nextStep === "verify-email" && payload.email) {
+        setVerificationEmail(payload.email);
+        setRecoveryEmail(payload.email);
+        setMode("verify-email");
+        setAuthInfo(payload.message ?? t.codeSent);
+        setAuthErrors(payload.errors ?? {});
+        return;
+      }
 
       if (!response.ok || !payload.user) {
         setAuthErrors(payload.errors ?? { general: [t.requestError] });
@@ -600,15 +685,154 @@ export default function AccountModal({
       setOrdersHasMore(false);
       setOrdersNextCursor(null);
       setLoginPassword("");
+      setRegisterPhone("");
       setRegisterPassword("");
       setRegisterConfirmPassword("");
       setRegisterAcceptedTerms(false);
+      setAuthInfo(payload.message ?? "");
       setActiveTab("orders");
       sessionChangeRef.current(payload.user);
     } catch {
       setAuthErrors({
         general: [t.requestError],
       });
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function handleVerifyEmail() {
+    setSubmitting(true);
+    setAuthErrors({});
+    setAuthInfo("");
+
+    try {
+      const response = await fetch("/api/auth/verify-email", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email: verificationEmail,
+          code: verificationCode,
+        }),
+      });
+
+      const payload = (await response.json()) as AuthResponse;
+
+      if (!response.ok || !payload.user) {
+        setAuthErrors(payload.errors ?? { general: [t.requestError] });
+        return;
+      }
+
+      setAuthInfo(payload.message ?? "");
+      setVerificationCode("");
+      setMode("login");
+      sessionChangeRef.current(payload.user);
+    } catch {
+      setAuthErrors({ general: [t.requestError] });
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function handleResendVerification() {
+    setSubmitting(true);
+    setAuthErrors({});
+    setAuthInfo("");
+
+    try {
+      const response = await fetch("/api/auth/resend-verification", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email: verificationEmail,
+          locale,
+        }),
+      });
+      const payload = (await response.json()) as AuthResponse;
+
+      if (!response.ok) {
+        setAuthErrors(payload.errors ?? { general: [t.requestError] });
+        return;
+      }
+
+      setAuthInfo(payload.message ?? t.codeSent);
+    } catch {
+      setAuthErrors({ general: [t.requestError] });
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function handlePasswordResetRequest() {
+    setSubmitting(true);
+    setAuthErrors({});
+    setAuthInfo("");
+
+    try {
+      const response = await fetch("/api/auth/password-reset/request", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email: recoveryEmail,
+          locale,
+        }),
+      });
+      const payload = (await response.json()) as AuthResponse;
+
+      if (!response.ok) {
+        setAuthErrors(payload.errors ?? { general: [t.requestError] });
+        return;
+      }
+
+      setMode("reset-password");
+      setVerificationEmail(recoveryEmail);
+      setAuthInfo(payload.message ?? t.codeSent);
+    } catch {
+      setAuthErrors({ general: [t.requestError] });
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function handlePasswordResetConfirm() {
+    setSubmitting(true);
+    setAuthErrors({});
+    setAuthInfo("");
+
+    try {
+      const response = await fetch("/api/auth/password-reset/confirm", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email: verificationEmail,
+          code: resetCode,
+          password: resetPassword,
+          confirmPassword: resetConfirmPassword,
+          locale,
+        }),
+      });
+      const payload = (await response.json()) as AuthResponse;
+
+      if (!response.ok || !payload.user) {
+        setAuthErrors(payload.errors ?? { general: [t.requestError] });
+        return;
+      }
+
+      setResetCode("");
+      setResetPassword("");
+      setResetConfirmPassword("");
+      setAuthInfo(payload.message ?? "");
+      sessionChangeRef.current(payload.user);
+    } catch {
+      setAuthErrors({ general: [t.requestError] });
     } finally {
       setSubmitting(false);
     }
@@ -876,7 +1100,17 @@ export default function AccountModal({
       <div className="flex max-h-[92dvh] w-full max-w-3xl flex-col overflow-hidden rounded-[1.75rem] border border-slate-800 bg-[#050816] p-4 shadow-2xl sm:rounded-3xl sm:p-6">
         <div className="mb-6 flex items-center justify-between">
           <h3 className="text-xl font-bold text-white">
-            {user ? t.account : mode === "login" ? t.login : t.register}
+            {user
+              ? t.account
+              : mode === "login"
+                ? t.login
+                : mode === "register"
+                  ? t.register
+                  : mode === "verify-email"
+                    ? t.verifyEmail
+                    : mode === "forgot-password"
+                      ? t.forgotPassword
+                      : t.resetPassword}
           </h3>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-300">
             <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1215,6 +1449,12 @@ export default function AccountModal({
               </button>
             </div>
 
+            {authInfo ? (
+              <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">
+                {authInfo}
+              </div>
+            ) : null}
+
             {authErrors.general?.length ? (
               <div className="rounded-2xl bg-rose-950 px-4 py-3 text-sm text-rose-300">
                 {authErrors.general[0]}
@@ -1269,8 +1509,21 @@ export default function AccountModal({
                 >
                   {t.login}
                 </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMode("forgot-password");
+                    setRecoveryEmail(loginEmail);
+                    setAuthErrors({});
+                    setAuthInfo("");
+                  }}
+                  className="w-full text-center text-sm font-medium text-cyan-300 hover:text-cyan-200"
+                >
+                  {t.forgotPassword}
+                </button>
               </form>
-            ) : (
+            ) : mode === "register" ? (
               <form
                 className="space-y-4"
                 onSubmit={(event) => {
@@ -1278,6 +1531,7 @@ export default function AccountModal({
                   void handleAuthSubmit("/api/auth/register", {
                     name: registerName,
                     email: registerEmail,
+                    phone: registerPhone,
                     password: registerPassword,
                     confirmPassword: registerConfirmPassword,
                     acceptedTerms: registerAcceptedTerms,
@@ -1310,6 +1564,21 @@ export default function AccountModal({
                   {collectFieldError(authErrors, "email") ? (
                     <p className="mt-1 text-sm text-rose-600">
                       {collectFieldError(authErrors, "email")}
+                    </p>
+                  ) : null}
+                </div>
+
+                <div>
+                  <input
+                    type="tel"
+                    value={registerPhone}
+                    onChange={(event) => setRegisterPhone(event.target.value)}
+                    placeholder={t.phoneRequired}
+                    className="w-full rounded-xl border border-slate-600 bg-[#0f1b2e] px-4 py-3 text-sm text-white placeholder-slate-500 outline-none focus:border-[#2563EB]"
+                  />
+                  {collectFieldError(authErrors, "phone") ? (
+                    <p className="mt-1 text-sm text-rose-600">
+                      {collectFieldError(authErrors, "phone")}
                     </p>
                   ) : null}
                 </div>
@@ -1370,6 +1639,177 @@ export default function AccountModal({
                   className="w-full rounded-xl bg-[#2563EB] py-3 text-sm font-bold text-white disabled:opacity-60"
                 >
                   {t.register}
+                </button>
+              </form>
+            ) : mode === "verify-email" ? (
+              <form
+                className="space-y-4"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  void handleVerifyEmail();
+                }}
+              >
+                <p className="text-sm text-slate-300">{t.verifyHint}</p>
+                <input
+                  type="email"
+                  value={verificationEmail}
+                  onChange={(event) => setVerificationEmail(event.target.value)}
+                  placeholder={t.email}
+                  className="w-full rounded-xl border border-slate-600 bg-[#0f1b2e] px-4 py-3 text-sm text-white placeholder-slate-500 outline-none focus:border-[#2563EB]"
+                />
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={6}
+                  value={verificationCode}
+                  onChange={(event) => setVerificationCode(event.target.value)}
+                  placeholder={t.code}
+                  className="w-full rounded-xl border border-slate-600 bg-[#0f1b2e] px-4 py-3 text-sm text-white placeholder-slate-500 outline-none focus:border-[#2563EB]"
+                />
+                {collectFieldError(authErrors, "code") ? (
+                  <p className="mt-1 text-sm text-rose-600">
+                    {collectFieldError(authErrors, "code")}
+                  </p>
+                ) : null}
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="w-full rounded-xl bg-[#2563EB] py-3 text-sm font-bold text-white disabled:opacity-60"
+                >
+                  {t.verifyCode}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void handleResendVerification()}
+                  disabled={submitting}
+                  className="w-full rounded-xl border border-slate-600 py-3 text-sm font-semibold text-slate-200 disabled:opacity-60"
+                >
+                  {t.sendCode}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMode("login");
+                    setAuthErrors({});
+                    setAuthInfo("");
+                  }}
+                  className="w-full text-center text-sm font-medium text-cyan-300 hover:text-cyan-200"
+                >
+                  {t.backToLogin}
+                </button>
+              </form>
+            ) : mode === "forgot-password" ? (
+              <form
+                className="space-y-4"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  void handlePasswordResetRequest();
+                }}
+              >
+                <p className="text-sm text-slate-300">{t.recoveryHint}</p>
+                <input
+                  type="email"
+                  value={recoveryEmail}
+                  onChange={(event) => setRecoveryEmail(event.target.value)}
+                  placeholder={t.email}
+                  className="w-full rounded-xl border border-slate-600 bg-[#0f1b2e] px-4 py-3 text-sm text-white placeholder-slate-500 outline-none focus:border-[#2563EB]"
+                />
+                {collectFieldError(authErrors, "email") ? (
+                  <p className="mt-1 text-sm text-rose-600">
+                    {collectFieldError(authErrors, "email")}
+                  </p>
+                ) : null}
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="w-full rounded-xl bg-[#2563EB] py-3 text-sm font-bold text-white disabled:opacity-60"
+                >
+                  {t.sendCode}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMode("login");
+                    setAuthErrors({});
+                    setAuthInfo("");
+                  }}
+                  className="w-full text-center text-sm font-medium text-cyan-300 hover:text-cyan-200"
+                >
+                  {t.backToLogin}
+                </button>
+              </form>
+            ) : (
+              <form
+                className="space-y-4"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  void handlePasswordResetConfirm();
+                }}
+              >
+                <p className="text-sm text-slate-300">{t.resetHint}</p>
+                <input
+                  type="email"
+                  value={verificationEmail}
+                  onChange={(event) => setVerificationEmail(event.target.value)}
+                  placeholder={t.email}
+                  className="w-full rounded-xl border border-slate-600 bg-[#0f1b2e] px-4 py-3 text-sm text-white placeholder-slate-500 outline-none focus:border-[#2563EB]"
+                />
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={6}
+                  value={resetCode}
+                  onChange={(event) => setResetCode(event.target.value)}
+                  placeholder={t.code}
+                  className="w-full rounded-xl border border-slate-600 bg-[#0f1b2e] px-4 py-3 text-sm text-white placeholder-slate-500 outline-none focus:border-[#2563EB]"
+                />
+                {collectFieldError(authErrors, "code") ? (
+                  <p className="mt-1 text-sm text-rose-600">
+                    {collectFieldError(authErrors, "code")}
+                  </p>
+                ) : null}
+                <input
+                  type="password"
+                  value={resetPassword}
+                  onChange={(event) => setResetPassword(event.target.value)}
+                  placeholder={t.newPassword}
+                  className="w-full rounded-xl border border-slate-600 bg-[#0f1b2e] px-4 py-3 text-sm text-white placeholder-slate-500 outline-none focus:border-[#2563EB]"
+                />
+                {collectFieldError(authErrors, "password") ? (
+                  <p className="mt-1 text-sm text-rose-600">
+                    {collectFieldError(authErrors, "password")}
+                  </p>
+                ) : null}
+                <input
+                  type="password"
+                  value={resetConfirmPassword}
+                  onChange={(event) => setResetConfirmPassword(event.target.value)}
+                  placeholder={t.confirmPassword}
+                  className="w-full rounded-xl border border-slate-600 bg-[#0f1b2e] px-4 py-3 text-sm text-white placeholder-slate-500 outline-none focus:border-[#2563EB]"
+                />
+                {collectFieldError(authErrors, "confirmPassword") ? (
+                  <p className="mt-1 text-sm text-rose-600">
+                    {collectFieldError(authErrors, "confirmPassword")}
+                  </p>
+                ) : null}
+
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="w-full rounded-xl bg-[#2563EB] py-3 text-sm font-bold text-white disabled:opacity-60"
+                >
+                  {t.resetPassword}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMode("login");
+                    setAuthErrors({});
+                    setAuthInfo("");
+                  }}
+                  className="w-full text-center text-sm font-medium text-cyan-300 hover:text-cyan-200"
+                >
+                  {t.backToLogin}
                 </button>
               </form>
             )}

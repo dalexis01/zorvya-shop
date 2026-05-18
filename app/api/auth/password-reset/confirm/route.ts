@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 
 import { verifyAuthCode } from "@/lib/server/auth-codes";
+import { buildRequestSecurityContext, recordAuthSecurityEvent } from "@/lib/server/auth-security";
+import { sendPasswordChangedEmail } from "@/lib/server/auth-email";
 import { createSessionForUser } from "@/lib/server/session";
 import {
   findUserByEmail,
@@ -13,6 +15,7 @@ import { validatePasswordResetConfirmPayload } from "@/lib/server/validation";
 export async function POST(request: Request) {
   try {
     const payload = (await request.json()) as unknown;
+    const securityContext = buildRequestSecurityContext(request);
     const validation = validatePasswordResetConfirmPayload(payload);
 
     if (!validation.success) {
@@ -47,6 +50,13 @@ export async function POST(request: Request) {
     });
 
     if (!codeMatches) {
+      await recordAuthSecurityEvent({
+        userId: user.id,
+        email: user.email,
+        eventType: "password-reset-failed",
+        success: false,
+        ...securityContext,
+      });
       return NextResponse.json(
         {
           success: false,
@@ -77,6 +87,24 @@ export async function POST(request: Request) {
       : ((await markUserEmailVerified(updatedUser.id)) ?? updatedUser);
 
     await createSessionForUser(verifiedUser.id);
+    await recordAuthSecurityEvent({
+      userId: verifiedUser.id,
+      email: verifiedUser.email,
+      eventType: "password-reset-success",
+      success: true,
+      ...securityContext,
+    });
+
+    try {
+      await sendPasswordChangedEmail({
+        email: verifiedUser.email,
+        name: verifiedUser.name,
+        locale:
+          payload && typeof payload === "object" && "locale" in payload
+            ? String((payload as Record<string, unknown>).locale) as "es" | "nl" | "en" | "pt"
+            : "es",
+      });
+    } catch {}
 
     return NextResponse.json({
       success: true,

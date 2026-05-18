@@ -8,8 +8,10 @@ import { getReviewsByProductId } from "@/lib/server/product-reviews";
 
 export const revalidate = 60;
 
-export async function GET(_request: Request, context: RouteContext<"/api/products/[id]">) {
+export async function GET(request: Request, context: RouteContext<"/api/products/[id]">) {
   const { id } = await context.params;
+  const { searchParams } = new URL(request.url);
+  const includeExtras = searchParams.get("includeExtras") !== "false";
   const product = await getStorefrontProductById(id);
 
   if (!product) {
@@ -20,6 +22,15 @@ export async function GET(_request: Request, context: RouteContext<"/api/product
       },
       { status: 404 }
     );
+  }
+
+  if (!includeExtras) {
+    return NextResponse.json({
+      success: true,
+      product,
+      reviews: [],
+      recommended: [],
+    });
   }
 
   const [reviews, recommended] = await Promise.all([

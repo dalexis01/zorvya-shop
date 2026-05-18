@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { createAuthCode } from "@/lib/server/auth-codes";
+import { buildRequestSecurityContext, recordAuthSecurityEvent } from "@/lib/server/auth-security";
 import { sendPasswordResetCodeEmail } from "@/lib/server/auth-email";
 import { findUserByEmail } from "@/lib/server/users";
 import { validatePasswordResetRequestPayload } from "@/lib/server/validation";
@@ -9,6 +10,7 @@ import type { Locale } from "@/lib/shop/types";
 export async function POST(request: Request) {
   try {
     const payload = (await request.json()) as unknown;
+    const securityContext = buildRequestSecurityContext(request);
     const validation = validatePasswordResetRequestPayload(payload);
     const locale =
       payload && typeof payload === "object" && "locale" in payload
@@ -28,6 +30,13 @@ export async function POST(request: Request) {
     const user = await findUserByEmail(validation.data.email);
 
     if (user) {
+      await recordAuthSecurityEvent({
+        userId: user.id,
+        email: user.email,
+        eventType: "password-reset-request",
+        success: true,
+        ...securityContext,
+      });
       const resetCode = await createAuthCode({
         userId: user.id,
         email: user.email,
@@ -39,6 +48,16 @@ export async function POST(request: Request) {
         name: user.name,
         code: resetCode.code,
         locale,
+      });
+    } else {
+      await recordAuthSecurityEvent({
+        email: validation.data.email,
+        eventType: "password-reset-request",
+        success: false,
+        ...securityContext,
+        metadata: {
+          reason: "email-not-found",
+        },
       });
     }
 
