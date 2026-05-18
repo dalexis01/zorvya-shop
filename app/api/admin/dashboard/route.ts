@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
 
 import { getRevenueAnalytics } from "@/lib/server/admin/analytics";
-import { getAllAdminOrders } from "@/lib/server/admin/orders";
 import { getAllSupportMessages, getPendingSupportMessages } from "@/lib/server/admin/support";
-import { getAllProducts, getLowStockProducts } from "@/lib/server/admin/products";
+import { getLowStockProducts, getProductStats } from "@/lib/server/admin/products";
 import { requireAdminRequestUser } from "@/lib/server/admin/request-auth";
-import { getAdminUsers } from "@/lib/server/admin/users";
+import { getDashboardOrderStats } from "@/lib/server/orders-store";
+import { getBlockedUserCount } from "@/lib/server/users";
 
 export const dynamic = "force-dynamic";
 
@@ -20,59 +20,79 @@ export async function GET() {
       );
     }
 
-    const [products, orders, supportMessages, lowStockProducts, users, revenue, allSupportMessages] =
-      await Promise.all([
-      getAllProducts(),
-      getAllAdminOrders(),
-      getPendingSupportMessages(),
+    // All queries run in parallel.
+    // getDashboardOrderStats()  → 2 targeted SQL queries (counts + recent rows)  replaces 3 full-table scans
+    // getProductStats()         → 1 COUNT query                                  replaces getAllProducts()
+    // getRevenueAnalytics(90)   → orders limited to last 90 days                 replaces unbounded getAllAdminOrders()
+    // getBlockedUserCount()     → 1 COUNT query                                  replaces getAllUsers()
+    // getLowStockProducts()     → already targeted SQL
+    // support messages          → filesystem only (fast)
+    const [
+      orderStats,
+      productStats,
+      revenue,
+      lowStockProducts,
+      blockedUsers,
+      supportMessages,
+      allSupportMessages,
+    ] = await Promise.all([
+      getDashboardOrderStats(),
+      getProductStats(),
+      getRevenueAnalytics(90),
       getLowStockProducts(5),
-      getAdminUsers(),
-      getRevenueAnalytics(),
+      getBlockedUserCount(),
+      getPendingSupportMessages(),
       getAllSupportMessages(),
     ]);
 
     const stats = {
-      totalProducts: products.length,
-      activeProducts: products.filter((product) => product.isActive).length,
+      // Product counts
+      totalProducts:    productStats.total,
+      activeProducts:   productStats.active,
       lowStockProducts,
-      totalOrders: orders.length,
-      ordersToday: revenue.dailySeries[revenue.dailySeries.length - 1]?.orders ?? 0,
-      ordersThisWeek: revenue.weeklySeries[revenue.weeklySeries.length - 1]?.orders ?? 0,
-      ordersThisMonth: revenue.monthlySeries[revenue.monthlySeries.length - 1]?.orders ?? 0,
-      pendingOrders: orders.filter((order) => order.isPending).length,
-      completedOrders: orders.filter((order) => order.isCompleted).length,
-      totalRevenue: revenue.totalRevenue,
-      revenueToday: revenue.revenueToday,
-      revenueThisWeek: revenue.revenueThisWeek,
-      revenueThisMonth: revenue.revenueThisMonth,
-      pendingSupportMessages: supportMessages.length,
-      blockedUsers: users.filter((user) => user.isBlocked).length,
-      cogsTotal: revenue.cogsTotal,
-      grossProfit: revenue.grossProfit,
-      netProfit: revenue.netProfit,
-      cancelledOrders: revenue.cancelledOrders,
-      cancelledValue: revenue.cancelledValue,
-      trackedProductCount: revenue.trackedProductCount,
+
+      // Order counts (from aggregated SQL — no full scan)
+      totalOrders:     orderStats?.totalOrders     ?? 0,
+      pendingOrders:   orderStats?.pendingOrders   ?? 0,
+      completedOrders: orderStats?.completedOrders ?? 0,
+      ordersToday:     orderStats?.ordersToday     ?? 0,
+      ordersThisWeek:  orderStats?.ordersThisWeek  ?? 0,
+      ordersThisMonth: orderStats?.ordersThisMonth ?? 0,
+
+      // Revenue (from aggregated SQL — no full scan)
+      totalRevenue:    orderStats?.totalRevenue    ?? 0,
+      revenueToday:    orderStats?.revenueToday    ?? 0,
+      revenueThisWeek: orderStats?.revenueThisWeek ?? 0,
+      revenueThisMonth:orderStats?.revenueThisMonth?? 0,
+      cancelledOrders: orderStats?.cancelledOrders ?? 0,
+      cancelledValue:  orderStats?.cancelledValue  ?? 0,
+
+      // Revenue analytics (90-day window — product performance, charts, COGS)
+      cogsTotal:          revenue.cogsTotal,
+      grossProfit:        revenue.grossProfit,
+      netProfit:          revenue.netProfit,
+      trackedProductCount:revenue.trackedProductCount,
       untrackedProductCount: revenue.untrackedProductCount,
-      totalUnitsSold: revenue.totalUnitsSold,
-      topProducts: revenue.productPerformance.slice(0, 5),
-      revenueSeries: revenue.dailySeries,
-      recentOrders: revenue.recentOrders,
-      recentSupportMessages: allSupportMessages.slice(0, 5),
+      totalUnitsSold:     revenue.totalUnitsSold,
+      topProducts:        revenue.productPerformance.slice(0, 5),
+      revenueSeries:      revenue.dailySeries,
+
+      // Recent orders (from lightweight 6-row query)
+      recentOrders: orderStats?.recentOrders ?? [],
+
+      // Support
+      pendingSupportMessages: supportMessages.length,
+      recentSupportMessages:  allSupportMessages.slice(0, 5),
+
+      // Users
+      blockedUsers,
     };
 
-    return NextResponse.json({
-      success: true,
-      stats,
-    });
+    return NextResponse.json({ success: true, stats });
   } catch (error) {
     console.error("Dashboard error:", error);
-
     return NextResponse.json(
-      {
-        success: false,
-        error: "Failed to load dashboard stats",
-      },
+      { success: false, error: "Failed to load dashboard stats" },
       { status: 500 }
     );
   }

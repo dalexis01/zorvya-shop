@@ -104,8 +104,11 @@ export async function getAdminOrders(options?: {
   };
 }
 
-export async function getAllAdminOrders() {
-  const [orders, products] = await Promise.all([getAllOrders(), getProductsForOrderLookup()]);
+export async function getAllAdminOrders(options?: { windowDays?: number }) {
+  const [orders, products] = await Promise.all([
+    getAllOrders(options),
+    getProductsForOrderLookup(),
+  ]);
   const productsByName = buildProductNameMap(products);
   return orders.map((order) => toAdminOrderRecord(order, productsByName));
 }

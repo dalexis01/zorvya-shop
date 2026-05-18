@@ -198,8 +198,8 @@ export function normalizeStoredOrder(order: StoredOrder): StoredOrder {
   };
 }
 
-async function readOrders() {
-  const orders = await loadAllOrdersFromStore();
+async function readOrders(options?: { windowDays?: number }) {
+  const orders = await loadAllOrdersFromStore(options);
   return orders.map(normalizeStoredOrder);
 }
 
@@ -359,8 +359,8 @@ function buildStatusHistoryEntry(input: {
   };
 }
 
-export async function getAllOrders() {
-  return readOrders();
+export async function getAllOrders(options?: { windowDays?: number }) {
+  return readOrders(options);
 }
 
 export async function getOrderById(orderId: string) {

@@ -86,7 +86,7 @@ export default function AdminSupportPage() {
     void loadMessages();
     const intervalId = window.setInterval(() => {
       void loadMessages();
-    }, 5000);
+    }, 30_000);
 
     return () => {
       isActive = false;

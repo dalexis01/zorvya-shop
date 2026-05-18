@@ -151,8 +151,13 @@ function buildRecentOrders(orders: AdminOrderRecord[]): DashboardOrderSnapshot[]
   }));
 }
 
-export async function getRevenueAnalytics(): Promise<RevenueAnalytics> {
-  const [orders, products] = await Promise.all([getAllAdminOrders(), getAllProducts()]);
+export async function getRevenueAnalytics(windowDays = 90): Promise<RevenueAnalytics> {
+  // windowDays limits the orders loaded (default: last 90 days).
+  // getAllProducts uses the 5-min cache — no extra scan when called alongside the dashboard.
+  const [orders, products] = await Promise.all([
+    getAllAdminOrders({ windowDays }),
+    getAllProducts(),
+  ]);
   const lookup = createProductLookup(products);
   const now = new Date();
   const todayStart = startOfDay(now);

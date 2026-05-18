@@ -496,12 +496,23 @@ async function queryOrdersPageFromDatabase(input: {
   };
 }
 
-export async function loadAllOrdersFromStore() {
+export async function loadAllOrdersFromStore(options?: { windowDays?: number }) {
   if (!isOrdersDatabaseConfigured()) {
     throw new Error("ORDERS_DB_NOT_CONFIGURED");
   }
 
   const pool = await getOrdersPool();
+
+  const whereParts: string[] = [];
+  const params: unknown[] = [];
+
+  if (options?.windowDays && options.windowDays > 0) {
+    params.push(options.windowDays);
+    whereParts.push(`created_at >= NOW() - ($${params.length} || ' days')::INTERVAL`);
+  }
+
+  const where = whereParts.length ? `WHERE ${whereParts.join(" AND ")}` : "";
+
   const result = await pool.query<OrderRow>(
     `
       SELECT
@@ -532,11 +543,94 @@ export async function loadAllOrdersFromStore() {
         status_history_json,
         issues_json
       FROM orders
+      ${where}
       ORDER BY created_at DESC, id DESC
-    `
+      LIMIT 5000
+    `,
+    params
   );
 
+  if (result.rows.length === 5000) {
+    console.warn("[orders] loadAllOrdersFromStore hit 5000-row safety LIMIT — consider narrowing the window.");
+  }
+
   return result.rows.map(orderRowToStoredOrder);
+}
+
+// Single aggregated SQL query — replaces 3 separate full-table scans on the dashboard.
+export async function getDashboardOrderStats() {
+  if (!isOrdersDatabaseConfigured()) {
+    return null;
+  }
+
+  const pool = await getOrdersPool();
+
+  const [statsResult, recentResult] = await Promise.all([
+    pool.query<{
+      total_orders: string;
+      pending_orders: string;
+      completed_orders: string;
+      cancelled_orders: string;
+      total_revenue: string;
+      revenue_today: string;
+      revenue_this_week: string;
+      revenue_this_month: string;
+      orders_today: string;
+      orders_this_week: string;
+      orders_this_month: string;
+      cancelled_value: string;
+    }>(`
+      SELECT
+        COUNT(*)::text                                                                        AS total_orders,
+        COUNT(*) FILTER (WHERE cancelled_at IS NULL
+          AND (admin_status IS NULL OR admin_status != 'Pedido completado'))::text            AS pending_orders,
+        COUNT(*) FILTER (WHERE admin_status = 'Pedido completado')::text                     AS completed_orders,
+        COUNT(*) FILTER (WHERE cancelled_at IS NOT NULL)::text                               AS cancelled_orders,
+        COALESCE(SUM(total) FILTER (WHERE cancelled_at IS NULL), 0)::text                    AS total_revenue,
+        COALESCE(SUM(total) FILTER (WHERE cancelled_at IS NULL
+          AND created_at >= DATE_TRUNC('day', NOW())), 0)::text                              AS revenue_today,
+        COALESCE(SUM(total) FILTER (WHERE cancelled_at IS NULL
+          AND created_at >= DATE_TRUNC('week', NOW())), 0)::text                             AS revenue_this_week,
+        COALESCE(SUM(total) FILTER (WHERE cancelled_at IS NULL
+          AND created_at >= DATE_TRUNC('month', NOW())), 0)::text                            AS revenue_this_month,
+        COUNT(*) FILTER (WHERE created_at >= DATE_TRUNC('day', NOW()))::text                 AS orders_today,
+        COUNT(*) FILTER (WHERE created_at >= DATE_TRUNC('week', NOW()))::text                AS orders_this_week,
+        COUNT(*) FILTER (WHERE created_at >= DATE_TRUNC('month', NOW()))::text               AS orders_this_month,
+        COALESCE(SUM(total) FILTER (WHERE cancelled_at IS NOT NULL), 0)::text                AS cancelled_value
+      FROM orders
+    `),
+    pool.query<{
+      id: string; customer_name: string; total: string;
+      admin_status: string | null; cancelled_at: string | null; created_at: string;
+    }>(
+      `SELECT id, customer_name, total, admin_status, cancelled_at, created_at
+       FROM orders ORDER BY created_at DESC LIMIT 6`
+    ),
+  ]);
+
+  const row = statsResult.rows[0];
+  return {
+    totalOrders:       Number(row.total_orders),
+    pendingOrders:     Number(row.pending_orders),
+    completedOrders:   Number(row.completed_orders),
+    cancelledOrders:   Number(row.cancelled_orders),
+    totalRevenue:      Number(row.total_revenue),
+    revenueToday:      Number(row.revenue_today),
+    revenueThisWeek:   Number(row.revenue_this_week),
+    revenueThisMonth:  Number(row.revenue_this_month),
+    ordersToday:       Number(row.orders_today),
+    ordersThisWeek:    Number(row.orders_this_week),
+    ordersThisMonth:   Number(row.orders_this_month),
+    cancelledValue:    Number(row.cancelled_value),
+    recentOrders:      recentResult.rows.map((r) => ({
+      id: r.id,
+      customerName: r.customer_name,
+      total: Number(r.total),
+      adminStatus: r.admin_status,
+      cancelledAt: r.cancelled_at,
+      createdAt: r.created_at,
+    })),
+  };
 }
 
 export async function loadOrderByIdFromStore(orderId: string) {

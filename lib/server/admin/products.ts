@@ -461,18 +461,37 @@ async function ensureProductsSchema(pool: Pool) {
     return;
   }
 
+  // Strip base64 images from legacy file to prevent re-inserting ~18 MB of base64 into the DB.
+  // The real images live in Vercel Blob. The bootstrap file is kept only as a last-resort fallback.
+  const safeProducts = legacyProducts.map((product) => ({
+    ...product,
+    images: product.images
+      .filter((img) => !img.url.startsWith("data:"))
+      .map((img) => img),
+  }));
+
+  const base64Count = legacyProducts.reduce(
+    (n, p) => n + p.images.filter((i) => i.url.startsWith("data:")).length,
+    0
+  );
+  if (base64Count > 0) {
+    console.warn(
+      `[products] bootstrap: stripped ${base64Count} base64 image(s) from legacy file — re-upload them via the admin panel after bootstrap.`
+    );
+  }
+
   const client = await pool.connect();
 
   try {
     await client.query("BEGIN");
 
-    for (const product of legacyProducts) {
+    for (const product of safeProducts) {
       await upsertProductRecord(client, product);
     }
 
     await client.query("COMMIT");
     console.info(
-      `[products] bootstrap completado: ${legacyProducts.length} producto(s) migrados desde data/products.json`
+      `[products] bootstrap completado: ${safeProducts.length} producto(s) migrados desde data/products.json`
     );
   } catch (error) {
     await client.query("ROLLBACK");
@@ -735,7 +754,7 @@ async function readProductSummariesFromDatabase(options?: {
         last_sold_at,
         updated_at,
         updated_by,
-        translations_json
+        NULL::jsonb AS translations_json
       FROM products
       ${whereClauses.length ? `WHERE ${whereClauses.join(" AND ")}` : ""}
       ORDER BY published_at DESC NULLS LAST, created_at DESC, display_order ASC, updated_at DESC
@@ -951,6 +970,26 @@ export async function getAllProducts(options?: {
   }
 
   return sortProducts(products);
+}
+
+// Returns total and active product counts — used by the dashboard instead of loading all products.
+export async function getProductStats(): Promise<{ total: number; active: number }> {
+  if (!isProductsDatabaseConfigured()) return { total: 0, active: 0 };
+  try {
+    const pool = await getProductsPool();
+    const result = await pool.query<{ total: string; active: string }>(
+      `SELECT COUNT(*)::text AS total,
+              COUNT(*) FILTER (WHERE is_active = true)::text AS active
+       FROM products`
+    );
+    return {
+      total:  Number(result.rows[0]?.total  ?? 0),
+      active: Number(result.rows[0]?.active ?? 0),
+    };
+  } catch (err) {
+    console.error("[products] getProductStats failed:", err);
+    return { total: 0, active: 0 };
+  }
 }
 
 // Returns only id+name — used when building order name→product maps.

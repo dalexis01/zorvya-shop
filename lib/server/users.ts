@@ -413,6 +413,18 @@ export async function updateUserEmail(userId: string, email: string) {
   return result.rows[0] ? rowToStoredUser(result.rows[0]) : null;
 }
 
+export async function getBlockedUserCount(): Promise<number> {
+  try {
+    const pool = await getCustomerPool();
+    const result = await pool.query<{ count: string }>(
+      `SELECT COUNT(*) FILTER (WHERE is_blocked = true)::text AS count FROM users`
+    );
+    return Number(result.rows[0]?.count ?? 0);
+  } catch {
+    return 0;
+  }
+}
+
 export async function getAllUsers() {
   const pool = await getCustomerPool();
   const result = await pool.query<StoredUserRow>(

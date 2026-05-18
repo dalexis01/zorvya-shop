@@ -16,10 +16,10 @@ const securityHeaders = [
       "default-src 'self'",
       "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.paypal.com https://www.sandbox.paypal.com",
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-      "img-src 'self' data: blob: https://images.unsplash.com https://www.paypal.com https://*.googleapis.com https://*.gstatic.com",
+      "img-src 'self' data: blob: https://images.unsplash.com https://www.paypal.com https://*.googleapis.com https://*.gstatic.com https://*.public.blob.vercel-storage.com https://public.blob.vercel-storage.com",
       "font-src 'self' data: https://fonts.gstatic.com",
       "frame-src https://www.paypal.com https://www.sandbox.paypal.com https://www.google.com",
-      "connect-src 'self' https://api.paypal.com https://api.sandbox.paypal.com https://*.googleapis.com https://nominatim.openstreetmap.org https://router.project-osrm.org https://*.tile.openstreetmap.org",
+      "connect-src 'self' https://api.paypal.com https://api.sandbox.paypal.com https://*.googleapis.com https://nominatim.openstreetmap.org https://router.project-osrm.org https://*.tile.openstreetmap.org https://*.public.blob.vercel-storage.com https://public.blob.vercel-storage.com",
       "object-src 'none'",
       "base-uri 'self'",
       "form-action 'self'",
@@ -40,6 +40,8 @@ const nextConfig: NextConfig = {
     ],
     remotePatterns: [
       { protocol: "https", hostname: "images.unsplash.com" },
+      { protocol: "https", hostname: "*.public.blob.vercel-storage.com" },
+      { protocol: "https", hostname: "public.blob.vercel-storage.com" },
     ],
   },
   async headers() {
