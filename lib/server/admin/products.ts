@@ -528,8 +528,18 @@ function productRowToProduct(row: ProductRow): Product {
 
 async function readProductsFromDatabase() {
   const pool = await getProductsPool();
+  // Excludes ai_json and translations_json — only needed in single-product edit view.
+  // images_json kept because post-migration it contains small URLs, not base64.
   const result = await pool.query<ProductRow>(
-    `SELECT *
+    `SELECT id, public_id, display_order, sku, name,
+            short_description, long_description, brand, category,
+            tags_json, price, original_price, stock, rating, review_count,
+            inventory_label, delivery_label, show_stock,
+            is_active, is_visible, is_featured, is_top,
+            attributes_json, internal_json, metrics_json, images_json,
+            created_at, published_at, stock_added_at, last_sold_at,
+            sale_dates_json, updated_at, updated_by,
+            NULL::jsonb AS translations_json, NULL::jsonb AS ai_json
      FROM products
      ORDER BY published_at DESC NULLS LAST, created_at DESC, display_order ASC, updated_at DESC`
   );
@@ -1399,8 +1409,28 @@ export async function setPrimaryImage(productId: string, imageId: string, update
 }
 
 export async function getLowStockProducts(threshold: number = 5) {
-  const products = await readProducts();
-  return products.filter((product) => product.stock <= threshold && product.isActive);
+  if (!isProductsDatabaseConfigured()) return [];
+  try {
+    const pool = await getProductsPool();
+    const result = await pool.query<ProductRow>(
+      `SELECT id, public_id, display_order, sku, name, stock, price, original_price,
+              rating, review_count, category, brand, tags_json, short_description,
+              long_description, inventory_label, delivery_label, show_stock,
+              is_active, is_visible, is_featured, is_top,
+              attributes_json, internal_json, metrics_json, images_json,
+              created_at, published_at, stock_added_at, last_sold_at,
+              sale_dates_json, updated_at, updated_by,
+              NULL::jsonb AS translations_json, NULL::jsonb AS ai_json
+       FROM products
+       WHERE stock <= $1 AND is_active = true
+       ORDER BY stock ASC, name ASC`,
+      [threshold]
+    );
+    return result.rows.map(productRowToProduct);
+  } catch (err) {
+    console.error("[products] getLowStockProducts failed:", err);
+    return [];
+  }
 }
 
 export async function registerProductSalesFromOrder(input: {

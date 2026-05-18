@@ -10,10 +10,13 @@
     "admin:create": "node scripts/create-admin.mjs",
     "orders:migrate:postgres": "node --env-file=.env.local scripts/migrate-orders-to-postgres.mjs",
     "products:migrate:postgres": "node --env-file=.env.local scripts/migrate-products-to-postgres.mjs",
-    "users:migrate:postgres": "node --env-file=.env.local scripts/migrate-users-to-postgres.mjs"
+    "users:migrate:postgres": "node --env-file=.env.local scripts/migrate-users-to-postgres.mjs",
+    "images:migrate:blob": "node --env-file=.env.local scripts/migrate-images-to-blob.mjs",
+    "images:migrate:blob:dry": "node --env-file=.env.local scripts/migrate-images-to-blob.mjs --dry-run"
   },
   "dependencies": {
     "@types/react-datepicker": "^6.2.0",
+    "@vercel/blob": "^2.3.3",
     "@vercel/speed-insights": "^2.0.0",
     "leaflet": "^1.9.4",
     "next": "16.2.3",

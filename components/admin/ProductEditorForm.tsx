@@ -389,6 +389,8 @@ export default function ProductEditorForm({ mode, productId }: ProductEditorForm
   const [saving, setSaving] = useState(false);
   const [savingDraft, setSavingDraft] = useState(false);
   const [error, setError] = useState("");
+  const [imageUploadError, setImageUploadError] = useState("");
+  const [uploadingImageCount, setUploadingImageCount] = useState(0);
   const [imageEditor, setImageEditor] = useState<ImageEditorState | null>(null);
   const [editingImage, setEditingImage] = useState(false);
   const [accountingImagePreviewOpen, setAccountingImagePreviewOpen] = useState(false);
@@ -429,39 +431,68 @@ export default function ProductEditorForm({ mode, productId }: ProductEditorForm
     }));
   }
 
-  async function appendImages(files: FileList | File[]) {
-    const nextImages = await Promise.all(
-      Array.from(files).map(async (file) => ({
-        id: createId(),
-        url: await imageFileToDataUrl(file),
-      }))
-    );
+  // Uploads a data URL (already resized by imageFileToDataUrl) to Vercel Blob.
+  // Returns the Blob URL on success, or the original dataUrl as fallback if storage is not yet set up.
+  async function uploadToBlob(dataUrl: string, filename?: string): Promise<string> {
+    try {
+      const res = await fetch("/api/admin/upload-image", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ dataUrl, filename }),
+      });
+      const data = (await res.json()) as { success?: boolean; url?: string; error?: string };
+      if (data.success && data.url) return data.url;
+      // Fall back to data URL if Blob is not yet configured (BLOB_READ_WRITE_TOKEN missing)
+      if (res.status === 503) return dataUrl;
+      setImageUploadError(data.error ?? "Error al subir imagen");
+      return dataUrl;
+    } catch {
+      return dataUrl;
+    }
+  }
 
-    setFormState((currentState) => ({
-      ...currentState,
-      images: [...currentState.images, ...nextImages],
-    }));
+  async function appendImages(files: FileList | File[]) {
+    setImageUploadError("");
+    setUploadingImageCount(Array.from(files).length);
+    try {
+      const nextImages = await Promise.all(
+        Array.from(files).map(async (file) => {
+          const dataUrl = await imageFileToDataUrl(file);
+          const url = await uploadToBlob(dataUrl, `${createId()}.${file.type.split("/")[1] ?? "jpg"}`);
+          return { id: createId(), url };
+        })
+      );
+      setFormState((currentState) => ({
+        ...currentState,
+        images: [...currentState.images, ...nextImages],
+      }));
+    } finally {
+      setUploadingImageCount(0);
+    }
   }
 
   async function replaceImage(index: number, file: File) {
-    const dataUrl = await imageFileToDataUrl(file);
-
-    setFormState((currentState) => ({
-      ...currentState,
-      images: currentState.images.map((image, imageIndex) =>
-        imageIndex === index
-          ? {
-              ...image,
-              url: dataUrl,
-            }
-          : image
-      ),
-    }));
+    setImageUploadError("");
+    setUploadingImageCount(1);
+    try {
+      const dataUrl = await imageFileToDataUrl(file);
+      const url = await uploadToBlob(dataUrl, `${createId()}.${file.type.split("/")[1] ?? "jpg"}`);
+      setFormState((currentState) => ({
+        ...currentState,
+        images: currentState.images.map((image, imageIndex) =>
+          imageIndex === index ? { ...image, url } : image
+        ),
+      }));
+    } finally {
+      setUploadingImageCount(0);
+    }
   }
 
   async function updateAccountingImage(file: File) {
+    setImageUploadError("");
     const dataUrl = await imageFileToDataUrl(file);
-    updateField("accountingImageUrl", dataUrl);
+    const url = await uploadToBlob(dataUrl, `accounting-${createId()}.${file.type.split("/")[1] ?? "jpg"}`);
+    updateField("accountingImageUrl", url);
   }
 
   function removeAccountingImage() {
@@ -636,8 +667,10 @@ export default function ProductEditorForm({ mode, productId }: ProductEditorForm
   }
 
   async function uploadVariantImage(variantId: string, file: File) {
+    setImageUploadError("");
     const dataUrl = await imageFileToDataUrl(file);
-    updateVariant(variantId, "imageUrl", dataUrl);
+    const url = await uploadToBlob(dataUrl, `variant-${createId()}.${file.type.split("/")[1] ?? "jpg"}`);
+    updateVariant(variantId, "imageUrl", url);
   }
 
   function hasDraftableContent() {
@@ -879,6 +912,17 @@ export default function ProductEditorForm({ mode, productId }: ProductEditorForm
                   />
                 </label>
               </div>
+
+              {uploadingImageCount > 0 && (
+                <p className="mt-3 text-xs font-medium text-cyan-400 animate-pulse">
+                  Subiendo {uploadingImageCount} imagen{uploadingImageCount > 1 ? "es" : ""}...
+                </p>
+              )}
+              {imageUploadError && (
+                <p className="mt-2 rounded-xl border border-rose-500/20 bg-rose-500/10 px-3 py-2 text-xs text-rose-300">
+                  {imageUploadError}
+                </p>
+              )}
 
               {formState.images.length > 0 ? (
                 <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-2">
