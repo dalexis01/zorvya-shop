@@ -476,8 +476,7 @@ function BlocksTable({
   onSaveStatus: (o: AdminOrderRecord) => Promise<void>;
   onOpenCancel: (o: AdminOrderRecord) => void;
 }) {
-  // Start all blocks OPEN so orders are immediately visible when the tab loads.
-  const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
+  const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set(routeBlocks.map((b) => b.id)));
 
   function toggleBlock(id: string) {
     setCollapsed((prev) => {
@@ -641,7 +640,7 @@ function BlocksTable({
       {nonRouteOrders.length > 0 && (
         <div>
           <p className="mb-2 px-1 text-[10px] font-semibold uppercase tracking-[0.25em] text-amber-400">
-            ⚠ Órdenes sin bloque · {nonRouteOrders.length} ordenes
+            ⚠ Órdenes sin bloque · {nonRouteOrders.length} orden{nonRouteOrders.length !== 1 ? "es" : ""} · (recogida, ya completadas, o exceden el límite de bloques)
           </p>
           <div className="overflow-x-auto rounded-[1.5rem] border border-slate-700 shadow-[0_16px_60px_rgba(0,0,0,0.4)]">
             <table className="w-full border-collapse">
@@ -1115,21 +1114,26 @@ export default function AdminOrdersPage() {
             <div className="rounded-xl border border-dashed border-slate-700 bg-[#050816] px-8 py-12 text-center text-sm text-slate-500">
               No hay pedidos de delivery pendientes para organizar en bloques automáticos.
             </div>
-          ) : routePlan && (
-            // Status bar: shows exactly how many orders are in blocks vs without block
+          ) : routePlan ? (
             <div className="flex flex-wrap items-center gap-3 rounded-xl border border-slate-800 bg-[#050816] px-4 py-2.5 text-xs">
               <span className="font-semibold text-slate-300">
-                {orders.length} pedido{orders.length !== 1 ? "s" : ""} cargado{orders.length !== 1 ? "s" : ""}
+                {orders.length} delivery pendiente{orders.length !== 1 ? "s" : ""} cargado{orders.length !== 1 ? "s" : ""}
               </span>
               <span className="text-slate-600">·</span>
-              <span className="text-cyan-300">
-                <strong>{routePlan.routeOrders.length}</strong> en {routePlan.routeBlocks.length} bloque{routePlan.routeBlocks.length !== 1 ? "s" : ""}
-              </span>
-              {routePlan.nonRouteOrders.length > 0 && (
+              {routePlan.routeBlocks.length > 0 ? (
+                <span className="text-cyan-300">
+                  <strong>{routePlan.routeOrders.length}</strong> organizados en <strong>{routePlan.routeBlocks.length}</strong> bloque{routePlan.routeBlocks.length !== 1 ? "s" : ""}
+                </span>
+              ) : (
+                <span className="text-amber-400 font-semibold">
+                  ⚠ 0 bloques creados — {routePlan.nonRouteOrders.length} pedidos sin bloque
+                </span>
+              )}
+              {routePlan.nonRouteOrders.length > 0 && routePlan.routeBlocks.length > 0 && (
                 <>
                   <span className="text-slate-600">·</span>
                   <span className="text-amber-300">
-                    <strong>{routePlan.nonRouteOrders.length}</strong> sin bloque
+                    <strong>{routePlan.nonRouteOrders.length}</strong> sin bloque (recogida o exceden límite)
                   </span>
                 </>
               )}
@@ -1141,7 +1145,7 @@ export default function AdminOrdersPage() {
                 ↻ Actualizar
               </button>
             </div>
-          )}
+          ) : null}
           {orders.length > 0 && routePlan ? (
             <BlocksTable
               key={routePlan.routeBlocks.map((block) => block.id).join("|")}

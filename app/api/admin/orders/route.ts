@@ -42,6 +42,24 @@ export async function GET(request: Request) {
       autoMode,
     });
 
+    // Debug log for blocks tab — helps diagnose why orders may not appear in route blocks
+    if (status === "pending" && deliveryType === "delivery") {
+      const eligible = result.orders.filter(
+        (o) => o.deliveryType === "delivery" && !o.isCancelled && !o.isCompleted
+      );
+      console.info(
+        `[admin/orders] blocks tab: ${result.orders.length} loaded, ${eligible.length} route-eligible` +
+        (result.orders.length !== eligible.length
+          ? ` (${result.orders.length - eligible.length} excluded: ${
+              result.orders
+                .filter((o) => !(o.deliveryType === "delivery" && !o.isCancelled && !o.isCompleted))
+                .map((o) => `${o.idTail}:type=${o.deliveryType},completed=${o.isCompleted},cancelled=${o.isCancelled}`)
+                .join(", ")
+            })`
+          : "")
+      );
+    }
+
     return NextResponse.json({
       success: true,
       orders: result.orders,
