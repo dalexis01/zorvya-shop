@@ -530,3 +530,51 @@ export async function updateUserPassword(userId: string, password: string) {
 
   return result.rows[0] ? rowToStoredUser(result.rows[0]) : null;
 }
+
+export async function findOrCreateGuestUser(input: {
+  name: string;
+  email: string;
+  phone: string;
+  address?: string;
+}): Promise<StoredUser | null> {
+  const email = normalizeCustomerEmail(input.email);
+  if (!email) return null;
+
+  const existing = await findUserByEmail(email);
+  if (existing) return existing;
+
+  const pool = await getCustomerPool();
+  const now = new Date().toISOString();
+  const tempPassword = `Guest-${randomUUID().slice(0, 12)}`;
+  const passwordHash = await hashPassword(tempPassword);
+  const normalizedPhone = normalizeCustomerPhone(input.phone);
+
+  const id = randomUUID();
+
+  try {
+    await pool.query(
+      `INSERT INTO users (
+        id, name, email, password_hash, phone, phone_normalized, address,
+        is_blocked, blocked_at, accepted_terms_at, accepted_terms_version,
+        email_verified_at, created_at, updated_at
+      ) VALUES (
+        $1, $2, $3, $4, $5, $6, $7, FALSE, NULL, NULL, NULL, NULL, $8::timestamptz, $9::timestamptz
+      ) ON CONFLICT (email) DO NOTHING`,
+      [
+        id,
+        trimCustomerText(input.name),
+        email,
+        passwordHash,
+        trimCustomerText(input.phone),
+        normalizedPhone,
+        input.address ? trimCustomerText(input.address) : "",
+        now,
+        now,
+      ]
+    );
+    return (await findUserByEmail(email));
+  } catch (err) {
+    console.error("[users] findOrCreateGuestUser failed:", err);
+    return null;
+  }
+}

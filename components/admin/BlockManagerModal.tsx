@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 
 import GoogleMapsEmbed from "@/components/admin/GoogleMapsEmbed";
-import { formatCurrencySrd, formatKilometers } from "@/lib/shop/number-format";
+import { formatCurrencySrd } from "@/lib/shop/number-format";
 import type { DeliveryBlock } from "@/lib/server/admin/delivery-blocks-store";
 import type { AdminOrderRecord } from "@/lib/shop/admin-types";
 

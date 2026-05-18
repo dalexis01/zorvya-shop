@@ -357,6 +357,7 @@ function buildAdminOrdersCacheKey(input: AdminOrdersQueryInput & { limit: number
     input.last4?.trim().toUpperCase() ?? "",
     input.cursor ?? "",
     input.limit,
+    input.autoMode ? "1" : "0",
   ]);
 }
 

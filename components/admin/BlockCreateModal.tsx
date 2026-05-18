@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import { formatCurrencySrd } from "@/lib/shop/number-format";
 import type { AdminOrderRecord } from "@/lib/shop/admin-types";

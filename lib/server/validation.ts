@@ -491,12 +491,15 @@ export function validateOrderPayload(
   }
 
   const body = payload as Record<string, unknown>;
-  const customerName = isNonEmptyString(body.name) ? trimText(body.name) : "";
-  const customerPhone = isNonEmptyString(body.phone) ? trimText(body.phone) : "";
-  const customerAddress = isNonEmptyString(body.address)
-    ? trimText(body.address)
-    : "";
-  const rawEmail = isNonEmptyString(body.email) ? normalizeEmail(body.email) : "";
+  // Accept both "name" (web) and "customerName" (mobile app) formats
+  const customerName = isNonEmptyString(body.name) ? trimText(body.name)
+    : isNonEmptyString(body.customerName) ? trimText(body.customerName as string) : "";
+  const customerPhone = isNonEmptyString(body.phone) ? trimText(body.phone)
+    : isNonEmptyString(body.customerPhone) ? trimText(body.customerPhone as string) : "";
+  const customerAddress = isNonEmptyString(body.address) ? trimText(body.address)
+    : isNonEmptyString(body.customerAddress) ? trimText(body.customerAddress as string) : "";
+  const rawEmail = isNonEmptyString(body.email) ? normalizeEmail(body.email)
+    : isNonEmptyString(body.customerEmail) ? normalizeEmail(body.customerEmail as string) : "";
   const customerEmail = rawEmail || options?.fallbackEmail || "";
   const deliveryType: DeliveryType =
     body.deliveryType === "pickup" ? "pickup" : "delivery";
@@ -532,8 +535,9 @@ export function validateOrderPayload(
     addFieldError(errors, "address", "Solo se permiten direcciones reales de Suriname.");
   }
 
-  if (!customerEmail || !isValidEmail(customerEmail)) {
-    addFieldError(errors, "email", "El correo del pedido no es valido.");
+  // Email is optional for guest orders — only validate format if provided
+  if (customerEmail && !isValidEmail(customerEmail)) {
+    addFieldError(errors, "email", "El formato del correo no es valido.");
   }
 
   if (!items || items.length === 0) {

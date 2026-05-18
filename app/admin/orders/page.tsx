@@ -41,10 +41,16 @@ function mergeOrders(a: AdminOrderRecord[], b: AdminOrderRecord[]) {
   return Array.from(m.values()).sort((x, y) => new Date(y.createdAt).getTime() - new Date(x.createdAt).getTime());
 }
 
-function apiUrl(p: { status: StatusFilter; deliveryType: DeliveryFilter; last4: string; cursor?: string | null; autoMode?: boolean }) {
+function apiUrl(p: { status: StatusFilter; deliveryType: DeliveryFilter; last4: string; cursor?: string | null; autoMode?: boolean; globalSearch?: string }) {
   const sp = new URLSearchParams({ status: p.status, deliveryType: p.deliveryType, last4: p.last4, limit: String(LIMIT) });
   if (p.cursor) sp.set("cursor", p.cursor);
   if (p.autoMode) sp.set("autoMode", "true");
+  // Global search overrides status/deliveryType filters
+  if (p.globalSearch) {
+    sp.set("status", "all");
+    sp.set("deliveryType", "all");
+    sp.set("search", p.globalSearch);
+  }
   return `/api/admin/orders?${sp.toString()}`;
 }
 
@@ -703,6 +709,8 @@ export default function AdminOrdersPage() {
   const [autoMode, setAutoMode] = useState(false);
   const [autoModeLoading, setAutoModeLoading] = useState(false);
   const [bulkingBlockId, setBulkingBlockId] = useState<string | null>(null);
+  const [globalSearch, setGlobalSearch] = useState("");
+  const [globalSearchInput, setGlobalSearchInput] = useState("");
 
   // ── Persistent blocks ────────────────────────────────────────────────────────
   const [persistentBlocks, setPersistentBlocks] = useState<DeliveryBlock[]>([]);
@@ -747,7 +755,6 @@ export default function AdminOrdersPage() {
 
   useEffect(() => {
     if (activeTab === "blocks") void loadPersistentBlocks();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, refreshKey]);
 
   async function handleCreateBlock(name: string, orderIds: string[]) {
@@ -823,7 +830,7 @@ export default function AdminOrdersPage() {
       const timer = setTimeout(() => abort.abort(), 25_000);
       try {
         const [ordRes, metaRes] = await Promise.all([
-          fetch(apiUrl({ status, deliveryType, last4, autoMode }), { cache: "no-store", signal: abort.signal }),
+          fetch(apiUrl({ status, deliveryType, last4, autoMode, globalSearch: globalSearch || undefined }), { cache: "no-store", signal: abort.signal }),
           fetch("/api/admin/orders/meta", { cache: "no-store", signal: abort.signal }),
         ]);
         const [ordData, metaData] = await Promise.all([
@@ -877,13 +884,13 @@ export default function AdminOrdersPage() {
     }
     void load();
     return () => { alive = false; };
-  }, [activeTab, last4, refreshKey, status, deliveryType, autoMode]);
+  }, [activeTab, last4, refreshKey, status, deliveryType, autoMode, globalSearch]);
 
   async function loadMore() {
     if (!nextCursor || loading || loadingMore) return;
     setLoadingMore(true);
     try {
-      const res = await fetch(apiUrl({ status, deliveryType, last4, cursor: nextCursor, autoMode }), { cache: "no-store" });
+      const res = await fetch(apiUrl({ status, deliveryType, last4, cursor: nextCursor, autoMode, globalSearch: globalSearch || undefined }), { cache: "no-store" });
       const data = (await res.json()) as AdminOrdersResponse;
       if (!data.success) return;
       const inc = data.orders ?? [];
@@ -1008,7 +1015,7 @@ export default function AdminOrdersPage() {
           {autoMode ? "⚡ Auto: ON" : "⚡ Auto: OFF"}
         </button>
 
-        {/* Search */}
+        {/* Search by ID */}
         <div className="flex items-center gap-2 rounded-full border border-slate-700 bg-[#0a1020] px-3 py-1.5">
           <svg className="h-3.5 w-3.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35m1.85-5.15a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -1023,6 +1030,28 @@ export default function AdminOrdersPage() {
             <button type="button" onClick={() => setLast4("")} className="text-[10px] text-slate-500 hover:text-white">✕</button>
           )}
         </div>
+
+        {/* Global search (name / phone / email — searches all tabs) */}
+        <form
+          onSubmit={(e) => { e.preventDefault(); setGlobalSearch(globalSearchInput.trim()); }}
+          className={`flex items-center gap-2 rounded-full border px-3 py-1.5 transition ${globalSearch ? "border-cyan-500/50 bg-cyan-500/10" : "border-slate-700 bg-[#0a1020]"}`}
+        >
+          <span className="text-[11px] text-slate-500">🔍</span>
+          <input
+            type="text"
+            value={globalSearchInput}
+            onChange={(e) => { setGlobalSearchInput(e.target.value); if (!e.target.value.trim()) setGlobalSearch(""); }}
+            placeholder="Nombre / teléfono / email"
+            className="w-40 bg-transparent text-xs font-medium text-white outline-none placeholder:text-slate-600"
+          />
+          {(globalSearchInput || globalSearch) && (
+            <button
+              type="button"
+              onClick={() => { setGlobalSearchInput(""); setGlobalSearch(""); }}
+              className="text-[10px] text-slate-500 hover:text-white"
+            >✕</button>
+          )}
+        </form>
       </div>
 
       {/* ── Tabs ── */}
@@ -1050,6 +1079,13 @@ export default function AdminOrdersPage() {
           );
         })}
       </div>
+
+      {/* ── Global search notice ── */}
+      {globalSearch && (
+        <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/10 px-4 py-3 text-sm text-cyan-200">
+          Mostrando resultados globales para <strong>&ldquo;{globalSearch}&rdquo;</strong> — buscando en todas las pestañas.
+        </div>
+      )}
 
       {/* ── Notice ── */}
       {notice && (
@@ -1247,7 +1283,7 @@ function PersistentBlocksPanel({
 
       {!loading && blocks.length === 0 && (
         <p className="rounded-xl border border-dashed border-slate-700 py-6 text-center text-sm text-slate-500">
-          No hay bloques creados aún. Usa "Crear bloque" para empezar.
+          No hay bloques creados aun. Usa &quot;Crear bloque&quot; para empezar.
         </p>
       )}
 
