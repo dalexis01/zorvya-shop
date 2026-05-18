@@ -956,3 +956,16 @@ export async function resolveDeliveryQuote(input: {
     source: realRoute.source,
   };
 }
+
+export async function geocodeAddressForAdmin(
+  address: string
+): Promise<{ latitude: number; longitude: number } | null> {
+  const result = await resolveDestinationCoordinates(address, "es");
+  if (!result) return null;
+  return { latitude: result.latitude, longitude: result.longitude };
+}
+
+export async function getStoreCoordinates(): Promise<{ latitude: number; longitude: number }> {
+  const result = await resolveStoreCoordinates("es");
+  return { latitude: result.latitude, longitude: result.longitude };
+}

@@ -3,6 +3,8 @@
 import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 
+import BlockCreateModal from "@/components/admin/BlockCreateModal";
+import BlockManagerModal from "@/components/admin/BlockManagerModal";
 import CancelOrderDialog from "@/components/admin/CancelOrderDialog";
 import RouteBlockModal from "@/components/admin/RouteBlockModal";
 import { formatCurrencySrd, formatKilometers } from "@/lib/shop/number-format";
@@ -10,6 +12,7 @@ import { planAdminOrderRoutes, type AdminOrderRouteBlock, type AdminOrderRouteSt
 import { ADMIN_ORDER_STATUS_OPTIONS } from "@/lib/shop/order-status";
 import type { AdminOrderRecord, AdminOrdersMeta } from "@/lib/shop/admin-types";
 import type { ProductAccountingEntry } from "@/app/api/admin/products/accounting/route";
+import type { DeliveryBlock } from "@/lib/server/admin/delivery-blocks-store";
 
 // ─── types ────────────────────────────────────────────────────────────────────
 type Tab = "blocks" | "orders" | "pickups" | "cancelled" | "completed";
@@ -701,6 +704,13 @@ export default function AdminOrdersPage() {
   const [autoModeLoading, setAutoModeLoading] = useState(false);
   const [bulkingBlockId, setBulkingBlockId] = useState<string | null>(null);
 
+  // ── Persistent blocks ────────────────────────────────────────────────────────
+  const [persistentBlocks, setPersistentBlocks] = useState<DeliveryBlock[]>([]);
+  const [persistentBlocksLoading, setPersistentBlocksLoading] = useState(false);
+  const [assignedOrderIds, setAssignedOrderIds] = useState<Set<string>>(new Set());
+  const [showCreateBlock, setShowCreateBlock] = useState(false);
+  const [managingBlock, setManagingBlock] = useState<DeliveryBlock | null>(null);
+
   const { status, deliveryType } = TAB_PARAMS[activeTab];
 
   useEffect(() => {
@@ -716,6 +726,48 @@ export default function AdminOrdersPage() {
       .then((d) => { if (d.success && d.settings) setAutoMode(d.settings.autoMode); })
       .catch(() => {});
   }, []);
+
+  async function loadPersistentBlocks() {
+    setPersistentBlocksLoading(true);
+    try {
+      const [blocksRes, assignedRes] = await Promise.all([
+        fetch("/api/admin/blocks", { cache: "no-store" }),
+        fetch("/api/admin/blocks", { method: "HEAD", cache: "no-store" }),
+      ]);
+      const blocksData = (await blocksRes.json()) as { success?: boolean; blocks?: DeliveryBlock[] };
+      const assignedData = (await assignedRes.json()) as { success?: boolean; assignedOrderIds?: string[] };
+      if (blocksData.success) setPersistentBlocks(blocksData.blocks ?? []);
+      if (assignedData.success) setAssignedOrderIds(new Set(assignedData.assignedOrderIds ?? []));
+    } catch {
+      // non-critical
+    } finally {
+      setPersistentBlocksLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    if (activeTab === "blocks") void loadPersistentBlocks();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, refreshKey]);
+
+  async function handleCreateBlock(name: string, orderIds: string[]) {
+    const res = await fetch("/api/admin/blocks", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, orderIds }),
+    });
+    const data = (await res.json()) as { success?: boolean; block?: DeliveryBlock; error?: string };
+    if (!data.success) throw new Error(data.error ?? "Error");
+    setShowCreateBlock(false);
+    setNotice({ tone: "success", message: `Bloque "${name}" creado con ${orderIds.length} ordenes.` });
+    await loadPersistentBlocks();
+  }
+
+  async function handleOpenBlockManager(blockId: string) {
+    const res = await fetch(`/api/admin/blocks/${blockId}`, { cache: "no-store" });
+    const data = (await res.json()) as { success?: boolean; block?: DeliveryBlock };
+    if (data.success && data.block) setManagingBlock(data.block);
+  }
 
   async function toggleAutoMode() {
     const next = !autoMode;
@@ -1016,7 +1068,15 @@ export default function AdminOrdersPage() {
           No hay ordenes.
         </div>
       ) : activeTab === "blocks" && routePlan ? (
-        <BlocksTable
+        <>
+          {/* ── Persistent blocks panel ── */}
+          <PersistentBlocksPanel
+            blocks={persistentBlocks}
+            loading={persistentBlocksLoading}
+            onCreateBlock={() => setShowCreateBlock(true)}
+            onManageBlock={(id) => void handleOpenBlockManager(id)}
+          />
+          <BlocksTable
           key={routePlan.routeBlocks.map((block) => block.id).join("|")}
           routeBlocks={routePlan.routeBlocks}
           nonRouteOrders={routePlan.nonRouteOrders}
@@ -1028,6 +1088,7 @@ export default function AdminOrdersPage() {
           onBulkStatus={handleBulkBlockStatus}
           {...commonTableProps}
         />
+        </>
       ) : (
         <OrdersTable orders={orders} {...commonTableProps} />
       )}
@@ -1063,6 +1124,168 @@ export default function AdminOrdersPage() {
           onSend={handleSendBlock}
           isSending={sendingBlockId === activeModalBlock.id}
         />
+      )}
+
+      {/* Create block modal */}
+      {showCreateBlock && (
+        <BlockCreateModal
+          availableOrders={orders}
+          assignedOrderIds={assignedOrderIds}
+          onClose={() => setShowCreateBlock(false)}
+          onCreate={handleCreateBlock}
+        />
+      )}
+
+      {/* Block manager modal */}
+      {managingBlock && (
+        <BlockManagerModal
+          block={managingBlock}
+          orders={orders.filter((o) =>
+            (managingBlock.orders ?? []).some((s) => s.orderId === o.id)
+          ).sort((a, b) => {
+            const posA = managingBlock.orders?.find((s) => s.orderId === a.id)?.position ?? 0;
+            const posB = managingBlock.orders?.find((s) => s.orderId === b.id)?.position ?? 0;
+            return posA - posB;
+          })}
+          availableOrders={orders.filter((o) => o.deliveryType === "delivery" && !o.isCancelled && !o.isCompleted)}
+          assignedOrderIds={assignedOrderIds}
+          onClose={() => { setManagingBlock(null); void loadPersistentBlocks(); }}
+          onReorder={async (orderedIds) => {
+            await fetch(`/api/admin/blocks/${managingBlock.id}`, {
+              method: "PUT", headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ orderedIds }),
+            });
+          }}
+          onRemoveOrder={async (orderId) => {
+            await fetch(`/api/admin/blocks/${managingBlock.id}/orders/${orderId}`, { method: "DELETE" });
+            const updated = await fetch(`/api/admin/blocks/${managingBlock.id}`, { cache: "no-store" }).then((r) => r.json()) as { block?: DeliveryBlock };
+            if (updated.block) setManagingBlock(updated.block);
+          }}
+          onAddOrder={async (orderId) => {
+            await fetch(`/api/admin/blocks/${managingBlock.id}/orders`, {
+              method: "POST", headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ orderId }),
+            });
+            const updated = await fetch(`/api/admin/blocks/${managingBlock.id}`, { cache: "no-store" }).then((r) => r.json()) as { block?: DeliveryBlock };
+            if (updated.block) setManagingBlock(updated.block);
+          }}
+          onUpdateStatus={async (status) => {
+            await fetch(`/api/admin/blocks/${managingBlock.id}`, {
+              method: "PUT", headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ status }),
+            });
+            const updated = await fetch(`/api/admin/blocks/${managingBlock.id}`, { cache: "no-store" }).then((r) => r.json()) as { block?: DeliveryBlock };
+            if (updated.block) setManagingBlock(updated.block);
+          }}
+          onAutoRoute={async () => {
+            const res = await fetch(`/api/admin/blocks/${managingBlock.id}/autoroute`, { method: "POST" });
+            const data = (await res.json()) as { success?: boolean; distanceKm?: number; durationMinutes?: number; gmapsUrl?: string };
+            if (!data.success) return null;
+            return { distanceKm: data.distanceKm ?? 0, durationMinutes: data.durationMinutes ?? 0, gmapsUrl: data.gmapsUrl };
+          }}
+          onDelete={async () => {
+            await fetch(`/api/admin/blocks/${managingBlock.id}`, { method: "DELETE" });
+            await loadPersistentBlocks();
+          }}
+          onBulkOrderStatus={async (status) => {
+            const orderIds = (managingBlock.orders ?? []).map((s) => s.orderId);
+            await Promise.allSettled(
+              orderIds.map((id) =>
+                fetch(`/api/admin/orders/${id}`, {
+                  method: "PATCH", headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ action: "update-status", status }),
+                })
+              )
+            );
+            window.dispatchEvent(new Event("admin-orders-updated"));
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+// ─── Persistent blocks panel ──────────────────────────────────────────────────
+function PersistentBlocksPanel({
+  blocks, loading, onCreateBlock, onManageBlock,
+}: {
+  blocks: DeliveryBlock[];
+  loading: boolean;
+  onCreateBlock: () => void;
+  onManageBlock: (id: string) => void;
+}) {
+  const STATUS_LABELS: Record<string, { label: string; cls: string }> = {
+    draft:       { label: "Borrador",    cls: "text-slate-400" },
+    ready:       { label: "Listo",       cls: "text-emerald-400" },
+    in_delivery: { label: "En delivery", cls: "text-sky-400" },
+    completed:   { label: "Completado",  cls: "text-cyan-400" },
+    cancelled:   { label: "Cancelado",   cls: "text-rose-400" },
+  };
+
+  const activeBlocks = blocks.filter((b) => b.status !== "completed" && b.status !== "cancelled");
+  const doneBlocks = blocks.filter((b) => b.status === "completed" || b.status === "cancelled");
+
+  return (
+    <div className="rounded-[1.5rem] border border-slate-700 bg-[#070d1c] p-4 shadow-[0_8px_30px_rgba(0,0,0,0.3)]">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="text-xs font-bold uppercase tracking-[0.25em] text-cyan-300">Mis bloques guardados</p>
+          <p className="text-xs text-slate-500 mt-0.5">{activeBlocks.length} activos · {doneBlocks.length} completados</p>
+        </div>
+        <button
+          type="button"
+          onClick={onCreateBlock}
+          className="rounded-xl border border-cyan-500/40 bg-cyan-500/10 px-4 py-2 text-sm font-semibold text-cyan-300 transition hover:bg-cyan-500/20"
+        >
+          + Crear bloque
+        </button>
+      </div>
+
+      {loading && (
+        <p className="py-4 text-center text-xs uppercase tracking-[0.3em] text-slate-600">Cargando...</p>
+      )}
+
+      {!loading && blocks.length === 0 && (
+        <p className="rounded-xl border border-dashed border-slate-700 py-6 text-center text-sm text-slate-500">
+          No hay bloques creados aún. Usa "Crear bloque" para empezar.
+        </p>
+      )}
+
+      {!loading && blocks.length > 0 && (
+        <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+          {blocks.map((block) => {
+            const st = STATUS_LABELS[block.status] ?? STATUS_LABELS.draft;
+            const orderCount = block.orders?.length ?? 0;
+            return (
+              <button
+                key={block.id}
+                type="button"
+                onClick={() => onManageBlock(block.id)}
+                className="rounded-xl border border-slate-700 bg-[#0a1020] p-3 text-left transition hover:border-cyan-500/50 hover:bg-[#0c1530]"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <p className="font-semibold text-white text-sm leading-tight">{block.name}</p>
+                  <span className={`shrink-0 text-[10px] font-bold uppercase ${st.cls}`}>{st.label}</span>
+                </div>
+                <p className="mt-1 font-mono text-xs text-cyan-400">{block.id}</p>
+                <div className="mt-2 flex flex-wrap gap-3 text-xs text-slate-400">
+                  <span><strong className="text-white">{orderCount}</strong> paradas</span>
+                  {block.routeDistanceKm && (
+                    <span>🛣 <strong className="text-white">{block.routeDistanceKm} km</strong></span>
+                  )}
+                  {block.totalAmount > 0 && (
+                    <span>💰 <strong className="text-cyan-300">
+                      {new Intl.NumberFormat("nl-SR", { minimumFractionDigits: 2 }).format(block.totalAmount)} SRD
+                    </strong></span>
+                  )}
+                </div>
+                <p className="mt-1.5 text-[10px] text-slate-600">
+                  {new Date(block.createdAt).toLocaleDateString("es", { day: "2-digit", month: "short", year: "numeric" })}
+                </p>
+              </button>
+            );
+          })}
+        </div>
       )}
     </div>
   );
