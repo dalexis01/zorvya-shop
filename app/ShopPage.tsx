@@ -877,6 +877,12 @@ export default function ShopPage({
         .sort((left, right) => left.order - right.order),
     [settings.buttonOrder]
   );
+  const mobileHeaderButtons = useMemo(() => {
+    const targetOrder = ["account", "cart", "support"] as const;
+    return targetOrder
+      .map((target) => headerButtons.find((button) => button.target === target))
+      .filter((button): button is (typeof headerButtons)[number] => Boolean(button));
+  }, [headerButtons]);
 
   const defaultDeliveryEstimateText =
     getDeliveryEstimate(6, locale)?.summaryText || localizedProducts[0]?.deliveryLabel || "";
@@ -2086,7 +2092,7 @@ export default function ShopPage({
       }
 
       const baseClass =
-        "storefront-header-pill-button relative inline-flex h-[2.45rem] w-full min-w-0 items-center justify-center rounded-[10px] px-2.5 text-center sm:h-[2.65rem] sm:px-3 md:h-[2.9rem] md:w-[8.5rem] md:px-4";
+        "storefront-header-pill-button relative inline-flex h-[2.45rem] w-full min-w-0 items-center justify-center overflow-hidden rounded-[10px] px-1.5 text-center text-[10px] font-semibold leading-none sm:h-[2.65rem] sm:px-2.5 sm:text-[11px] md:h-[2.9rem] md:w-[8.5rem] md:px-4 md:text-[11px]";
       const buttonText =
         target === "support"
           ? locale === "es"
@@ -2109,7 +2115,7 @@ export default function ShopPage({
             aria-label={buttonText}
             title={buttonText}
           >
-            <span className="storefront-header-pill-button__text">{buttonText}</span>
+            <span className="storefront-header-pill-button__text whitespace-nowrap">{buttonText}</span>
           </button>
         );
       }
@@ -2123,7 +2129,7 @@ export default function ShopPage({
             aria-label={buttonText}
             title={buttonText}
           >
-            <span className="storefront-header-pill-button__text">{buttonText}</span>
+            <span className="storefront-header-pill-button__text whitespace-nowrap">{buttonText}</span>
             {hasUnreadSupportReply ? (
               <span className="absolute -right-1.5 -top-1.5 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-bold text-white shadow-[0_6px_16px_rgba(244,63,94,0.38)]">
                 1
@@ -2145,7 +2151,7 @@ export default function ShopPage({
           aria-label={buttonText}
           title={buttonText}
         >
-          <span className="storefront-header-pill-button__text">{buttonText}</span>
+          <span className="storefront-header-pill-button__text whitespace-nowrap">{buttonText}</span>
           {cart.length > 0 ? (
             <span className="absolute -right-1.5 -top-1.5 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-cyan-500 px-1 text-[10px] font-bold text-slate-950 shadow-[0_6px_16px_rgba(34,211,238,0.34)]">
               {cart.length}
@@ -2300,9 +2306,14 @@ export default function ShopPage({
               </div>
             </div>
 
-            <div className="grid grid-cols-3 gap-2 md:flex md:flex-wrap md:items-center md:justify-self-end md:justify-end">
+            <div className="grid grid-cols-3 gap-1.5 md:flex md:flex-wrap md:items-center md:justify-self-end md:justify-end md:gap-2">
+                {mobileHeaderButtons.map((button) => (
+                  <div key={button.id} className="min-w-0 md:hidden">
+                    {renderHeaderButton(button.target)}
+                  </div>
+                ))}
                 {headerButtons.map((button) => (
-                  <div key={button.id} className="min-w-0">
+                  <div key={`desktop-${button.id}`} className="hidden min-w-0 md:block">
                     {renderHeaderButton(button.target)}
                   </div>
                 ))}

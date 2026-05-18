@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { memo } from "react";
+import { memo, useState } from "react";
 
 import DeliveryEstimateBadge from "@/components/storefront/DeliveryEstimateBadge";
 import { createStars } from "@/lib/shop/display-utils";
@@ -40,6 +40,33 @@ function shouldUseDirectStorefrontImage(src: string) {
 }
 
 function ProductCardImage({ src, alt }: { src: string; alt: string }) {
+  const [hasError, setHasError] = useState(false);
+
+  if (!src || hasError) {
+    return (
+      <div className={styles.imageFallback} aria-label={alt} role="img">
+        <div className={styles.imageFallbackGlow} />
+        <svg
+          viewBox="0 0 24 24"
+          aria-hidden="true"
+          className={styles.imageFallbackIcon}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.7"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            d="M4 6.5A2.5 2.5 0 0 1 6.5 4h11A2.5 2.5 0 0 1 20 6.5v11A2.5 2.5 0 0 1 17.5 20h-11A2.5 2.5 0 0 1 4 17.5z"
+          />
+          <path strokeLinecap="round" strokeLinejoin="round" d="m7.5 15.5 3-3 2.5 2.5 2.5-3 1.5 2" />
+          <circle cx="9" cy="9" r="1.2" fill="currentColor" stroke="none" />
+        </svg>
+        <span className={styles.imageFallbackText}>ZorvyA Shop</span>
+      </div>
+    );
+  }
+
   return (
     <Image
       src={src}
@@ -49,6 +76,7 @@ function ProductCardImage({ src, alt }: { src: string; alt: string }) {
       unoptimized={shouldUseDirectStorefrontImage(src)}
       sizes="(max-width: 640px) 50vw, (max-width: 900px) 33vw, (max-width: 1280px) 25vw, (max-width: 1680px) 20vw, 16vw"
       className="product-media product-media--cover transition duration-500 group-hover:scale-105"
+      onError={() => setHasError(true)}
     />
   );
 }
@@ -58,7 +86,7 @@ function CartActionIcon() {
     <svg
       viewBox="0 0 24 24"
       aria-hidden="true"
-      className="h-[1.85rem] w-[1.85rem] fill-none stroke-current stroke-[1.5]"
+      className="h-[1.7rem] w-[1.7rem] fill-none stroke-current stroke-[1.5] sm:h-[1.85rem] sm:w-[1.85rem]"
       strokeLinecap="round"
       strokeLinejoin="round"
     >
@@ -74,7 +102,7 @@ function ModelActionIcon() {
     <svg
       viewBox="0 0 24 24"
       aria-hidden="true"
-      className="h-[1.05rem] w-[1.05rem] fill-none stroke-current stroke-[1.8]"
+      className="h-[0.95rem] w-[0.95rem] fill-none stroke-current stroke-[1.8] sm:h-[1.05rem] sm:w-[1.05rem]"
     >
       <path d="M4 7h10" />
       <path d="M4 17h16" />
@@ -110,7 +138,7 @@ function ProductCard({
 
   return (
     <article
-      className={`${styles.card} group flex aspect-square h-full min-h-0 flex-col overflow-hidden rounded-[1rem] border border-slate-600/80 shadow-[0_12px_30px_rgba(2,6,23,0.38)] transition hover:-translate-y-1 hover:border-cyan-300/70 sm:rounded-[1.2rem] sm:shadow-[0_16px_40px_rgba(2,6,23,0.45)]`}
+      className={`${styles.card} group flex h-full min-h-[13.65rem] flex-col overflow-hidden rounded-[1rem] border border-slate-600/80 shadow-[0_12px_30px_rgba(2,6,23,0.38)] transition hover:-translate-y-1 hover:border-cyan-300/70 sm:min-h-[15.25rem] sm:rounded-[1.2rem] sm:shadow-[0_16px_40px_rgba(2,6,23,0.45)]`}
     >
       <div aria-hidden="true" className={styles.cardBackdrop} />
       <div aria-hidden="true" className={styles.cardOverlay} />
@@ -120,34 +148,30 @@ function ProductCard({
           <button
             type="button"
             onClick={openProduct}
-            className="block h-[57%] min-h-0 w-full shrink-0 text-left sm:h-[55%]"
+            className="block h-[54%] min-h-0 w-full shrink-0 text-left sm:h-[55%]"
           >
-            <div
-              className={`relative h-full overflow-hidden border-b border-slate-800 ${styles.mediaShell}`}
-            >
-              {product.image ? <ProductCardImage src={product.image} alt={product.name} /> : null}
+            <div className={`relative h-full overflow-hidden border-b border-slate-800 ${styles.mediaShell}`}>
+              <ProductCardImage src={product.image} alt={product.name} />
             </div>
           </button>
         ) : (
           <Link
             href={`/products/${product.id}`}
             prefetch
-            className="block h-[57%] min-h-0 w-full shrink-0 sm:h-[55%]"
+            className="block h-[54%] min-h-0 w-full shrink-0 sm:h-[55%]"
           >
-            <div
-              className={`relative h-full overflow-hidden border-b border-slate-800 ${styles.mediaShell}`}
-            >
-              {product.image ? <ProductCardImage src={product.image} alt={product.name} /> : null}
+            <div className={`relative h-full overflow-hidden border-b border-slate-800 ${styles.mediaShell}`}>
+              <ProductCardImage src={product.image} alt={product.name} />
             </div>
           </Link>
         )}
 
-        <div className="flex min-h-0 flex-1 flex-col justify-end gap-1.5 p-2 pt-1.5 sm:gap-2 sm:p-2.5 sm:pt-2">
-          <div className="min-h-0">
+        <div className="flex min-h-0 flex-1 flex-col gap-1.5 p-2 pt-1.5 sm:gap-2 sm:p-2.5 sm:pt-2">
+          <div className="min-h-[2rem] sm:min-h-[2.25rem]">
             {useOverlay ? (
-              <button type="button" onClick={openProduct} className="block text-left">
+              <button type="button" onClick={openProduct} className="block w-full text-left">
                 <h3
-                  className={`${styles.title} line-clamp-2 text-[12px] leading-[1.24] transition hover:text-cyan-100 sm:text-[13.5px]`}
+                  className={`${styles.title} line-clamp-2 text-[11.5px] leading-[1.22] transition hover:text-cyan-100 sm:text-[13.5px]`}
                 >
                   {product.name}
                 </h3>
@@ -155,7 +179,7 @@ function ProductCard({
             ) : (
               <Link href={`/products/${product.id}`} prefetch className="block">
                 <h3
-                  className={`${styles.title} line-clamp-2 text-[12px] leading-[1.24] transition hover:text-cyan-100 sm:text-[13.5px]`}
+                  className={`${styles.title} line-clamp-2 text-[11.5px] leading-[1.22] transition hover:text-cyan-100 sm:text-[13.5px]`}
                 >
                   {product.name}
                 </h3>
@@ -163,33 +187,32 @@ function ProductCard({
             )}
           </div>
 
-          <div className="mt-auto flex items-end justify-between gap-1.5 sm:gap-2.5">
+          <div className="flex min-h-0 flex-1 items-end justify-between gap-2 sm:gap-2.5">
             <div className="min-w-0 flex-1">
-              <div className="mb-1 flex items-center justify-between gap-1.5 sm:mb-1.5">
+              <div className="mb-1">
                 <DeliveryEstimateBadge
                   text={deliveryEstimateText || t.localWarehouse}
-                  className="max-w-[72%] sm:max-w-[68%]"
+                  className="max-w-full"
                 />
-                <div className="flex shrink-0 items-center justify-end gap-1.5">
-                  <span className="text-[15px] leading-none tracking-tight text-amber-400 sm:text-[14px]">
-                    {reviewStars}
+              </div>
+
+              <div className="mb-1 flex items-center gap-1.5 sm:mb-1.5">
+                <span className="block max-w-full overflow-hidden text-[12px] leading-none tracking-[0.04em] text-amber-400 sm:text-[13px]">
+                  {reviewStars}
+                </span>
+                {product.reviewCount > 0 ? (
+                  <span className="shrink-0 text-[9px] leading-none text-slate-400 sm:text-[10px]">
+                    ({product.reviewCount})
                   </span>
-                  {product.reviewCount > 0 ? (
-                    <span className="text-[9px] leading-none text-slate-400 sm:text-[10px]">
-                      ({product.reviewCount})
-                    </span>
-                  ) : null}
-                </div>
+                ) : null}
               </div>
 
               <div className={styles.priceScene}>
-                <div className={styles.priceCube}>
-                  <span className={`${styles.price} ${styles.priceSideTop} text-[16px] leading-none sm:text-[17px]`}>
+                <div className={`${styles.priceCube} ${styles.priceCubeMobile}`}>
+                  <span className={`${styles.price} ${styles.priceSideTop} text-[14px] leading-none sm:text-[17px]`}>
                     {formatCurrency(product.price)}
                   </span>
-                  <span
-                    className={`${styles.price} ${styles.priceSideFront} text-[13px] leading-none sm:text-[14px]`}
-                  >
+                  <span className={`${styles.price} ${styles.priceSideFront} text-[11px] leading-none sm:text-[14px]`}>
                     {priceInUsd}
                   </span>
                 </div>
@@ -198,7 +221,7 @@ function ProductCard({
 
             {requiresSelection ? (
               useOverlay ? (
-                <div className="shrink-0">
+                <div className="shrink-0 self-end">
                   <button
                     type="button"
                     onClick={openProduct}
@@ -210,7 +233,7 @@ function ProductCard({
                   </button>
                 </div>
               ) : (
-                <div className="shrink-0">
+                <div className="shrink-0 self-end">
                   <Link
                     href={`/products/${product.id}`}
                     prefetch
@@ -223,7 +246,7 @@ function ProductCard({
                 </div>
               )
             ) : (
-              <div className="shrink-0">
+              <div className="shrink-0 self-end">
                 <button
                   type="button"
                   onClick={() => onAdd(product)}

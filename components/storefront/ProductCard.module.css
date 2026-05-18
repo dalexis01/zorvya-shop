@@ -115,6 +115,52 @@
     rgb(15 23 42 / 0.52);
 }
 
+.imageFallback {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  background:
+    radial-gradient(circle at 30% 25%, rgb(34 211 238 / 0.18), transparent 34%),
+    radial-gradient(circle at 72% 72%, rgb(59 130 246 / 0.16), transparent 30%),
+    linear-gradient(180deg, rgb(8 15 29 / 0.95), rgb(15 23 42 / 0.96));
+  color: rgb(186 230 253 / 0.9);
+}
+
+.imageFallbackGlow {
+  position: absolute;
+  width: 4.8rem;
+  height: 4.8rem;
+  border-radius: 9999px;
+  background: radial-gradient(circle, rgb(34 211 238 / 0.18), transparent 70%);
+  filter: blur(8px);
+  opacity: 0.8;
+}
+
+.imageFallbackIcon,
+.imageFallbackText {
+  position: relative;
+  z-index: 1;
+}
+
+.imageFallbackIcon {
+  width: 2rem;
+  height: 2rem;
+}
+
+.imageFallbackText {
+  max-width: 80%;
+  text-align: center;
+  font-family: var(--font-sora), var(--font-manrope), sans-serif;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
 .eyebrow {
   font-family: var(--font-inter), var(--font-manrope), sans-serif;
   color: rgb(226 232 240 / 0.7);
@@ -196,6 +242,10 @@
 
 .card:hover .priceCube {
   transform: rotateX(90deg);
+}
+
+.priceCubeMobile {
+  min-height: 1.15rem;
 }
 
 .priceSideTop {
@@ -329,6 +379,10 @@
 
   .card:hover .priceCube {
     transform: none;
+  }
+
+  .priceCubeMobile {
+    min-height: 0;
   }
 
   .iconActionButton:hover {
