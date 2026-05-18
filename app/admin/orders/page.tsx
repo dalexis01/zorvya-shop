@@ -641,6 +641,7 @@ function BlocksTable({
 
                           {/* Route metrics */}
                           <div className="flex flex-wrap gap-3 text-xs text-slate-400">
+                            <span><strong className="text-white">{block.stopsCount}</strong> paradas</span>
                             <span><strong className="text-white">{formatKilometers(block.estimatedTotalKm)}</strong> ruta</span>
                             <span><strong className="text-white">{formatTime(block.estimatedTimeMinutes)}</strong></span>
                             <span><strong className="text-white">{block.packagesCount}</strong> paq.</span>
