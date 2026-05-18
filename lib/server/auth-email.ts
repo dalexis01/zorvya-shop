@@ -117,7 +117,9 @@ const copyByLocale: Record<
 function getEmailConfig() {
   return {
     apiKey: process.env.RESEND_API_KEY,
-    fromEmail: process.env.RESEND_FROM_EMAIL || process.env.ORDER_RECEIVER_EMAIL || "",
+    fromEmail:
+      process.env.RESEND_FROM_EMAIL ||
+      "Zorvya Shop <onboarding@resend.dev>",
   };
 }
 
@@ -142,15 +144,15 @@ async function sendAuthEmail(input: {
   const { apiKey, fromEmail } = getEmailConfig();
 
   if (!apiKey) {
-    throw new Error("RESEND_API_KEY_MISSING");
+    throw new AuthEmailSendError("RESEND_API_KEY_MISSING", "RESEND_API_KEY_MISSING");
   }
 
   if (!fromEmail) {
-    throw new Error("RESEND_FROM_EMAIL_MISSING");
+    throw new AuthEmailSendError("RESEND_FROM_EMAIL_MISSING", "RESEND_FROM_EMAIL_MISSING");
   }
 
   const resend = new Resend(apiKey);
-  await resend.emails.send({
+  const result = await resend.emails.send({
     from: fromEmail,
     to: input.to,
     subject: input.subject,
@@ -166,6 +168,19 @@ async function sendAuthEmail(input: {
       </div>
     `,
   });
+
+  if (result.error) {
+    console.error("[auth-email] resend auth email failed", {
+      to: input.to,
+      subject: input.subject,
+      fromEmail,
+      error: result.error,
+    });
+    throw new AuthEmailSendError(
+      `RESEND_SEND_FAILED: ${result.error.message}`,
+      "RESEND_SEND_FAILED"
+    );
+  }
 }
 
 async function sendSecurityEmail(input: {
@@ -179,15 +194,15 @@ async function sendSecurityEmail(input: {
   const { apiKey, fromEmail } = getEmailConfig();
 
   if (!apiKey) {
-    throw new Error("RESEND_API_KEY_MISSING");
+    throw new AuthEmailSendError("RESEND_API_KEY_MISSING", "RESEND_API_KEY_MISSING");
   }
 
   if (!fromEmail) {
-    throw new Error("RESEND_FROM_EMAIL_MISSING");
+    throw new AuthEmailSendError("RESEND_FROM_EMAIL_MISSING", "RESEND_FROM_EMAIL_MISSING");
   }
 
   const resend = new Resend(apiKey);
-  await resend.emails.send({
+  const result = await resend.emails.send({
     from: fromEmail,
     to: input.to,
     subject: input.subject,
@@ -200,6 +215,29 @@ async function sendSecurityEmail(input: {
       </div>
     `,
   });
+
+  if (result.error) {
+    console.error("[auth-email] resend security email failed", {
+      to: input.to,
+      subject: input.subject,
+      fromEmail,
+      error: result.error,
+    });
+    throw new AuthEmailSendError(
+      `RESEND_SEND_FAILED: ${result.error.message}`,
+      "RESEND_SEND_FAILED"
+    );
+  }
+}
+
+export function getAuthEmailDebugConfig() {
+  const { apiKey, fromEmail } = getEmailConfig();
+
+  return {
+    provider: "resend",
+    hasApiKey: Boolean(apiKey),
+    fromEmail,
+  };
 }
 
 export async function sendVerificationCodeEmail(input: {
@@ -301,4 +339,16 @@ export async function sendNewDeviceLoginEmail(input: {
     name: input.name,
     extra: input.extra,
   });
+}
+class AuthEmailSendError extends Error {
+  constructor(
+    message: string,
+    readonly code:
+      | "RESEND_API_KEY_MISSING"
+      | "RESEND_FROM_EMAIL_MISSING"
+      | "RESEND_SEND_FAILED"
+  ) {
+    super(message);
+    this.name = "AuthEmailSendError";
+  }
 }

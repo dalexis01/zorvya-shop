@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 import { createAuthCode } from "@/lib/server/auth-codes";
 import { buildRequestSecurityContext, hasKnownLoginDevice, recordAuthSecurityEvent } from "@/lib/server/auth-security";
-import { sendNewDeviceLoginEmail, sendVerificationCodeEmail } from "@/lib/server/auth-email";
+import { getAuthEmailDebugConfig, sendNewDeviceLoginEmail, sendVerificationCodeEmail } from "@/lib/server/auth-email";
 import { createSessionForUser } from "@/lib/server/session";
 import { authenticateUser, toSessionUser } from "@/lib/server/users";
 import { validateLoginPayload } from "@/lib/server/validation";
@@ -43,23 +43,35 @@ export async function POST(request: Request) {
       });
 
       if (authResult.reason === "unverified" && authResult.user) {
-        const verificationCode = await createAuthCode({
-          userId: authResult.user.id,
-          email: authResult.user.email,
-          purpose: "verify-email",
-        });
         let message = "Tu cuenta aun no esta verificada. Revisa tu correo.";
 
         try {
+          const verificationCode = await createAuthCode({
+            userId: authResult.user.id,
+            email: authResult.user.email,
+            purpose: "verify-email",
+          });
+
           await sendVerificationCodeEmail({
             email: authResult.user.email,
             name: authResult.user.name,
             code: verificationCode.code,
             locale,
           });
-        } catch {
-          message =
-            "Tu cuenta aun no esta verificada. No pudimos enviar el codigo ahora; intenta reenviarlo.";
+        } catch (error) {
+          if (error instanceof Error && error.message === "AUTH_CODE_RATE_LIMIT") {
+            message =
+              "Tu cuenta aun no esta verificada. Espera unos minutos antes de solicitar otro codigo.";
+          } else {
+            console.error("[auth/login] failed to send verification email", {
+              email: authResult.user.email,
+              locale,
+              config: getAuthEmailDebugConfig(),
+              error,
+            });
+            message =
+              "Tu cuenta aun no esta verificada. No pudimos enviar el codigo ahora; intenta reenviarlo.";
+          }
         }
 
         return NextResponse.json(
@@ -130,7 +142,8 @@ export async function POST(request: Request) {
       success: true,
       user: toSessionUser(authResult.user),
     });
-  } catch {
+  } catch (error) {
+    console.error("[auth/login] unexpected error", error);
     return NextResponse.json(
       {
         success: false,

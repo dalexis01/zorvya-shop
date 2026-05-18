@@ -53,6 +53,7 @@ CREATE TABLE IF NOT EXISTS auth_codes (
   email TEXT NOT NULL,
   purpose TEXT NOT NULL,
   code_hash TEXT NOT NULL,
+  attempts INTEGER NOT NULL DEFAULT 0,
   created_at TIMESTAMPTZ NOT NULL,
   expires_at TIMESTAMPTZ NOT NULL,
   consumed_at TIMESTAMPTZ NULL

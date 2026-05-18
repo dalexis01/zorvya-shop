@@ -111,7 +111,8 @@ export async function POST(request: Request) {
       user: toSessionUser(verifiedUser),
       message: "Tu contrasena fue actualizada correctamente.",
     });
-  } catch {
+  } catch (error) {
+    console.error("[auth/password-reset/confirm] unexpected error", error);
     return NextResponse.json(
       {
         success: false,

@@ -2,7 +2,11 @@ import { NextResponse } from "next/server";
 
 import { createAuthCode } from "@/lib/server/auth-codes";
 import { recordAuthSecurityEvent, buildRequestSecurityContext } from "@/lib/server/auth-security";
-import { sendVerificationCodeEmail, sendWelcomeSecurityEmail } from "@/lib/server/auth-email";
+import {
+  getAuthEmailDebugConfig,
+  sendVerificationCodeEmail,
+  sendWelcomeSecurityEmail,
+} from "@/lib/server/auth-email";
 import { createUser } from "@/lib/server/users";
 import { validateRegistrationPayload } from "@/lib/server/validation";
 import type { Locale } from "@/lib/shop/types";
@@ -41,8 +45,6 @@ export async function POST(request: Request) {
         email: user.email,
         purpose: "verify-email",
       });
-      let message = "Revisa tu correo para verificar la cuenta.";
-
       try {
         await sendVerificationCodeEmail({
           email: user.email,
@@ -55,9 +57,27 @@ export async function POST(request: Request) {
           name: user.name,
           locale,
         });
-      } catch {
-        message =
-          "La cuenta fue creada, pero no se pudo enviar el codigo. Usa reenviar codigo para intentarlo de nuevo.";
+      } catch (error) {
+        console.error("[auth/register] failed to send verification email", {
+          email: user.email,
+          locale,
+          emailConfig: getAuthEmailDebugConfig(),
+          error,
+        });
+
+        return NextResponse.json(
+          {
+            success: false,
+            nextStep: "verify-email",
+            email: user.email,
+            errors: {
+              general: [
+                "La cuenta fue creada, pero no pudimos enviar el codigo al correo. Revisa la configuracion de correo y usa reenviar codigo.",
+              ],
+            },
+          },
+          { status: 502 }
+        );
       }
 
       return NextResponse.json(
@@ -66,7 +86,7 @@ export async function POST(request: Request) {
           user: null,
           nextStep: "verify-email",
           email: user.email,
-          message,
+          message: "Revisa tu correo para verificar la cuenta.",
         },
         { status: 201 }
       );
@@ -95,9 +115,22 @@ export async function POST(request: Request) {
         );
       }
 
+      if (error instanceof Error && error.message === "AUTH_CODE_RATE_LIMIT") {
+        return NextResponse.json(
+          {
+            success: false,
+            errors: {
+              general: ["Espera unos minutos antes de solicitar otro codigo."],
+            },
+          },
+          { status: 429 }
+        );
+      }
+
       throw error;
     }
-  } catch {
+  } catch (error) {
+    console.error("[auth/register] unexpected error", error);
     return NextResponse.json(
       {
         success: false,

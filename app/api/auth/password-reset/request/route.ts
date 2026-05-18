@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 import { createAuthCode } from "@/lib/server/auth-codes";
 import { buildRequestSecurityContext, recordAuthSecurityEvent } from "@/lib/server/auth-security";
-import { sendPasswordResetCodeEmail } from "@/lib/server/auth-email";
+import { getAuthEmailDebugConfig, sendPasswordResetCodeEmail } from "@/lib/server/auth-email";
 import { findUserByEmail } from "@/lib/server/users";
 import { validatePasswordResetRequestPayload } from "@/lib/server/validation";
 import type { Locale } from "@/lib/shop/types";
@@ -43,12 +43,31 @@ export async function POST(request: Request) {
         purpose: "reset-password",
       });
 
-      await sendPasswordResetCodeEmail({
-        email: user.email,
-        name: user.name,
-        code: resetCode.code,
-        locale,
-      });
+      try {
+        await sendPasswordResetCodeEmail({
+          email: user.email,
+          name: user.name,
+          code: resetCode.code,
+          locale,
+        });
+      } catch (error) {
+        console.error("[auth/password-reset/request] failed to send reset email", {
+          email: user.email,
+          locale,
+          emailConfig: getAuthEmailDebugConfig(),
+          error,
+        });
+
+        return NextResponse.json(
+          {
+            success: false,
+            errors: {
+              general: ["No pudimos enviar el codigo de recuperacion en este momento."],
+            },
+          },
+          { status: 502 }
+        );
+      }
     } else {
       await recordAuthSecurityEvent({
         email: validation.data.email,
@@ -67,7 +86,20 @@ export async function POST(request: Request) {
       email: validation.data.email,
       message: "Si el correo existe, te enviamos un codigo para recuperar la cuenta.",
     });
-  } catch {
+  } catch (error) {
+    if (error instanceof Error && error.message === "AUTH_CODE_RATE_LIMIT") {
+      return NextResponse.json(
+        {
+          success: false,
+          errors: {
+            general: ["Espera unos minutos antes de solicitar otro codigo."],
+          },
+        },
+        { status: 429 }
+      );
+    }
+
+    console.error("[auth/password-reset/request] unexpected error", error);
     return NextResponse.json(
       {
         success: false,
