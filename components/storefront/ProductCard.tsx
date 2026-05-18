@@ -151,6 +151,12 @@ function ProductCard({
             className="block h-[54%] min-h-0 w-full shrink-0 text-left sm:h-[55%]"
           >
             <div className={`relative h-full overflow-hidden border-b border-slate-800 ${styles.mediaShell}`}>
+              <div className="absolute left-2 top-2 z-[2] sm:hidden">
+                <DeliveryEstimateBadge
+                  text={deliveryEstimateText || t.localWarehouse}
+                  className="max-w-[calc(100vw-9rem)]"
+                />
+              </div>
               <ProductCardImage src={product.image} alt={product.name} />
             </div>
           </button>
@@ -161,6 +167,12 @@ function ProductCard({
             className="block h-[54%] min-h-0 w-full shrink-0 sm:h-[55%]"
           >
             <div className={`relative h-full overflow-hidden border-b border-slate-800 ${styles.mediaShell}`}>
+              <div className="absolute left-2 top-2 z-[2] sm:hidden">
+                <DeliveryEstimateBadge
+                  text={deliveryEstimateText || t.localWarehouse}
+                  className="max-w-[calc(100vw-9rem)]"
+                />
+              </div>
               <ProductCardImage src={product.image} alt={product.name} />
             </div>
           </Link>
@@ -189,7 +201,7 @@ function ProductCard({
 
           <div className="flex min-h-0 flex-1 items-end justify-between gap-2 sm:gap-2.5">
             <div className="min-w-0 flex-1">
-              <div className="mb-1">
+              <div className="mb-1 hidden sm:block">
                 <DeliveryEstimateBadge
                   text={deliveryEstimateText || t.localWarehouse}
                   className="max-w-full"

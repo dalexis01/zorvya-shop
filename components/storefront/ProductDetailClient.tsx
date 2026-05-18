@@ -194,6 +194,21 @@ function StorefrontImage({
   sizes?: string;
   priority?: boolean;
 }) {
+  const [hasError, setHasError] = useState(false);
+
+  if (!src || hasError) {
+    return (
+      <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-[radial-gradient(circle_at_30%_25%,rgba(34,211,238,0.16),transparent_34%),radial-gradient(circle_at_72%_72%,rgba(59,130,246,0.14),transparent_30%),linear-gradient(180deg,#08111d_0%,#0f172a_100%)] text-cyan-100">
+        <svg viewBox="0 0 24 24" aria-hidden="true" className="h-8 w-8" fill="none" stroke="currentColor" strokeWidth="1.7">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M4 6.5A2.5 2.5 0 0 1 6.5 4h11A2.5 2.5 0 0 1 20 6.5v11A2.5 2.5 0 0 1 17.5 20h-11A2.5 2.5 0 0 1 4 17.5z" />
+          <path strokeLinecap="round" strokeLinejoin="round" d="m7.5 15.5 3-3 2.5 2.5 2.5-3 1.5 2" />
+          <circle cx="9" cy="9" r="1.2" fill="currentColor" stroke="none" />
+        </svg>
+        <span className="text-[11px] font-semibold uppercase tracking-[0.22em]">ZorvyA Shop</span>
+      </div>
+    );
+  }
+
   return (
     <Image
       src={src}
@@ -204,6 +219,7 @@ function StorefrontImage({
       unoptimized={shouldUseDirectStorefrontImage(src)}
       sizes={sizes}
       className={className}
+      onError={() => setHasError(true)}
     />
   );
 }
@@ -791,7 +807,7 @@ function ProductDetailClient({
               <button
                 type="button"
                 onClick={() => setLightboxOpen(true)}
-                className="absolute bottom-4 right-4 rounded-full border border-slate-700 bg-black/60 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-white backdrop-blur"
+                className="absolute bottom-4 right-4 hidden rounded-full border border-slate-700 bg-black/60 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-white backdrop-blur sm:inline-flex"
               >
                 {t.fullscreen}
               </button>

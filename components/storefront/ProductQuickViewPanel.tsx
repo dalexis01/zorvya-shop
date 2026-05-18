@@ -232,6 +232,21 @@ function QuickViewImage({
   sizes?: string;
   priority?: boolean;
 }) {
+  const [hasError, setHasError] = useState(false);
+
+  if (!src || hasError) {
+    return (
+      <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-[radial-gradient(circle_at_30%_25%,rgba(34,211,238,0.16),transparent_34%),radial-gradient(circle_at_72%_72%,rgba(59,130,246,0.14),transparent_30%),linear-gradient(180deg,#08111d_0%,#0f172a_100%)] text-cyan-100">
+        <svg viewBox="0 0 24 24" aria-hidden="true" className="h-8 w-8" fill="none" stroke="currentColor" strokeWidth="1.7">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M4 6.5A2.5 2.5 0 0 1 6.5 4h11A2.5 2.5 0 0 1 20 6.5v11A2.5 2.5 0 0 1 17.5 20h-11A2.5 2.5 0 0 1 4 17.5z" />
+          <path strokeLinecap="round" strokeLinejoin="round" d="m7.5 15.5 3-3 2.5 2.5 2.5-3 1.5 2" />
+          <circle cx="9" cy="9" r="1.2" fill="currentColor" stroke="none" />
+        </svg>
+        <span className="text-[11px] font-semibold uppercase tracking-[0.22em]">ZorvyA Shop</span>
+      </div>
+    );
+  }
+
   return (
     <Image
       src={src}
@@ -242,6 +257,7 @@ function QuickViewImage({
       unoptimized={shouldUseDirectStorefrontImage(src)}
       sizes={sizes ?? "(max-width: 1024px) 100vw, 40vw"}
       className={className}
+      onError={() => setHasError(true)}
     />
   );
 }
@@ -286,7 +302,8 @@ export default function ProductQuickViewPanel({
   initialSelection?: QuickViewSelection;
 }) {
   const t = texts[locale];
-  const relatedVisibleLimit = 4;
+  const [isCompactViewport, setIsCompactViewport] = useState(false);
+  const relatedVisibleLimit = isCompactViewport ? 8 : 4;
   const [selectedModelId, setSelectedModelId] = useState(initialSelection?.selectedVariantId ?? "base");
   const [selectedColor, setSelectedColor] = useState(initialSelection?.selectedColor ?? "");
   const [selectedImage, setSelectedImage] = useState(
@@ -303,6 +320,18 @@ export default function ProductQuickViewPanel({
   const [reviewSubmitting, setReviewSubmitting] = useState(false);
   const [reviewError, setReviewError] = useState("");
   const [reviewNotice, setReviewNotice] = useState("");
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia("(max-width: 767px)");
+    const syncViewport = () => setIsCompactViewport(mediaQuery.matches);
+
+    syncViewport();
+    mediaQuery.addEventListener("change", syncViewport);
+
+    return () => {
+      mediaQuery.removeEventListener("change", syncViewport);
+    };
+  }, []);
 
   useEffect(() => {
     setSelectedModelId(initialSelection?.selectedVariantId ?? "base");
@@ -424,6 +453,7 @@ export default function ProductQuickViewPanel({
     [
       normalizedRelatedSearchQuery,
       product.id,
+      relatedVisibleLimit,
       relatedProducts,
       relatedRefreshIndex,
       searchableRelatedEntries,
@@ -600,7 +630,7 @@ export default function ProductQuickViewPanel({
           <div className="scrollbar-hidden overflow-y-auto px-3 py-3 sm:px-5 sm:py-5 lg:flex-1 lg:overflow-hidden lg:px-5 lg:py-5">
             <div className="grid items-start gap-3 xl:gap-4 lg:h-full lg:grid-cols-[minmax(15rem,0.32fr)_minmax(0,1.24fr)_minmax(14.75rem,0.58fr)] lg:items-stretch">
               <aside className="order-3 space-y-3 lg:order-1 lg:h-full">
-                <div className="flex h-[15rem] flex-col rounded-[1.5rem] border border-slate-800 bg-[#050816] p-3.5 sm:h-[18rem] lg:h-full lg:min-h-0">
+                <div className="flex min-h-[20rem] flex-col rounded-[1.5rem] border border-slate-800 bg-[#050816] p-3.5 sm:h-[18rem] lg:h-full lg:min-h-0">
                   <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-cyan-200">
                     {t.recommendedTitle}
                   </p>
@@ -617,7 +647,7 @@ export default function ProductQuickViewPanel({
                     />
                   </div>
                   <div className="mt-3 flex min-h-0 flex-1 flex-col">
-                    <div className="scrollbar-hidden min-h-0 flex-1 space-y-2.5 overflow-y-auto lg:pr-1">
+                    <div className="scrollbar-hidden min-h-0 flex-1 space-y-2.5 overflow-y-visible lg:overflow-y-auto lg:pr-1">
                       {visibleRelatedProducts.length > 0 ? (
                         visibleRelatedProducts.map((entry) => (
                           <button
@@ -698,7 +728,7 @@ export default function ProductQuickViewPanel({
                   <button
                     type="button"
                     onClick={() => setLightboxOpen(true)}
-                    className="absolute bottom-3 right-3 rounded-full border border-slate-700 bg-black/60 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-white backdrop-blur"
+                    className="absolute bottom-3 right-3 hidden rounded-full border border-slate-700 bg-black/60 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-white backdrop-blur sm:inline-flex"
                   >
                     {t.fullscreen}
                   </button>

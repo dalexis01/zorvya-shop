@@ -2037,13 +2037,16 @@ html[data-client-theme="light"] .client-panel * {
 }
 
 .header-promo-marquee__track {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   width: max-content;
-  min-width: 100%;
+  min-width: max-content;
   animation: promoTicker 24s linear infinite;
   position: relative;
   z-index: 1;
+  will-change: transform;
+  transform: translate3d(0, 0, 0);
+  backface-visibility: hidden;
 }
 
 .header-promo-marquee__group {
@@ -2096,6 +2099,10 @@ html[data-client-theme="light"] .client-panel * {
 @media (max-width: 767px) {
   .header-promo-marquee {
     min-height: 38px;
+  }
+
+  .header-promo-marquee__track {
+    animation-duration: 20s;
   }
 
   .header-promo-marquee__text {

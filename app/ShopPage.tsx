@@ -148,11 +148,15 @@ function shouldUseDirectStorefrontImage(src: string) {
 function CatalogPromoBanner({
   products,
   onOpen,
+  initialIndex = 0,
 }: {
   products: StorefrontProduct[];
   onOpen: (product: StorefrontProduct) => void;
+  initialIndex?: number;
 }) {
-  const [activeIndex, setActiveIndex] = useState(0);
+  const [activeIndex, setActiveIndex] = useState(
+    products.length > 0 ? initialIndex % products.length : 0
+  );
 
   useEffect(() => {
     if (products.length <= 1) {
@@ -223,6 +227,26 @@ function CatalogPromoBanner({
       </button>
     </article>
   );
+}
+
+function getMobilePromoInsertionIndexes(productCount: number) {
+  const indexes = new Set<number>();
+  const intervals = [8, 12, 6] as const;
+
+  if (productCount <= 1) {
+    return indexes;
+  }
+
+  let nextIndex = 1;
+  let intervalIndex = 0;
+
+  while (nextIndex < productCount - 1) {
+    indexes.add(nextIndex);
+    nextIndex += intervals[intervalIndex % intervals.length];
+    intervalIndex += 1;
+  }
+
+  return indexes;
 }
 
 type QuickViewState = {
@@ -883,6 +907,10 @@ export default function ShopPage({
       .map((target) => headerButtons.find((button) => button.target === target))
       .filter((button): button is (typeof headerButtons)[number] => Boolean(button));
   }, [headerButtons]);
+  const mobilePromoInsertionIndexes = useMemo(
+    () => getMobilePromoInsertionIndexes(catalogProducts.length),
+    [catalogProducts.length]
+  );
 
   const defaultDeliveryEstimateText =
     getDeliveryEstimate(6, locale)?.summaryText || localizedProducts[0]?.deliveryLabel || "";
@@ -2205,7 +2233,7 @@ export default function ShopPage({
           }}
         >
           <div className="header-promo-marquee__track">
-            {[0, 1, 2].map((groupIndex) => (
+            {[0, 1, 2, 3].map((groupIndex) => (
               <div key={groupIndex} className="header-promo-marquee__group">
                 {marqueeItems.map((item, itemIndex) => (
                   <span
@@ -2344,11 +2372,23 @@ export default function ShopPage({
                       onAdd={addToCart}
                       onOpen={openProduct}
                     />
+                    {mobilePromoInsertionIndexes.has(index) && catalogPromoProducts.length > 0 ? (
+                      <div className="col-span-2 md:hidden">
+                        <CatalogPromoBanner
+                          products={catalogPromoProducts}
+                          onOpen={openProduct}
+                          initialIndex={index}
+                        />
+                      </div>
+                    ) : null}
                     {index === 4 && catalogPromoProducts.length > 0 ? (
-                      <CatalogPromoBanner
-                        products={catalogPromoProducts}
-                        onOpen={openProduct}
-                      />
+                      <div className="hidden md:block md:col-span-2 lg:col-span-2 xl:col-span-2">
+                        <CatalogPromoBanner
+                          products={catalogPromoProducts}
+                          onOpen={openProduct}
+                          initialIndex={0}
+                        />
+                      </div>
                     ) : null}
                   </Fragment>
                 ))}
