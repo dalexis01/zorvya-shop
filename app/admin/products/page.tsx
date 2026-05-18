@@ -191,9 +191,9 @@ export default function AdminProductsPage() {
                   <tr key={product.id} className={`${rowBg} transition-colors hover:bg-[#0c1530]`}>
 
                     {/* ── Articulo ── */}
-                    <td className="border-b border-r border-slate-800 px-3 py-2.5 align-top">
-                      <Link href={`/admin/products/${product.id}`} className="flex items-center gap-2.5">
-                        <div className="h-10 w-10 shrink-0 overflow-hidden rounded-lg border border-slate-800 bg-[#02040c]">
+                    <td className="border-b border-r border-slate-800 px-3 py-2 align-middle">
+                      <Link href={`/admin/products/${product.id}`} className="flex items-center gap-2">
+                        <div className="h-9 w-9 shrink-0 overflow-hidden rounded-lg border border-slate-800 bg-[#02040c]">
                           {product.images[0]?.url ? (
                             <img src={product.images[0].url} alt={product.name} className="h-full w-full object-cover" />
                           ) : (
@@ -205,127 +205,110 @@ export default function AdminProductsPage() {
                           )}
                         </div>
                         <div className="min-w-0">
-                          <p className="truncate text-xs font-semibold text-white leading-snug max-w-[160px]">{product.name}</p>
-                          <p className="mt-0.5 font-mono text-[10px] text-slate-500">{product.publicId}</p>
-                          <p className="font-mono text-[10px] text-slate-500">SKU: {product.sku}</p>
+                          <p className="truncate text-[11px] font-semibold text-white max-w-[150px]">{product.name}</p>
+                          <p className="font-mono text-[10px] text-slate-500">{product.publicId} · {product.sku}</p>
                         </div>
                       </Link>
                     </td>
 
                     {/* ── Categoria ── */}
-                    <td className="border-b border-r border-slate-800 px-3 py-2.5 align-top">
-                      <p className="text-xs font-semibold text-white">{product.category}</p>
-                      <p className="mt-0.5 text-[11px] text-slate-400">{product.brand}</p>
+                    <td className="border-b border-r border-slate-800 px-3 py-2 align-middle whitespace-nowrap">
+                      <p className="text-[11px] font-semibold text-white">{product.category}</p>
+                      <p className="text-[10px] text-slate-400">{product.brand}</p>
                     </td>
 
                     {/* ── Precio ── */}
-                    <td className="border-b border-r border-slate-800 px-3 py-2.5 align-top whitespace-nowrap">
-                      <p className="text-xs font-bold text-white">{formatCurrencyDollar(product.price)}</p>
+                    <td className="border-b border-r border-slate-800 px-3 py-2 align-middle whitespace-nowrap">
+                      <p className="text-[11px] font-bold text-white">{formatCurrencyDollar(product.price)}</p>
                       {product.originalPrice ? (
-                        <p className="mt-0.5 text-[10px] text-slate-500 line-through">{formatCurrencyDollar(product.originalPrice)}</p>
+                        <p className="text-[10px] text-slate-500 line-through">{formatCurrencyDollar(product.originalPrice)}</p>
                       ) : null}
                     </td>
 
                     {/* ── Stock ── */}
-                    <td className="border-b border-r border-slate-800 px-3 py-2.5 align-top">
+                    <td className="border-b border-r border-slate-800 px-3 py-2 align-middle">
                       <div className="flex items-center gap-1.5">
                         <input
                           type="number"
                           min={0}
                           value={stockDrafts[product.id] ?? String(product.stock)}
                           onChange={(e) => setStockDrafts((d) => ({ ...d, [product.id]: e.target.value }))}
-                          className="w-14 rounded-md border border-slate-700 bg-[#0a1020] px-1.5 py-1 text-[11px] text-white outline-none focus:border-cyan-400"
+                          className="w-12 rounded-md border border-slate-700 bg-[#0a1020] px-1.5 py-0.5 text-[11px] text-white outline-none focus:border-cyan-400"
                         />
                         <button
                           type="button"
                           onClick={() => void updateProduct(product.id, { stock: Math.max(0, Number(stockDrafts[product.id] ?? product.stock)), showStock: true })}
                           disabled={busy}
-                          className="rounded-md border border-slate-700 bg-[#0a1020] px-2 py-1 text-[10px] font-semibold text-white hover:border-cyan-500 disabled:opacity-50"
+                          className="rounded-md border border-slate-700 bg-[#0a1020] px-1.5 py-0.5 text-[10px] font-semibold text-white hover:border-cyan-500 disabled:opacity-50"
                         >
                           OK
                         </button>
+                        <span className={`text-[10px] font-bold ${product.stock > 0 ? "text-emerald-400" : "text-rose-400"}`}>
+                          {product.stock > 0 ? "✓" : "✕"}
+                        </span>
                       </div>
-                      <p className={`mt-1 text-[10px] font-semibold ${product.stock > 0 ? "text-emerald-400" : "text-rose-400"}`}>
-                        {product.stock > 0 ? "En stock" : "Sin stock"}
-                      </p>
                     </td>
 
-                    {/* ── Estado ── */}
-                    <td className="border-b border-r border-slate-800 px-3 py-2.5 align-top">
-                      <div className="flex flex-wrap gap-1 mb-2">
-                        <StatusChip label={product.isVisible ? "Visible" : "Oculto"} tone={product.isVisible ? "cyan" : "slate"} />
-                        <StatusChip label={product.isActive ? "Publicado" : "Borrador"} tone={product.isActive ? "emerald" : "slate"} />
-                        {product.isFeatured ? <StatusChip label="Destacado" tone="amber" /> : null}
-                      </div>
-                      <div className="space-y-1.5 text-[11px] text-slate-300">
+                    {/* ── Estado — 3 checkboxes en una sola fila ── */}
+                    <td className="border-b border-r border-slate-800 px-3 py-2 align-middle">
+                      <div className="flex items-center gap-3">
                         {(
                           [
-                            { key: "isVisible", label: "Visible", val: product.isVisible },
-                            { key: "isActive", label: "Publicado", val: product.isActive },
-                            { key: "isFeatured", label: "Destacado", val: product.isFeatured },
+                            { key: "isVisible",  label: "Visible",   val: product.isVisible },
+                            { key: "isActive",   label: "Publicado", val: product.isActive  },
+                            { key: "isFeatured", label: "Dest.",      val: product.isFeatured },
                           ] as const
                         ).map(({ key, label, val }) => (
-                          <label key={key} className="flex items-center gap-1.5 cursor-pointer">
+                          <label key={key} className="flex items-center gap-1 cursor-pointer whitespace-nowrap">
                             <input
                               type="checkbox"
                               checked={val}
                               onChange={() => void updateProduct(product.id, { [key]: !val })}
                               disabled={busy}
-                              className="h-3.5 w-3.5 rounded border-slate-600 bg-[#0a1020]"
+                              className="h-3 w-3 rounded border-slate-600 bg-[#0a1020]"
                             />
-                            {label}
+                            <span className={`text-[10px] font-medium ${val ? "text-slate-200" : "text-slate-500"}`}>{label}</span>
                           </label>
                         ))}
                       </div>
-                      <p className="mt-1.5 text-[10px] text-slate-500">
-                        {formatDateTime(product.publishedAt)}
-                      </p>
                     </td>
 
                     {/* ── Contabilidad ── */}
-                    <td className="border-b border-r border-slate-800 px-3 py-2.5 align-top whitespace-nowrap">
-                      <p className="text-xs font-bold text-white">{formatCurrencyDollar(product.internal.costPrice)}</p>
-                      <p className="mt-0.5 text-[10px] text-slate-400">{product.internal.supplier || "Sin proveedor"}</p>
-                      <p className="mt-0.5 text-[10px] text-slate-500">{formatDateTime(product.lastSoldAt)}</p>
+                    <td className="border-b border-r border-slate-800 px-3 py-2 align-middle whitespace-nowrap">
+                      <p className="text-[11px] font-bold text-white">{formatCurrencyDollar(product.internal.costPrice)}</p>
+                      <p className="text-[10px] text-slate-400">{product.internal.supplier || "—"}</p>
                     </td>
 
-                    {/* ── Acciones ── */}
-                    <td className="border-b border-slate-800 px-3 py-2.5 align-top">
-                      <div className="flex flex-col gap-1 min-w-[80px]">
+                    {/* ── Acciones — todos en fila ── */}
+                    <td className="border-b border-slate-800 px-3 py-2 align-middle">
+                      <div className="flex flex-wrap items-center gap-1">
                         <Link
                           href={`/admin/products/${product.id}`}
-                          className="rounded-md border border-slate-700 bg-[#0a1020] px-2 py-1 text-center text-[10px] font-semibold text-white hover:border-cyan-500"
+                          className="rounded border border-slate-700 bg-[#0a1020] px-2 py-0.5 text-[10px] font-semibold text-white hover:border-cyan-500"
                         >
                           Editar
                         </Link>
-                        <button
-                          type="button"
+                        <button type="button" disabled={busy}
                           onClick={() => void updateProduct(product.id, { isVisible: !product.isVisible })}
-                          disabled={busy}
-                          className="rounded-md border border-slate-700 bg-[#0a1020] px-2 py-1 text-[10px] font-semibold text-white hover:border-cyan-500 disabled:opacity-50"
+                          className="rounded border border-slate-700 bg-[#0a1020] px-2 py-0.5 text-[10px] font-semibold text-white hover:border-cyan-500 disabled:opacity-50"
                         >
                           {product.isVisible ? "Ocultar" : "Mostrar"}
                         </button>
-                        <button
-                          type="button"
+                        <button type="button" disabled={busy}
                           onClick={() => void updateProduct(product.id, { isActive: !product.isActive })}
-                          disabled={busy}
-                          className="rounded-md border border-slate-700 bg-[#0a1020] px-2 py-1 text-[10px] font-semibold text-white hover:border-emerald-500 disabled:opacity-50"
+                          className="rounded border border-slate-700 bg-[#0a1020] px-2 py-0.5 text-[10px] font-semibold text-white hover:border-emerald-500 disabled:opacity-50"
                         >
                           {product.isActive ? "Despublicar" : "Publicar"}
                         </button>
-                        <button
-                          type="button"
+                        <button type="button" disabled={busy}
                           onClick={() => void updateProduct(product.id, { isFeatured: !product.isFeatured })}
-                          disabled={busy}
-                          className="rounded-md border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-[10px] font-semibold text-amber-200 hover:border-amber-400 disabled:opacity-50"
+                          className="rounded border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold text-amber-200 hover:border-amber-400 disabled:opacity-50"
                         >
                           {product.isFeatured ? "Quitar" : "Destacar"}
                         </button>
-                        <button
-                          type="button"
+                        <button type="button"
                           onClick={() => handleDelete(product.id)}
-                          className="rounded-md border border-rose-500/30 bg-rose-500/10 px-2 py-1 text-[10px] font-semibold text-rose-200 hover:border-rose-400"
+                          className="rounded border border-rose-500/30 bg-rose-500/10 px-2 py-0.5 text-[10px] font-semibold text-rose-200 hover:border-rose-400"
                         >
                           Eliminar
                         </button>
