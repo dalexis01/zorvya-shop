@@ -1,6 +1,6 @@
 import "server-only";
 
-import { randomUUID } from "node:crypto";
+import { randomBytes } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 
@@ -17,10 +17,20 @@ let blocksPoolInstance: Pool | null = null;
 let blocksSchemaReadyPromise: Promise<void> | null = null;
 
 export const MAX_ORDERS_PER_BLOCK = 5;
+export const MAX_PACKAGES_PER_BLOCK = 5;
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export type BlockStatus = "draft" | "ready" | "in_delivery" | "completed" | "cancelled";
+
+// ─── ID generator ─────────────────────────────────────────────────────────────
+
+const ID_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+
+function generateBlockId(): string {
+  const bytes = randomBytes(4);
+  return Array.from(bytes).map((b) => ID_CHARS[b % ID_CHARS.length]).join("");
+}
 
 export interface DeliveryBlock {
   id: string;
@@ -210,9 +220,10 @@ export async function createDeliveryBlock(input: {
   totalAmount?: number;
   totalDeliveryFee?: number;
   createdBy?: string;
+  initialStatus?: BlockStatus;
 }): Promise<DeliveryBlock> {
   const pool = await getBlocksPool();
-  const id = `BLK-${randomUUID().slice(0, 8).toUpperCase()}`;
+  const id = generateBlockId();
   const now = new Date().toISOString();
   const uniqueOrderIds = Array.from(new Set(input.orderIds.filter(Boolean)));
 
@@ -226,8 +237,8 @@ export async function createDeliveryBlock(input: {
 
     await client.query(
       `INSERT INTO delivery_blocks (id, name, status, total_amount, total_delivery_fee, created_at, updated_at, created_by)
-       VALUES ($1, $2, 'draft', $3, $4, $5::timestamptz, $5::timestamptz, $6)`,
-      [id, input.name.trim(), input.totalAmount ?? 0, input.totalDeliveryFee ?? 0, now, input.createdBy ?? "admin"]
+       VALUES ($1, $2, $3, $4, $5, $6::timestamptz, $6::timestamptz, $7)`,
+      [id, input.name.trim(), input.initialStatus ?? "draft", input.totalAmount ?? 0, input.totalDeliveryFee ?? 0, now, input.createdBy ?? "admin"]
     );
 
     for (let i = 0; i < uniqueOrderIds.length; i++) {
@@ -464,27 +475,35 @@ export async function ensurePendingOrdersAssignedToBlocks(): Promise<{
       name: string;
       status: BlockStatus;
       order_count: number;
+      package_count: number;
     }>(
       `SELECT
          db.id,
          db.name,
          db.status,
-         COUNT(dbo.order_id)::int AS order_count
+         COUNT(DISTINCT dbo.order_id)::int AS order_count,
+         COALESCE(SUM((item->>'quantity')::int), 0)::int AS package_count
        FROM delivery_blocks db
        LEFT JOIN delivery_block_orders dbo ON dbo.block_id = db.id
+       LEFT JOIN orders o ON o.id = dbo.order_id
+       LEFT JOIN LATERAL jsonb_array_elements(COALESCE(o.items_json, '[]'::jsonb)) AS item ON true
        WHERE db.status IN ('draft', 'ready')
        GROUP BY db.id, db.name, db.status, db.created_at
        ORDER BY db.created_at ASC`
     );
 
-    const unassignedOrdersRes = await client.query<{ id: string }>(
-      `SELECT o.id
+    const unassignedOrdersRes = await client.query<{ id: string; packages: number }>(
+      `SELECT
+         o.id,
+         GREATEST(1, COALESCE(SUM((item->>'quantity')::int), 1))::int AS packages
        FROM orders o
        LEFT JOIN delivery_block_orders dbo ON dbo.order_id = o.id
+       LEFT JOIN LATERAL jsonb_array_elements(COALESCE(o.items_json, '[]'::jsonb)) AS item ON true
        WHERE dbo.order_id IS NULL
          AND o.delivery_type = 'delivery'
          AND o.cancelled_at IS NULL
          AND COALESCE(o.admin_status, '') <> 'Pedido completado'
+       GROUP BY o.id, o.created_at
        ORDER BY o.created_at DESC`
     );
 
@@ -496,16 +515,20 @@ export async function ensurePendingOrdersAssignedToBlocks(): Promise<{
     const availableBlocks = availableBlocksRes.rows.map((row) => ({
       id: row.id,
       count: Number(row.order_count ?? 0),
+      packages: Number(row.package_count ?? 0),
     }));
 
     let assignedCount = 0;
     let createdBlocks = 0;
 
     for (const order of unassignedOrdersRes.rows) {
-      let target = availableBlocks.find((block) => block.count < MAX_ORDERS_PER_BLOCK);
+      const orderPackages = Number(order.packages ?? 1);
+      let target = availableBlocks.find(
+        (b) => b.count < MAX_ORDERS_PER_BLOCK && b.packages + orderPackages <= MAX_PACKAGES_PER_BLOCK
+      );
 
       if (!target) {
-        const blockId = `BLK-${randomUUID().slice(0, 8).toUpperCase()}`;
+        const blockId = generateBlockId();
         createdBlocks += 1;
         await client.query(
           `INSERT INTO delivery_blocks (
@@ -518,7 +541,7 @@ export async function ensurePendingOrdersAssignedToBlocks(): Promise<{
             "system",
           ]
         );
-        target = { id: blockId, count: 0 };
+        target = { id: blockId, count: 0, packages: 0 };
         availableBlocks.push(target);
       }
 
@@ -530,6 +553,7 @@ export async function ensurePendingOrdersAssignedToBlocks(): Promise<{
       );
 
       target.count += 1;
+      target.packages += orderPackages;
       assignedCount += 1;
     }
 

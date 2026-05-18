@@ -5,6 +5,7 @@ import {
   ensurePendingOrdersAssignedToBlocks,
   listDeliveryBlocks,
   MAX_ORDERS_PER_BLOCK,
+  type BlockStatus,
 } from "@/lib/server/admin/delivery-blocks-store";
 import { getAdminOrdersByIds } from "@/lib/server/admin/orders";
 import { requireAdminRequestUser } from "@/lib/server/admin/request-auth";
@@ -31,7 +32,7 @@ export async function POST(request: Request) {
   if (!auth.user) return NextResponse.json({ success: false, error: auth.error }, { status: auth.status });
 
   try {
-    const body = (await request.json()) as { name?: string; orderIds?: string[] };
+    const body = (await request.json()) as { name?: string; orderIds?: string[]; initialStatus?: BlockStatus };
 
     if (!body.name?.trim()) {
       return NextResponse.json({ success: false, error: "Nombre del bloque requerido." }, { status: 400 });
@@ -65,6 +66,7 @@ export async function POST(request: Request) {
       totalAmount,
       totalDeliveryFee,
       createdBy: auth.user.id,
+      initialStatus: body.initialStatus,
     });
 
     return NextResponse.json({ success: true, block }, { status: 201 });

@@ -2,6 +2,7 @@ import { estimateDeliveryDistance, STORE_ADDRESS } from "@/helpers/delivery";
 import type { AdminOrderRecord } from "@/lib/shop/admin-types";
 
 export const TARGET_ROUTE_BLOCK_SIZE = 5;
+export const MAX_PACKAGES_PER_BLOCK = 5;
 export const MAX_ROUTE_BLOCKS = 10; // supports up to 50 pending delivery orders
 
 const AVERAGE_SPEED_KMH = 25;
@@ -281,9 +282,13 @@ export function planAdminOrderRoutes(
     let currentAddress = STORE_ADDRESS;
 
     while (remainingOrders.length > 0 && nextBlockOrders.length < targetOrdersPerBlock) {
+      const usedPackages = nextBlockOrders.reduce((s, o) => s + countPackages(o), 0);
       const nextIndex = pickNextOrderIndex(remainingOrders, currentAddress);
-      const [nextOrder] = remainingOrders.splice(nextIndex, 1);
+      const nextOrder = remainingOrders[nextIndex];
 
+      if (usedPackages + countPackages(nextOrder) > MAX_PACKAGES_PER_BLOCK) break;
+
+      remainingOrders.splice(nextIndex, 1);
       nextBlockOrders.push(nextOrder);
       currentAddress = nextOrder.customerAddress;
     }
