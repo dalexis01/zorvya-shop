@@ -766,6 +766,7 @@ export default function AdminOrdersPage() {
 
   // â”€â”€ Persistent blocks â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const [persistentBlocks, setPersistentBlocks] = useState<DeliveryBlock[]>([]);
+  const [persistentBlockOrders, setPersistentBlockOrders] = useState<AdminOrderRecord[]>([]);
   const [persistentBlocksLoading, setPersistentBlocksLoading] = useState(false);
   const [assignedOrderIds, setAssignedOrderIds] = useState<Set<string>>(new Set());
   const [showCreateBlock, setShowCreateBlock] = useState(false);
@@ -795,9 +796,16 @@ export default function AdminOrdersPage() {
         fetch("/api/admin/blocks", { cache: "no-store" }),
         fetch("/api/admin/blocks/assigned", { cache: "no-store" }),
       ]);
-      const blocksData = (await blocksRes.json()) as { success?: boolean; blocks?: DeliveryBlock[] };
+      const blocksData = (await blocksRes.json()) as {
+        success?: boolean;
+        blocks?: DeliveryBlock[];
+        orderRecords?: AdminOrderRecord[];
+      };
       const assignedData = (await assignedRes.json()) as { success?: boolean; assignedOrderIds?: string[] };
-      if (blocksData.success) setPersistentBlocks(blocksData.blocks ?? []);
+      if (blocksData.success) {
+        setPersistentBlocks(blocksData.blocks ?? []);
+        setPersistentBlockOrders(blocksData.orderRecords ?? []);
+      }
       if (assignedData.success) setAssignedOrderIds(new Set(assignedData.assignedOrderIds ?? []));
     } catch {
       // non-critical
@@ -821,12 +829,6 @@ export default function AdminOrdersPage() {
     setShowCreateBlock(false);
     setNotice({ tone: "success", message: `Bloque "${name}" creado con ${orderIds.length} ordenes.` });
     await loadPersistentBlocks();
-  }
-
-  async function handleOpenBlockManager(blockId: string) {
-    const res = await fetch(`/api/admin/blocks/${blockId}`, { cache: "no-store" });
-    const data = (await res.json()) as { success?: boolean; block?: DeliveryBlock };
-    if (data.success && data.block) setManagingBlock(data.block);
   }
 
   async function toggleAutoMode() {
@@ -1041,6 +1043,10 @@ export default function AdminOrdersPage() {
   }
 
   const ordersById = useMemo(() => new Map(orders.map((order) => [order.id, order])), [orders]);
+  const persistentBlockOrdersById = useMemo(
+    () => new Map(persistentBlockOrders.map((order) => [order.id, order])),
+    [persistentBlockOrders]
+  );
 
   const ordersWithoutBlock = useMemo(
     () =>
@@ -1060,7 +1066,7 @@ export default function AdminOrdersPage() {
       .map((block) => {
         const slots = [...(block.orders ?? [])].sort((left, right) => left.position - right.position);
         const blockOrders = slots
-          .map((slot) => ordersById.get(slot.orderId))
+          .map((slot) => persistentBlockOrdersById.get(slot.orderId) ?? ordersById.get(slot.orderId))
           .filter((order): order is AdminOrderRecord => Boolean(order));
 
         let cumulativeKm = 0;
@@ -1104,7 +1110,7 @@ export default function AdminOrdersPage() {
         };
       })
       .filter((block) => block.stopsCount > 0);
-  }, [activePersistentBlocks, ordersById]);
+  }, [activePersistentBlocks, ordersById, persistentBlockOrdersById]);
 
   const TABS: Array<{ id: Tab; label: string; accent?: string }> = [
     { id: "blocks",    label: "Bloques de ordenes" },
@@ -1424,98 +1430,6 @@ export default function AdminOrdersPage() {
             window.dispatchEvent(new Event("admin-orders-updated"));
           }}
         />
-      )}
-    </div>
-  );
-}
-
-// â”€â”€â”€ Persistent blocks panel â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-function PersistentBlocksPanel({
-  blocks, loading, onCreateBlock, onManageBlock,
-}: {
-  blocks: DeliveryBlock[];
-  loading: boolean;
-  onCreateBlock: () => void;
-  onManageBlock: (id: string) => void;
-}) {
-  const STATUS_LABELS: Record<string, { label: string; cls: string }> = {
-    draft:       { label: "Borrador",    cls: "text-slate-400" },
-    ready:       { label: "Listo",       cls: "text-emerald-400" },
-    in_delivery: { label: "En delivery", cls: "text-sky-400" },
-    completed:   { label: "Completado",  cls: "text-cyan-400" },
-    cancelled:   { label: "Cancelado",   cls: "text-rose-400" },
-  };
-
-  const activeBlocks = blocks.filter((b) => b.status !== "completed" && b.status !== "cancelled");
-  const doneBlocks = blocks.filter((b) => b.status === "completed" || b.status === "cancelled");
-
-  return (
-    <div className="rounded-[1.5rem] border border-slate-700 bg-[#070d1c] p-4 shadow-[0_8px_30px_rgba(0,0,0,0.3)]">
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <p className="text-xs font-bold uppercase tracking-[0.25em] text-cyan-300">Mis bloques guardados</p>
-          <p className="text-xs text-slate-500 mt-0.5">{activeBlocks.length} activos Â· {doneBlocks.length} completados</p>
-        </div>
-        <button
-          type="button"
-          onClick={onCreateBlock}
-          className="rounded-xl border border-cyan-500/40 bg-cyan-500/10 px-4 py-2 text-sm font-semibold text-cyan-300 transition hover:bg-cyan-500/20"
-        >
-          + Crear bloque
-        </button>
-      </div>
-
-      {loading && (
-        <p className="py-4 text-center text-xs uppercase tracking-[0.3em] text-slate-600">Cargando...</p>
-      )}
-
-      {!loading && blocks.length === 0 && (
-        <p className="rounded-xl border border-dashed border-slate-700 py-6 text-center text-sm text-slate-500">
-          No hay bloques creados aun. Usa &quot;Crear bloque&quot; para empezar.
-        </p>
-      )}
-
-      {!loading && blocks.length > 0 && (
-        <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-          {blocks.map((block) => {
-            const st = STATUS_LABELS[block.status] ?? STATUS_LABELS.draft;
-            const orderCount = block.orders?.length ?? 0;
-            return (
-              <button
-                key={block.id}
-                type="button"
-                onClick={() => onManageBlock(block.id)}
-                className="rounded-xl border border-slate-700 bg-[#0a1020] p-3 text-left transition hover:border-cyan-500/50 hover:bg-[#0c1530]"
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <p className="font-semibold text-white text-sm leading-tight">{block.name}</p>
-                  <span className={`shrink-0 text-[10px] font-bold uppercase ${st.cls}`}>{st.label}</span>
-                </div>
-                <p className="mt-1 font-mono text-xs text-cyan-400">{block.id}</p>
-                <div className="mt-2 flex flex-wrap gap-3 text-xs text-slate-400">
-                  <span><strong className="text-white">{orderCount}</strong> / {TARGET_ROUTE_BLOCK_SIZE} pedidos</span>
-                  {block.routeDistanceKm && (
-                    <span>ðŸ›£ <strong className="text-white">{block.routeDistanceKm} km</strong></span>
-                  )}
-                  {block.routeDurationMinutes ? (
-                    <span>â± <strong className="text-white">{formatTime(block.routeDurationMinutes)}</strong></span>
-                  ) : null}
-                  {block.totalAmount > 0 && (
-                    <span>ðŸ’° <strong className="text-cyan-300">
-                      {new Intl.NumberFormat("nl-SR", { minimumFractionDigits: 2 }).format(block.totalAmount)} SRD
-                    </strong></span>
-                  )}
-                  {block.totalDeliveryFee > 0 ? (
-                    <span>Delivery <strong className="text-emerald-300">{formatCurrencySrd(block.totalDeliveryFee)}</strong></span>
-                  ) : null}
-                </div>
-                <p className="mt-1.5 text-[10px] text-slate-600">
-                  {new Date(block.createdAt).toLocaleDateString("es", { day: "2-digit", month: "short", year: "numeric" })}
-                </p>
-              </button>
-            );
-          })}
-        </div>
       )}
     </div>
   );

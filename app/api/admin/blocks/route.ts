@@ -17,7 +17,13 @@ export async function GET() {
 
   const assignment = await ensurePendingOrdersAssignedToBlocks();
   const blocks = await listDeliveryBlocks();
-  return NextResponse.json({ success: true, blocks, assignment });
+  const orderIds = Array.from(
+    new Set(
+      blocks.flatMap((block) => (block.orders ?? []).map((slot) => slot.orderId))
+    )
+  );
+  const orderRecords = orderIds.length > 0 ? await getAdminOrdersByIds(orderIds) : [];
+  return NextResponse.json({ success: true, blocks, orderRecords, assignment });
 }
 
 export async function POST(request: Request) {
