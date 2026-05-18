@@ -295,10 +295,13 @@ export function planAdminOrderRoutes(
     }
   }
 
+  // Orders that overflowed past MAX_ROUTE_BLOCKS go to the non-route section
+  const allNonRouteOrders = [...nonRouteOrders, ...remainingOrders];
+
   return {
     routeOrders,
     routeBlocks,
-    nonRouteOrders,
+    nonRouteOrders: allNonRouteOrders,
     totalEstimatedKm: Number(
       routeBlocks.reduce((sum, block) => sum + block.estimatedTotalKm, 0).toFixed(1)
     ),
