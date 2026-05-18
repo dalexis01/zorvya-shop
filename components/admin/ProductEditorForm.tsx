@@ -431,19 +431,30 @@ export default function ProductEditorForm({ mode, productId }: ProductEditorForm
     }));
   }
 
-  // Uploads a data URL (already resized by imageFileToDataUrl) to Vercel Blob.
-  // Returns the Blob URL on success, or the original dataUrl as fallback if storage is not yet set up.
-  async function uploadToBlob(dataUrl: string, filename?: string): Promise<string> {
+  // Converts a canvas data URL to a binary Blob for direct upload.
+  function dataUrlToBlob(dataUrl: string): Blob {
+    const [header, base64] = dataUrl.split(",");
+    const mimeType = header?.match(/data:([^;]+)/)?.[1] ?? "image/jpeg";
+    const binary = atob(base64 ?? "");
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    return new Blob([bytes], { type: mimeType });
+  }
+
+  // Uploads a resized image (data URL from imageFileToDataUrl) to Vercel Blob.
+  // Sends raw binary — no base64 JSON overhead.
+  // Falls back to data URL if Blob is not yet configured (503).
+  async function uploadToBlob(dataUrl: string, filename: string): Promise<string> {
     try {
-      const res = await fetch("/api/admin/upload-image", {
+      const fileBlob = dataUrlToBlob(dataUrl);
+      const res = await fetch(`/api/admin/upload-image?filename=${encodeURIComponent(filename)}`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ dataUrl, filename }),
+        headers: { "Content-Type": fileBlob.type },
+        body: fileBlob,
       });
       const data = (await res.json()) as { success?: boolean; url?: string; error?: string };
       if (data.success && data.url) return data.url;
-      // Fall back to data URL if Blob is not yet configured (BLOB_READ_WRITE_TOKEN missing)
-      if (res.status === 503) return dataUrl;
+      if (res.status === 503) return dataUrl; // Blob not configured yet — fall back silently
       setImageUploadError(data.error ?? "Error al subir imagen");
       return dataUrl;
     } catch {

@@ -3,17 +3,14 @@ import { NextResponse } from "next/server";
 
 import { requireAdminRequestUser } from "@/lib/server/admin/request-auth";
 
-const MIME_TO_EXT: Record<string, string> = {
-  "image/jpeg": "jpg",
-  "image/png": "png",
-  "image/webp": "webp",
-  "image/avif": "avif",
-};
+const ALLOWED_CONTENT_TYPES = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/avif",
+]);
 
-const ALLOWED_MIME = new Set(Object.keys(MIME_TO_EXT));
-const MAX_SIZE_BYTES = 8 * 1024 * 1024; // 8 MB
-
-export async function POST(request: Request) {
+export async function POST(request: Request): Promise<NextResponse> {
   const auth = await requireAdminRequestUser();
   if (!auth.user) {
     return NextResponse.json({ success: false, error: auth.error }, { status: auth.status });
@@ -21,48 +18,31 @@ export async function POST(request: Request) {
 
   if (!process.env.BLOB_READ_WRITE_TOKEN) {
     return NextResponse.json(
-      { success: false, error: "BLOB_READ_WRITE_TOKEN no configurado. Crea un Blob store en Vercel y agrega la variable." },
+      { success: false, error: "BLOB_READ_WRITE_TOKEN no configurado." },
       { status: 503 }
     );
   }
 
+  const { searchParams } = new URL(request.url);
+  const filename = searchParams.get("filename");
+
+  if (!filename) {
+    return NextResponse.json({ success: false, error: "filename requerido" }, { status: 400 });
+  }
+
+  const contentType = request.headers.get("content-type") ?? "image/jpeg";
+  if (!ALLOWED_CONTENT_TYPES.has(contentType)) {
+    return NextResponse.json({ success: false, error: "Tipo de imagen no permitido" }, { status: 400 });
+  }
+
   try {
-    const body = (await request.json()) as { dataUrl?: string; filename?: string };
-    const { dataUrl, filename } = body;
-
-    if (!dataUrl?.startsWith("data:")) {
-      return NextResponse.json({ success: false, error: "Se esperaba un data URL" }, { status: 400 });
+    if (!request.body) {
+      return NextResponse.json({ success: false, error: "Body vacío" }, { status: 400 });
     }
 
-    const separatorIndex = dataUrl.indexOf(",");
-    if (separatorIndex === -1) {
-      return NextResponse.json({ success: false, error: "Data URL malformado" }, { status: 400 });
-    }
-
-    const header = dataUrl.slice(5, separatorIndex);
-    const mimeType = header.split(";")[0] ?? "image/jpeg";
-
-    if (!ALLOWED_MIME.has(mimeType)) {
-      return NextResponse.json({ success: false, error: "Tipo de imagen no permitido" }, { status: 400 });
-    }
-
-    const base64 = dataUrl.slice(separatorIndex + 1);
-    const buffer = Buffer.from(base64, "base64");
-
-    if (buffer.byteLength > MAX_SIZE_BYTES) {
-      return NextResponse.json(
-        { success: false, error: `Imagen demasiado grande (max 8 MB)` },
-        { status: 413 }
-      );
-    }
-
-    const ext = MIME_TO_EXT[mimeType] ?? "jpg";
-    const name = filename ?? `img-${Date.now()}.${ext}`;
-
-    const blob = await put(`products/${name}`, buffer, {
+    const blob = await put(`products/${filename}`, request.body, {
       access: "public",
-      contentType: mimeType,
-      addRandomSuffix: true,
+      contentType,
     });
 
     return NextResponse.json({ success: true, url: blob.url });
