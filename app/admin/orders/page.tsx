@@ -8,7 +8,7 @@ import BlockManagerModal from "@/components/admin/BlockManagerModal";
 import CancelOrderDialog from "@/components/admin/CancelOrderDialog";
 import RouteBlockModal from "@/components/admin/RouteBlockModal";
 import { formatCurrencySrd, formatKilometers } from "@/lib/shop/number-format";
-import { planAdminOrderRoutes, TARGET_ROUTE_BLOCK_SIZE, type AdminOrderRouteBlock, type AdminOrderRouteStop } from "@/lib/shop/admin-order-routing";
+import { TARGET_ROUTE_BLOCK_SIZE, type AdminOrderRouteBlock, type AdminOrderRouteStop } from "@/lib/shop/admin-order-routing";
 import { STORE_ADDRESS } from "@/helpers/delivery";
 import { ADMIN_ORDER_STATUS_OPTIONS } from "@/lib/shop/order-status";
 import type { AdminOrderRecord, AdminOrdersMeta } from "@/lib/shop/admin-types";
@@ -25,6 +25,7 @@ type AdminOrdersResponse = {
 };
 
 const LIMIT = 24;
+const BLOCKS_LIMIT = 120;
 const TAB_PARAMS: Record<Tab, { status: StatusFilter; deliveryType: DeliveryFilter }> = {
   blocks:    { status: "pending",   deliveryType: "delivery" },
   orders:    { status: "all",       deliveryType: "delivery" },
@@ -42,8 +43,8 @@ function mergeOrders(a: AdminOrderRecord[], b: AdminOrderRecord[]) {
   return Array.from(m.values()).sort((x, y) => new Date(y.createdAt).getTime() - new Date(x.createdAt).getTime());
 }
 
-function apiUrl(p: { status: StatusFilter; deliveryType: DeliveryFilter; last4: string; cursor?: string | null; autoMode?: boolean; globalSearch?: string }) {
-  const sp = new URLSearchParams({ status: p.status, deliveryType: p.deliveryType, last4: p.last4, limit: String(LIMIT) });
+function apiUrl(p: { status: StatusFilter; deliveryType: DeliveryFilter; last4: string; cursor?: string | null; autoMode?: boolean; globalSearch?: string; limit?: number }) {
+  const sp = new URLSearchParams({ status: p.status, deliveryType: p.deliveryType, last4: p.last4, limit: String(p.limit ?? LIMIT) });
   if (p.cursor) sp.set("cursor", p.cursor);
   if (p.autoMode) sp.set("autoMode", "true");
   // Global search overrides status/deliveryType filters
@@ -83,6 +84,32 @@ function formatTime(m: number) {
   if (m < 60) return `~${m}m`;
   const h = Math.floor(m / 60); const r = m % 60;
   return r > 0 ? `~${h}h${r}m` : `~${h}h`;
+}
+
+function getAddressLabel(address: string) {
+  const parts = address
+    .split(",")
+    .map((part) => part.trim())
+    .filter(Boolean);
+  if (parts.length >= 2) {
+    return `${parts[0]}, ${parts[1]}`;
+  }
+  return parts[0] ?? address.trim() ?? "Sin direccion";
+}
+
+function getAreaLabel(address: string) {
+  const parts = address
+    .split(",")
+    .map((part) => part.trim())
+    .filter(Boolean);
+  if (parts.length >= 2) {
+    return parts[1];
+  }
+  return parts[0] ?? "Zona sin definir";
+}
+
+function countPackages(order: AdminOrderRecord) {
+  return Math.max(1, order.items.reduce((sum, item) => sum + item.quantity, 0));
 }
 
 // â”€â”€â”€ shared table shell â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -472,7 +499,7 @@ function BlocksTable({
   sentBlocks, sendingBlockId, bulkingBlockId, accountingMap,
   onViewRoute, onSend, onBulkStatus, onDraftChange, onSaveStatus, onOpenCancel,
 }: {
-  routeBlocks: ReturnType<typeof planAdminOrderRoutes>["routeBlocks"];
+  routeBlocks: AdminOrderRouteBlock[];
   nonRouteOrders: AdminOrderRecord[];
   statusDrafts: Record<string, string>;
   activeOrderId: string | null;
@@ -857,7 +884,17 @@ export default function AdminOrdersPage() {
       const timer = setTimeout(() => abort.abort(), 25_000);
       try {
         const requests: Array<Promise<Response>> = [
-          fetch(apiUrl({ status, deliveryType, last4, autoMode, globalSearch: globalSearch || undefined }), { cache: "no-store", signal: abort.signal }),
+          fetch(
+            apiUrl({
+              status,
+              deliveryType,
+              last4,
+              autoMode,
+              globalSearch: globalSearch || undefined,
+              limit: activeTab === "blocks" ? BLOCKS_LIMIT : LIMIT,
+            }),
+            { cache: "no-store", signal: abort.signal }
+          ),
         ];
         if (activeTab !== "blocks") {
           requests.push(fetch("/api/admin/orders/meta", { cache: "no-store", signal: abort.signal }));
@@ -920,7 +957,18 @@ export default function AdminOrdersPage() {
     if (!nextCursor || loading || loadingMore) return;
     setLoadingMore(true);
     try {
-      const res = await fetch(apiUrl({ status, deliveryType, last4, cursor: nextCursor, autoMode, globalSearch: globalSearch || undefined }), { cache: "no-store" });
+      const res = await fetch(
+        apiUrl({
+          status,
+          deliveryType,
+          last4,
+          cursor: nextCursor,
+          autoMode,
+          globalSearch: globalSearch || undefined,
+          limit: activeTab === "blocks" ? BLOCKS_LIMIT : LIMIT,
+        }),
+        { cache: "no-store" }
+      );
       const data = (await res.json()) as AdminOrdersResponse;
       if (!data.success) return;
       const inc = data.orders ?? [];
@@ -992,6 +1040,8 @@ export default function AdminOrdersPage() {
     setActiveModalBlock(null);
   }
 
+  const ordersById = useMemo(() => new Map(orders.map((order) => [order.id, order])), [orders]);
+
   const ordersWithoutBlock = useMemo(
     () =>
       activeTab === "blocks"
@@ -1000,15 +1050,61 @@ export default function AdminOrdersPage() {
     [activeTab, orders, assignedOrderIds]
   );
 
-  const routePlan = useMemo(
-    () => (activeTab === "blocks" ? planAdminOrderRoutes(ordersWithoutBlock) : null),
-    [activeTab, ordersWithoutBlock]
-  );
-
   const activePersistentBlocks = useMemo(
     () => persistentBlocks.filter((block) => block.status !== "completed" && block.status !== "cancelled"),
     [persistentBlocks]
   );
+
+  const persistentRouteBlocks = useMemo<AdminOrderRouteBlock[]>(() => {
+    return activePersistentBlocks
+      .map((block) => {
+        const slots = [...(block.orders ?? [])].sort((left, right) => left.position - right.position);
+        const blockOrders = slots
+          .map((slot) => ordersById.get(slot.orderId))
+          .filter((order): order is AdminOrderRecord => Boolean(order));
+
+        let cumulativeKm = 0;
+        const stops = blockOrders.map((order, index) => {
+          const slot = slots.find((current) => current.orderId === order.id);
+          const legKm = slot?.legDistanceKm ?? 0;
+          cumulativeKm += legKm;
+          return {
+            order,
+            stopNumber: index + 1,
+            addressLabel: getAddressLabel(order.customerAddress),
+            areaLabel: getAreaLabel(order.customerAddress),
+            estimatedLegKm: legKm,
+            cumulativeKm,
+            packages: countPackages(order),
+          };
+        });
+
+        const packagesCount = blockOrders.reduce((sum, order) => sum + countPackages(order), 0);
+        const itemsCount = blockOrders.reduce((sum, order) => sum + order.items.length, 0);
+        const areas = Array.from(new Set(blockOrders.map((order) => getAreaLabel(order.customerAddress)).filter(Boolean)));
+
+        return {
+          id: block.id,
+          label: block.name,
+          stops,
+          orders: blockOrders,
+          stopsCount: blockOrders.length,
+          packagesCount,
+          itemsCount,
+          estimatedDriveKm: Number(cumulativeKm.toFixed(1)),
+          estimatedReturnKm: 0,
+          estimatedTotalKm: Number((block.routeDistanceKm ?? cumulativeKm).toFixed(1)),
+          estimatedTimeMinutes: block.routeDurationMinutes ?? 0,
+          totalAmount: block.totalAmount,
+          deliveryFees: block.totalDeliveryFee,
+          areas,
+          routePreview: stops.map((stop) => stop.addressLabel).join(" → "),
+          isPartial: blockOrders.length < TARGET_ROUTE_BLOCK_SIZE,
+          isSent: block.status === "in_delivery" || block.status === "completed",
+        };
+      })
+      .filter((block) => block.stopsCount > 0);
+  }, [activePersistentBlocks, ordersById]);
 
   const TABS: Array<{ id: Tab; label: string; accent?: string }> = [
     { id: "blocks",    label: "Bloques de ordenes" },
@@ -1181,45 +1277,23 @@ export default function AdminOrdersPage() {
             </div>
           </div>
 
-          <PersistentBlocksPanel
-            blocks={persistentBlocks}
-            loading={persistentBlocksLoading}
-            onCreateBlock={() => setShowCreateBlock(true)}
-            onManageBlock={(blockId) => void handleOpenBlockManager(blockId)}
-          />
-
-          {ordersWithoutBlock.length > 0 ? (
-            <div className="space-y-3">
-              <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
-                Ordenes sin bloque: {ordersWithoutBlock.length}. Todo pedido nuevo queda visible aqui hasta que se asigne a un bloque real.
-              </div>
-
-              {routePlan && routePlan.routeBlocks.length > 0 ? (
-                <BlocksTable
-                  key={routePlan.routeBlocks.map((block) => block.id).join("|")}
-                  routeBlocks={routePlan.routeBlocks}
-                  nonRouteOrders={routePlan.nonRouteOrders}
-                  sentBlocks={sentBlocks}
-                  sendingBlockId={sendingBlockId}
-                  bulkingBlockId={bulkingBlockId}
-                  onViewRoute={setActiveModalBlock}
-                  onSend={handleSendBlock}
-                  onBulkStatus={handleBulkBlockStatus}
-                  {...commonTableProps}
-                />
-              ) : null}
-
-              <div className="space-y-2">
-                <p className="px-1 text-[10px] font-semibold uppercase tracking-[0.25em] text-amber-400">
-                  Ordenes sin bloque listas para asignacion manual
-                </p>
-                <OrdersTable orders={ordersWithoutBlock} {...commonTableProps} />
-              </div>
+          {persistentBlocksLoading ? (
+            <div className="rounded-xl border border-slate-800 bg-[#050816] py-10 text-center text-xs uppercase tracking-[0.3em] text-slate-600">
+              Cargando bloques...
             </div>
           ) : (
-            <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-6 text-center text-sm text-emerald-100">
-              Todas las ordenes pendientes de delivery ya estan dentro de un bloque activo.
-            </div>
+            <BlocksTable
+              key={persistentRouteBlocks.map((block) => block.id).join("|")}
+              routeBlocks={persistentRouteBlocks}
+              nonRouteOrders={ordersWithoutBlock}
+              sentBlocks={sentBlocks}
+              sendingBlockId={sendingBlockId}
+              bulkingBlockId={bulkingBlockId}
+              onViewRoute={setActiveModalBlock}
+              onSend={handleSendBlock}
+              onBulkStatus={handleBulkBlockStatus}
+              {...commonTableProps}
+            />
           )}
         </>
       ) : orders.length === 0 ? (
