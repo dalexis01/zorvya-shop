@@ -1208,24 +1208,31 @@ export default function ShopPage({
       return;
     }
 
-    const root = document.documentElement;
     const body = document.body;
-    const previousHtmlOverflow = root.style.overflow;
-    const previousBodyOverflow = body.style.overflow;
-    const previousBodyPaddingRight = body.style.paddingRight;
-    const scrollbarWidth = Math.max(0, window.innerWidth - root.clientWidth);
+    const html = document.documentElement;
+    const scrollbarWidth = Math.max(0, window.innerWidth - html.clientWidth);
+    // Capture current scroll position before locking
+    const scrollY = window.scrollY;
 
-    root.style.overflow = "hidden";
-    body.style.overflow = "hidden";
-
+    // iOS-safe scroll lock: position:fixed avoids the "scroll jumps to top / broken after close" bug.
+    // overflow:hidden alone doesn't prevent rubber-band scrolling on iOS Safari.
+    body.style.position = "fixed";
+    body.style.top = `-${scrollY}px`;
+    body.style.width = "100%";
+    // Keep desktop scrollbar to prevent layout shift
     if (scrollbarWidth > 0) {
+      body.style.overflowY = "scroll";
       body.style.paddingRight = `${scrollbarWidth}px`;
     }
 
     return () => {
-      root.style.overflow = previousHtmlOverflow;
-      body.style.overflow = previousBodyOverflow;
-      body.style.paddingRight = previousBodyPaddingRight;
+      body.style.position = "";
+      body.style.top = "";
+      body.style.width = "";
+      body.style.overflowY = "";
+      body.style.paddingRight = "";
+      // Restore exact scroll position — critical on iOS
+      window.scrollTo({ top: scrollY, behavior: "instant" as ScrollBehavior });
     };
   }, [shouldLockBackgroundScroll]);
 

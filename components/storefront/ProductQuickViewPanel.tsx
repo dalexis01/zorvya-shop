@@ -482,11 +482,10 @@ export default function ProductQuickViewPanel({
       }
     };
 
-    document.body.style.overflow = "hidden";
+    // Body scroll is already locked by ShopPage — don't double-lock here.
     window.addEventListener("keydown", handleKeyDown);
 
     return () => {
-      document.body.style.overflow = "";
       window.removeEventListener("keydown", handleKeyDown);
     };
   }, [currentSelection, lightboxOpen, onClose, reviewComposerOpen]);
@@ -603,7 +602,7 @@ export default function ProductQuickViewPanel({
   }
 
   return (
-    <div className="fixed inset-0 z-[95]">
+    <div className="fixed inset-0 z-[95] [transform:translateZ(0)]">
       <button
         type="button"
         onClick={() => onClose(currentSelection)}
@@ -611,8 +610,8 @@ export default function ProductQuickViewPanel({
       />
 
       <div className="absolute inset-0 flex items-center justify-center p-2 sm:p-5 lg:p-6">
-        <div className="relative z-10 flex max-h-[96dvh] w-full max-w-[min(100vw-0.75rem,86rem)] flex-col overflow-hidden rounded-[1.6rem] border border-slate-800 bg-[#02030a] shadow-[0_32px_120px_rgba(0,0,0,0.55)] sm:rounded-[2rem] lg:h-[min(90dvh,48rem)]">
-          <div className="flex items-center justify-between border-b border-slate-800 bg-[#030611]/85 px-4 py-3 backdrop-blur-xl sm:px-5">
+        <div className="relative z-10 flex max-h-[96dvh] w-full max-w-[min(100vw-0.75rem,86rem)] flex-col overflow-hidden rounded-[1.6rem] border border-slate-800 bg-[#02030a] shadow-[0_32px_120px_rgba(0,0,0,0.55)] sm:rounded-[2rem] lg:h-[min(90dvh,48rem)] [transform:translateZ(0)]">
+          <div className="flex items-center justify-between border-b border-slate-800 bg-[#030611]/85 px-4 py-3 sm:px-5" style={{ WebkitBackdropFilter: "blur(24px)", backdropFilter: "blur(24px)" }}>
             <div className="min-w-0">
               <h2 className="truncate text-base font-semibold text-white sm:text-lg">{product.name}</h2>
               <p className="mt-1 text-xs uppercase tracking-[0.2em] text-slate-500">{product.category}</p>
