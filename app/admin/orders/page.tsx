@@ -594,13 +594,11 @@ function BlocksTable({
               </tr>
             </thead>
             <tbody>
-              {routeBlocks.map((block) => {
+              {routeBlocks.map((block, blockIndex) => {
                 const isCollapsed = collapsed.has(block.id);
                 const isSent = sentBlocks.has(block.id);
                 const sending = sendingBlockId === block.id;
-
                 const bulking = bulkingBlockId === block.id;
-
                 const profit = computeBlockProfit(block, accountingMap);
 
                 return (
@@ -626,7 +624,7 @@ function BlocksTable({
 
                           {/* Block label */}
                           <span className="text-xs font-bold uppercase tracking-[0.25em] text-cyan-300">
-                            {block.label}
+                            Bloque {blockIndex + 1}
                           </span>
                           <span className="rounded border border-slate-700 bg-[#050816] px-2 py-0.5 text-[10px] font-semibold text-slate-400">
                             {block.stopsCount}/{TARGET_ROUTE_BLOCK_SIZE} pedidos
@@ -650,34 +648,6 @@ function BlocksTable({
                               ✓ Enviado
                             </span>
                           )}
-
-                          {/* Bulk status actions */}
-                          <div className="flex flex-wrap gap-1.5">
-                            <button
-                              type="button"
-                              disabled={bulking}
-                              onClick={() => void onBulkStatus(block, "Confirmando stock")}
-                              className="rounded border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-[11px] font-semibold text-amber-300 transition hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-40"
-                            >
-                              📋 Confirmar stock
-                            </button>
-                            <button
-                              type="button"
-                              disabled={bulking}
-                              onClick={() => void onBulkStatus(block, "Preparando pedido")}
-                              className="rounded border border-violet-500/30 bg-violet-500/10 px-2.5 py-1 text-[11px] font-semibold text-violet-300 transition hover:bg-violet-500/20 disabled:cursor-not-allowed disabled:opacity-40"
-                            >
-                              📦 Preparar
-                            </button>
-                            <button
-                              type="button"
-                              disabled={bulking}
-                              onClick={() => void onBulkStatus(block, "En delivery")}
-                              className="rounded border border-sky-500/30 bg-sky-500/10 px-2.5 py-1 text-[11px] font-semibold text-sky-300 transition hover:bg-sky-500/20 disabled:cursor-not-allowed disabled:opacity-40"
-                            >
-                              🚚 En delivery
-                            </button>
-                          </div>
 
                           {/* Actions */}
                           <div className="ml-auto flex gap-2">
