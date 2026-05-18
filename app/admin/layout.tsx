@@ -119,7 +119,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
     void loadOrdersMeta();
 
-    const intervalId = window.setInterval(loadOrdersMeta, 5000);
+    const intervalId = window.setInterval(loadOrdersMeta, 30_000);
     const handleOrdersUpdated = () => {
       void loadOrdersMeta();
     };

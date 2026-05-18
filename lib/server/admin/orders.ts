@@ -1,6 +1,6 @@
 import "server-only";
 
-import { getAllProducts } from "@/lib/server/admin/products";
+import { getProductsForOrderLookup } from "@/lib/server/admin/products";
 import { getAllOrders, getOrderById } from "@/lib/server/orders";
 import {
   loadAdminOrdersMetaFromStore,
@@ -26,8 +26,10 @@ function getOrderIdTail(orderId: string) {
   return orderId.slice(-4).toUpperCase();
 }
 
-function buildProductNameMap(products: Awaited<ReturnType<typeof getAllProducts>>) {
-  const map = new Map<string, Awaited<ReturnType<typeof getAllProducts>>[number]>();
+type ProductLookup = { id: string; name: string };
+
+function buildProductNameMap(products: ProductLookup[]) {
+  const map = new Map<string, ProductLookup>();
   for (const product of products) {
     map.set(normalizeText(product.name), product);
   }
@@ -36,7 +38,7 @@ function buildProductNameMap(products: Awaited<ReturnType<typeof getAllProducts>
 
 function resolveOrderItems(
   order: StoredOrder,
-  productsByName: Map<string, Awaited<ReturnType<typeof getAllProducts>>[number]>
+  productsByName: Map<string, ProductLookup>
 ) {
   return order.items.map<AdminOrderItemRecord>((item, index) => {
     const matchedProduct = productsByName.get(normalizeText(item.name));
@@ -53,7 +55,7 @@ function resolveOrderItems(
 
 function toAdminOrderRecord(
   order: StoredOrder,
-  productsByName: Map<string, Awaited<ReturnType<typeof getAllProducts>>[number]>,
+  productsByName: Map<string, ProductLookup>,
   autoMode = false
 ): AdminOrderRecord {
   const status = getOrderStatus(order, { autoMode });
@@ -91,7 +93,7 @@ export async function getAdminOrders(options?: {
       limit: options?.limit,
       autoMode,
     }),
-    getAllProducts(),
+    getProductsForOrderLookup(),
   ]);
 
   const productsByName = buildProductNameMap(products);
@@ -103,13 +105,13 @@ export async function getAdminOrders(options?: {
 }
 
 export async function getAllAdminOrders() {
-  const [orders, products] = await Promise.all([getAllOrders(), getAllProducts()]);
+  const [orders, products] = await Promise.all([getAllOrders(), getProductsForOrderLookup()]);
   const productsByName = buildProductNameMap(products);
   return orders.map((order) => toAdminOrderRecord(order, productsByName));
 }
 
 export async function getAdminOrderById(orderId: string) {
-  const [order, products] = await Promise.all([getOrderById(orderId), getAllProducts()]);
+  const [order, products] = await Promise.all([getOrderById(orderId), getProductsForOrderLookup()]);
 
   if (!order) {
     return null;

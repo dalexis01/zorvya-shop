@@ -751,7 +751,7 @@ export async function loadOrdersByUserIdFromStore(userId: string) {
   const result = await queryOrdersPageFromDatabase({
     whereClauses: ["user_id = $1"],
     params: [userId],
-    limit: 10_000,
+    limit: 200,
   });
 
   return result.orders;

@@ -150,11 +150,16 @@ let productsPoolInstance: Pool | null = null;
 let productsSchemaReadyPromise: Promise<void> | null = null;
 const LEGACY_PRODUCTS_FILE_PATH = path.join(process.cwd(), "data", "products.json");
 
-const PRODUCTS_LIST_CACHE_TTL_MS = 60_000;
+const PRODUCTS_LIST_CACHE_TTL_MS = 300_000; // 5 min
 let productsListCache: { expiresAt: number; value: Product[] } | null = null;
+
+// Slim lookup cache — only id+name, used for order-name matching
+const PRODUCTS_LOOKUP_CACHE_TTL_MS = 120_000; // 2 min
+let productsLookupCache: { expiresAt: number; value: Array<{ id: string; name: string }> } | null = null;
 
 function clearProductsListCache() {
   productsListCache = null;
+  productsLookupCache = null;
 }
 
 function trimText(value: string | undefined) {
@@ -938,6 +943,27 @@ export async function getAllProducts(options?: {
   return sortProducts(products);
 }
 
+// Returns only id+name — used when building order name→product maps.
+// Avoids downloading images_json, ai_json, translations_json for every orders request.
+export async function getProductsForOrderLookup(): Promise<Array<{ id: string; name: string }>> {
+  if (!isProductsDatabaseConfigured()) return [];
+  if (productsLookupCache && productsLookupCache.expiresAt > Date.now()) {
+    return productsLookupCache.value;
+  }
+  try {
+    const pool = await getProductsPool();
+    const result = await pool.query<{ id: string; name: string }>(
+      `SELECT id, name FROM products ORDER BY name`
+    );
+    const value = result.rows;
+    productsLookupCache = { expiresAt: Date.now() + PRODUCTS_LOOKUP_CACHE_TTL_MS, value };
+    return value;
+  } catch (err) {
+    console.error("[products] getProductsForOrderLookup failed:", err);
+    return [];
+  }
+}
+
 export async function getProductSummaries(options?: {
   onlyActive?: boolean;
   category?: string;
@@ -1383,27 +1409,28 @@ export async function registerProductSalesFromOrder(input: {
     productId?: string | number;
   }>;
 }) {
+  if (!isProductsDatabaseConfigured()) return;
+
   const soldAt = trimText(input.soldAt);
-  const products = await readProducts();
+  const productIds = input.items
+    .map((item) => String(item.productId ?? "").trim())
+    .filter(Boolean);
 
-  await Promise.all(
-    products.map(async (product) => {
-      const matchedItem = input.items.find(
-        (item) => String(item.productId ?? "") === String(product.id)
-      );
+  if (productIds.length === 0 || !soldAt) return;
 
-      if (!matchedItem) {
-        return;
-      }
-
-      await writeProduct(
-        normalizeProduct({
-          ...product,
-          lastSoldAt: soldAt,
-          saleDates: [...product.saleDates, soldAt],
-          updatedAt: soldAt,
-        })
-      );
-    })
-  );
+  try {
+    const pool = await getProductsPool();
+    // Targeted UPDATE — no full table scan needed
+    await pool.query(
+      `UPDATE products
+       SET last_sold_at = $1,
+           sale_dates_json = COALESCE(sale_dates_json, '[]'::jsonb) || to_jsonb($1::text),
+           updated_at = $1
+       WHERE id = ANY($2)`,
+      [soldAt, productIds]
+    );
+    clearProductsListCache();
+  } catch (err) {
+    console.error("[products] registerProductSalesFromOrder failed:", err);
+  }
 }
