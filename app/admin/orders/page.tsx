@@ -38,9 +38,10 @@ function mergeOrders(a: AdminOrderRecord[], b: AdminOrderRecord[]) {
   return Array.from(m.values()).sort((x, y) => new Date(y.createdAt).getTime() - new Date(x.createdAt).getTime());
 }
 
-function apiUrl(p: { status: StatusFilter; deliveryType: DeliveryFilter; last4: string; cursor?: string | null }) {
+function apiUrl(p: { status: StatusFilter; deliveryType: DeliveryFilter; last4: string; cursor?: string | null; autoMode?: boolean }) {
   const sp = new URLSearchParams({ status: p.status, deliveryType: p.deliveryType, last4: p.last4, limit: String(LIMIT) });
   if (p.cursor) sp.set("cursor", p.cursor);
+  if (p.autoMode) sp.set("autoMode", "true");
   return `/api/admin/orders?${sp.toString()}`;
 }
 
@@ -447,8 +448,8 @@ function OrdersTable({
 // ─── blocks table (Bloques de ordenes tab) ────────────────────────────────────
 function BlocksTable({
   routeBlocks, nonRouteOrders, statusDrafts, activeOrderId, pendingAction,
-  sentBlocks, sendingBlockId, accountingMap,
-  onViewRoute, onSend, onDraftChange, onSaveStatus, onOpenCancel,
+  sentBlocks, sendingBlockId, bulkingBlockId, accountingMap,
+  onViewRoute, onSend, onBulkStatus, onDraftChange, onSaveStatus, onOpenCancel,
 }: {
   routeBlocks: ReturnType<typeof planAdminOrderRoutes>["routeBlocks"];
   nonRouteOrders: AdminOrderRecord[];
@@ -457,9 +458,11 @@ function BlocksTable({
   pendingAction: "update-status" | "cancel-order" | null;
   sentBlocks: Set<string>;
   sendingBlockId: string | null;
+  bulkingBlockId: string | null;
   accountingMap: Map<string, ProductAccountingEntry>;
   onViewRoute: (b: AdminOrderRouteBlock) => void;
   onSend: (b: AdminOrderRouteBlock) => Promise<void>;
+  onBulkStatus: (b: AdminOrderRouteBlock, status: string) => Promise<void>;
   onDraftChange: (id: string, val: string) => void;
   onSaveStatus: (o: AdminOrderRecord) => Promise<void>;
   onOpenCancel: (o: AdminOrderRecord) => void;
@@ -505,6 +508,8 @@ function BlocksTable({
                 const isSent = sentBlocks.has(block.id);
                 const sending = sendingBlockId === block.id;
 
+                const bulking = bulkingBlockId === block.id;
+
                 return (
                   <React.Fragment key={block.id}>
                     {/* Block header row */}
@@ -547,6 +552,34 @@ function BlocksTable({
                             </span>
                           )}
 
+                          {/* Bulk status actions */}
+                          <div className="flex flex-wrap gap-1.5">
+                            <button
+                              type="button"
+                              disabled={bulking}
+                              onClick={() => void onBulkStatus(block, "Confirmando stock")}
+                              className="rounded border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-[11px] font-semibold text-amber-300 transition hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-40"
+                            >
+                              📋 Confirmar stock
+                            </button>
+                            <button
+                              type="button"
+                              disabled={bulking}
+                              onClick={() => void onBulkStatus(block, "Preparando pedido")}
+                              className="rounded border border-violet-500/30 bg-violet-500/10 px-2.5 py-1 text-[11px] font-semibold text-violet-300 transition hover:bg-violet-500/20 disabled:cursor-not-allowed disabled:opacity-40"
+                            >
+                              📦 Preparar
+                            </button>
+                            <button
+                              type="button"
+                              disabled={bulking}
+                              onClick={() => void onBulkStatus(block, "En delivery")}
+                              className="rounded border border-sky-500/30 bg-sky-500/10 px-2.5 py-1 text-[11px] font-semibold text-sky-300 transition hover:bg-sky-500/20 disabled:cursor-not-allowed disabled:opacity-40"
+                            >
+                              🚚 En delivery
+                            </button>
+                          </div>
+
                           {/* Actions */}
                           <div className="ml-auto flex gap-2">
                             <button
@@ -558,11 +591,11 @@ function BlocksTable({
                             </button>
                             <button
                               type="button"
-                              disabled={sending || isSent}
+                              disabled={sending || isSent || bulking}
                               onClick={() => void onSend(block)}
                               className="rounded border border-cyan-500/40 bg-cyan-500/10 px-3 py-1 text-[11px] font-semibold text-cyan-300 transition hover:bg-cyan-500/20 disabled:cursor-not-allowed disabled:opacity-40"
                             >
-                              {sending ? "Enviando..." : isSent ? "Enviado" : "Enviar bloque"}
+                              {sending || bulking ? "..." : isSent ? "Enviado" : "Enviar bloque"}
                             </button>
                           </div>
                         </div>
@@ -597,8 +630,8 @@ function BlocksTable({
       {/* Non-route orders */}
       {nonRouteOrders.length > 0 && (
         <div>
-          <p className="mb-2 px-1 text-[10px] font-semibold uppercase tracking-[0.25em] text-violet-400">
-            Fuera de ruta activa · {nonRouteOrders.length} ordenes
+          <p className="mb-2 px-1 text-[10px] font-semibold uppercase tracking-[0.25em] text-amber-400">
+            ⚠ Órdenes sin bloque · {nonRouteOrders.length} ordenes
           </p>
           <div className="overflow-x-auto rounded-[1.5rem] border border-slate-700 shadow-[0_16px_60px_rgba(0,0,0,0.4)]">
             <table className="w-full border-collapse">
@@ -664,6 +697,9 @@ export default function AdminOrdersPage() {
   const [sentBlocks, setSentBlocks] = useState<Set<string>>(new Set());
   const [sendingBlockId, setSendingBlockId] = useState<string | null>(null);
   const [accountingMap, setAccountingMap] = useState<Map<string, ProductAccountingEntry>>(new Map());
+  const [autoMode, setAutoMode] = useState(false);
+  const [autoModeLoading, setAutoModeLoading] = useState(false);
+  const [bulkingBlockId, setBulkingBlockId] = useState<string | null>(null);
 
   const { status, deliveryType } = TAB_PARAMS[activeTab];
 
@@ -672,6 +708,56 @@ export default function AdminOrdersPage() {
     window.addEventListener("admin-orders-updated", fn);
     return () => window.removeEventListener("admin-orders-updated", fn);
   }, []);
+
+  // Load autoMode setting once on mount
+  useEffect(() => {
+    fetch("/api/admin/settings/orders", { cache: "no-store" })
+      .then((r) => r.json() as Promise<{ success?: boolean; settings?: { autoMode: boolean } }>)
+      .then((d) => { if (d.success && d.settings) setAutoMode(d.settings.autoMode); })
+      .catch(() => {});
+  }, []);
+
+  async function toggleAutoMode() {
+    const next = !autoMode;
+    setAutoModeLoading(true);
+    try {
+      const res = await fetch("/api/admin/settings/orders", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ autoMode: next }),
+      });
+      const d = await res.json() as { success?: boolean; settings?: { autoMode: boolean } };
+      if (d.success) {
+        setAutoMode(next);
+        setRefreshKey((k) => k + 1);
+        setNotice({ tone: "success", message: next ? "Modo automático activado." : "Modo automático desactivado. Control manual." });
+      }
+    } finally {
+      setAutoModeLoading(false);
+    }
+  }
+
+  async function handleBulkBlockStatus(block: AdminOrderRouteBlock, newStatus: string) {
+    setBulkingBlockId(block.id);
+    setNotice(null);
+    const ids = block.stops.map((s) => s.order.id);
+    const results = await Promise.allSettled(
+      ids.map((id) =>
+        fetch(`/api/admin/orders/${id}`, {
+          method: "PATCH", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "update-status", status: newStatus }),
+        }).then((r) => r.json())
+      )
+    );
+    const fails = results.filter((r) => r.status === "rejected" || (r.status === "fulfilled" && !(r.value as { success?: boolean }).success));
+    setBulkingBlockId(null);
+    if (fails.length === 0) {
+      setNotice({ tone: "success", message: `${block.label}: ${ids.length} ordenes → "${newStatus}"` });
+    } else {
+      setNotice({ tone: "warning", message: `${block.label}: ${fails.length} error(es) al actualizar.` });
+    }
+    window.dispatchEvent(new Event("admin-orders-updated"));
+  }
 
   useEffect(() => {
     let alive = true;
@@ -685,7 +771,7 @@ export default function AdminOrdersPage() {
       const timer = setTimeout(() => abort.abort(), 25_000);
       try {
         const [ordRes, metaRes] = await Promise.all([
-          fetch(apiUrl({ status, deliveryType, last4 }), { cache: "no-store", signal: abort.signal }),
+          fetch(apiUrl({ status, deliveryType, last4, autoMode }), { cache: "no-store", signal: abort.signal }),
           fetch("/api/admin/orders/meta", { cache: "no-store", signal: abort.signal }),
         ]);
         const [ordData, metaData] = await Promise.all([
@@ -739,13 +825,13 @@ export default function AdminOrdersPage() {
     }
     void load();
     return () => { alive = false; };
-  }, [activeTab, last4, refreshKey, status, deliveryType]);
+  }, [activeTab, last4, refreshKey, status, deliveryType, autoMode]);
 
   async function loadMore() {
     if (!nextCursor || loading || loadingMore) return;
     setLoadingMore(true);
     try {
-      const res = await fetch(apiUrl({ status, deliveryType, last4, cursor: nextCursor }), { cache: "no-store" });
+      const res = await fetch(apiUrl({ status, deliveryType, last4, cursor: nextCursor, autoMode }), { cache: "no-store" });
       const data = (await res.json()) as AdminOrdersResponse;
       if (!data.success) return;
       const inc = data.orders ?? [];
@@ -856,6 +942,20 @@ export default function AdminOrdersPage() {
           ) : null}
         </div>
 
+        {/* Auto mode toggle */}
+        <button
+          type="button"
+          disabled={autoModeLoading}
+          onClick={() => void toggleAutoMode()}
+          className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition disabled:opacity-50 ${
+            autoMode
+              ? "border-amber-500/40 bg-amber-500/15 text-amber-300 hover:bg-amber-500/25"
+              : "border-slate-700 bg-[#0a1020] text-slate-400 hover:border-slate-500 hover:text-white"
+          }`}
+        >
+          {autoMode ? "⚡ Auto: ON" : "⚡ Auto: OFF"}
+        </button>
+
         {/* Search */}
         <div className="flex items-center gap-2 rounded-full border border-slate-700 bg-[#0a1020] px-3 py-1.5">
           <svg className="h-3.5 w-3.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -922,8 +1022,10 @@ export default function AdminOrdersPage() {
           nonRouteOrders={routePlan.nonRouteOrders}
           sentBlocks={sentBlocks}
           sendingBlockId={sendingBlockId}
+          bulkingBlockId={bulkingBlockId}
           onViewRoute={setActiveModalBlock}
           onSend={handleSendBlock}
+          onBulkStatus={handleBulkBlockStatus}
           {...commonTableProps}
         />
       ) : (

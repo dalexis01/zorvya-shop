@@ -88,6 +88,7 @@ export type AdminOrdersQueryInput = {
   last4?: string;
   cursor?: string | null;
   limit?: number;
+  autoMode?: boolean;
 };
 
 let poolInstance: Pool | null = null;
@@ -359,17 +360,20 @@ function buildAdminOrdersCacheKey(input: AdminOrdersQueryInput & { limit: number
   ]);
 }
 
-function getCompletedStatusSql() {
-  return `(
-    cancelled_at IS NULL AND (
-      admin_status = 'Pedido completado'
-      OR (
-        admin_status IS NULL
-        AND delivery_type = 'delivery'
-        AND created_at <= NOW() - INTERVAL '24 hours'
+function getCompletedStatusSql(autoMode = false) {
+  if (autoMode) {
+    return `(
+      cancelled_at IS NULL AND (
+        admin_status = 'Pedido completado'
+        OR (
+          admin_status IS NULL
+          AND delivery_type = 'delivery'
+          AND created_at <= NOW() - INTERVAL '24 hours'
+        )
       )
-    )
-  )`;
+    )`;
+  }
+  return `(cancelled_at IS NULL AND admin_status = 'Pedido completado')`;
 }
 
 function applyAdminFilters(
@@ -379,6 +383,7 @@ function applyAdminFilters(
 ) {
   const status = input.status ?? "all";
   const deliveryType = input.deliveryType ?? "all";
+  const autoMode = input.autoMode ?? false;
   const search = input.search?.trim();
   const last4 = input.last4?.trim().toUpperCase();
 
@@ -390,9 +395,9 @@ function applyAdminFilters(
   if (status === "cancelled") {
     baseClauses.push("cancelled_at IS NOT NULL");
   } else if (status === "completed") {
-    baseClauses.push(getCompletedStatusSql());
+    baseClauses.push(getCompletedStatusSql(autoMode));
   } else if (status === "pending") {
-    baseClauses.push(`cancelled_at IS NULL AND NOT ${getCompletedStatusSql()}`);
+    baseClauses.push(`cancelled_at IS NULL AND NOT ${getCompletedStatusSql(autoMode)}`);
   }
 
   if (search) {

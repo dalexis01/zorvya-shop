@@ -10,15 +10,15 @@ import type {
 export const ORDER_EDIT_WINDOW_MS = 5 * 60 * 60 * 1000;
 export const ADMIN_ORDER_STATUS_OPTIONS: AdminManualOrderStatus[] = [
   "Pendiente de confirmacion",
+  "Confirmando stock",
+  "Preparando pedido",
   "Pagada / Preparando",
   "Pedido aceptado",
   "Pedido listo para delivery",
+  "En delivery",
   "Pedido completado",
   "Pedido confirmado",
 ];
-
-const DELIVERY_PROCESSING_WINDOW_MS = 12 * 60 * 60 * 1000;
-const DELIVERY_COMPLETION_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 function getPickupStatusDetail(order: Pick<StoredOrder, "pickupDate" | "pickupTime" | "total">) {
   if (!order.pickupDate || !order.pickupTime) {
@@ -28,8 +28,12 @@ function getPickupStatusDetail(order: Pick<StoredOrder, "pickupDate" | "pickupTi
   return `Su pedido ha sido confirmado, recuerde ir a la direccion indicada en la fecha y hora seleccionadas y llevar la cantidad correspondiente a pagar. Direccion de recogida: ${PICKUP_ADDRESS}. Fecha y hora: ${formatPickupLabel(order.pickupDate, order.pickupTime)}. Total a pagar: ${formatCurrencySrd(order.total)}.`;
 }
 
+const DELIVERY_PROCESSING_WINDOW_MS = 12 * 60 * 60 * 1000;
+const DELIVERY_COMPLETION_WINDOW_MS = 24 * 60 * 60 * 1000;
+
 export function getOrderStatus(
-  order: Pick<StoredOrder, "cancelledAt" | "createdAt" | "deliveryType" | "adminStatus">
+  order: Pick<StoredOrder, "cancelledAt" | "createdAt" | "deliveryType" | "adminStatus">,
+  options?: { autoMode?: boolean }
 ): OrderStatusLabel {
   if (order.cancelledAt) {
     return "Pedido cancelado";
@@ -43,18 +47,14 @@ export function getOrderStatus(
     return "Pedido confirmado para recogida";
   }
 
-  const createdAtDate = new Date(order.createdAt);
-  const elapsedMs = Date.now() - createdAtDate.getTime();
-
-  if (elapsedMs < DELIVERY_PROCESSING_WINDOW_MS) {
-    return "Orden confirmada y procesandose";
+  if (options?.autoMode) {
+    const elapsedMs = Date.now() - new Date(order.createdAt).getTime();
+    if (elapsedMs < DELIVERY_PROCESSING_WINDOW_MS) return "Orden confirmada y procesandose";
+    if (elapsedMs < DELIVERY_COMPLETION_WINDOW_MS) return "Procesandose para delivery";
+    return "Pedido completado";
   }
 
-  if (elapsedMs < DELIVERY_COMPLETION_WINDOW_MS) {
-    return "Procesandose para delivery";
-  }
-
-  return "Pedido completado";
+  return "Pendiente de confirmacion";
 }
 
 export function getOrderStatusDetail(

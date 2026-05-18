@@ -53,9 +53,10 @@ function resolveOrderItems(
 
 function toAdminOrderRecord(
   order: StoredOrder,
-  productsByName: Map<string, Awaited<ReturnType<typeof getAllProducts>>[number]>
+  productsByName: Map<string, Awaited<ReturnType<typeof getAllProducts>>[number]>,
+  autoMode = false
 ): AdminOrderRecord {
-  const status = getOrderStatus(order);
+  const status = getOrderStatus(order, { autoMode });
 
   return {
     ...order,
@@ -77,7 +78,9 @@ export async function getAdminOrders(options?: {
   last4?: string;
   cursor?: string | null;
   limit?: number;
+  autoMode?: boolean;
 }) {
+  const autoMode = options?.autoMode ?? false;
   const [{ orders, hasMore, nextCursor }, products] = await Promise.all([
     loadPaginatedAdminOrdersFromStore({
       status: options?.status,
@@ -86,13 +89,14 @@ export async function getAdminOrders(options?: {
       last4: options?.last4,
       cursor: options?.cursor,
       limit: options?.limit,
+      autoMode,
     }),
     getAllProducts(),
   ]);
 
   const productsByName = buildProductNameMap(products);
   return {
-    orders: orders.map((order) => toAdminOrderRecord(order, productsByName)),
+    orders: orders.map((order) => toAdminOrderRecord(order, productsByName, autoMode)),
     hasMore,
     nextCursor,
   };

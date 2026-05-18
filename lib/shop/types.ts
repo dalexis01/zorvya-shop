@@ -8,9 +8,12 @@ export type PayPalDisplayCurrency = "SRD" | "USD";
 export type OrderStatusLabel = string;
 export type AdminManualOrderStatus =
   | "Pendiente de confirmacion"
+  | "Confirmando stock"
+  | "Preparando pedido"
   | "Pagada / Preparando"
   | "Pedido aceptado"
   | "Pedido listo para delivery"
+  | "En delivery"
   | "Pedido completado"
   | "Pedido confirmado";
 export type OrderCancellationSource = "customer" | "admin";

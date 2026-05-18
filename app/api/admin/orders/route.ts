@@ -31,6 +31,7 @@ export async function GET(request: Request) {
     const cursor = searchParams.get("cursor");
     const limitValue = Number(searchParams.get("limit") ?? "");
     const limit = Number.isFinite(limitValue) && limitValue > 0 ? limitValue : undefined;
+    const autoMode = searchParams.get("autoMode") === "true";
     const result = await getAdminOrders({
       status,
       deliveryType,
@@ -38,6 +39,7 @@ export async function GET(request: Request) {
       last4,
       cursor,
       limit,
+      autoMode,
     });
 
     return NextResponse.json({
