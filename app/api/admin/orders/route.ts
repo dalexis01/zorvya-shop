@@ -32,9 +32,10 @@ export async function GET(request: Request) {
     const limitValue = Number(searchParams.get("limit") ?? "");
     const limit = Number.isFinite(limitValue) && limitValue > 0 ? limitValue : undefined;
     const autoMode = searchParams.get("autoMode") === "true";
+    const noWindow = searchParams.get("noWindow") === "true";
 
-    // Default: last 24 h only. Removed when search is active so older orders are reachable.
-    const windowHours = (search || last4) ? undefined : 24;
+    // Default: last 24 h only. Removed when search is active or user explicitly requests older orders.
+    const windowHours = (search || last4 || noWindow) ? undefined : 24;
 
     const result = await getAdminOrders({
       status,

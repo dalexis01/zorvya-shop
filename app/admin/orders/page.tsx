@@ -53,7 +53,7 @@ function mergeOrders(a: AdminOrderRecord[], b: AdminOrderRecord[]) {
 
 function isIdSearch(q: string) { return /^[A-Z0-9]{1,4}$/i.test(q.trim()); }
 
-function apiUrl(p: { status: StatusFilter; deliveryType: DeliveryFilter; search: string; cursor?: string | null; limit?: number }) {
+function apiUrl(p: { status: StatusFilter; deliveryType: DeliveryFilter; search: string; cursor?: string | null; limit?: number; noWindow?: boolean }) {
   const sp = new URLSearchParams({ status: p.status, deliveryType: p.deliveryType, limit: String(p.limit ?? LIMIT) });
   if (p.cursor) sp.set("cursor", p.cursor);
   const q = p.search.trim();
@@ -66,6 +66,7 @@ function apiUrl(p: { status: StatusFilter; deliveryType: DeliveryFilter; search:
       sp.set("search", q);
     }
   }
+  if (p.noWindow) sp.set("noWindow", "true");
   return `/api/admin/orders?${sp.toString()}`;
 }
 
@@ -841,6 +842,7 @@ export default function AdminOrdersPage() {
   const [sendingBlockId, setSendingBlockId] = useState<string | null>(null);
   const [accountingMap, setAccountingMap] = useState<Map<string, ProductAccountingEntry>>(new Map());
   const [bulkingBlockId, setBulkingBlockId] = useState<string | null>(null);
+  const [noWindow, setNoWindow] = useState(false);
 
   // ── Persistent blocks ────────────────────────────────────────────────────────
   const [persistentBlocks, setPersistentBlocks] = useState<DeliveryBlock[]>([]);
@@ -941,6 +943,7 @@ export default function AdminOrdersPage() {
     setHasMore(false);
     setNextCursor(null);
     setAccountingMap(new Map());
+    // noWindow resets when tab or search changes (only persists within same tab/search context)
 
     async function load() {
       const abort = new AbortController();
@@ -953,6 +956,7 @@ export default function AdminOrdersPage() {
               deliveryType,
               search,
               limit: activeTab === "blocks" ? BLOCKS_LIMIT : LIMIT,
+              noWindow,
             }),
             { cache: "no-store", signal: abort.signal }
           ),
@@ -1012,7 +1016,7 @@ export default function AdminOrdersPage() {
     }
     void load();
     return () => { alive = false; };
-  }, [activeTab, search, refreshKey, status, deliveryType]);
+  }, [activeTab, search, refreshKey, status, deliveryType, noWindow]);
 
   async function loadMore() {
     if (!nextCursor || loading || loadingMore) return;
@@ -1025,6 +1029,7 @@ export default function AdminOrdersPage() {
           search,
           cursor: nextCursor,
           limit: activeTab === "blocks" ? BLOCKS_LIMIT : LIMIT,
+          noWindow,
         }),
         { cache: "no-store" }
       );
@@ -1281,14 +1286,13 @@ export default function AdminOrdersPage() {
         })}
       </div>
 
-      <div className="rounded-xl border border-slate-800 bg-[#050816] px-4 py-2.5 text-xs text-slate-500">
-        {search
-          ? isIdSearch(search)
-            ? <span className="text-cyan-300">Buscando ID <strong>···{search.toUpperCase()}</strong> en todo el historial</span>
-            : <span className="text-cyan-300">Resultados para <strong>&ldquo;{search}&rdquo;</strong> — buscando en todo el historial</span>
-          : <>Mostrando pedidos de las <strong className="text-slate-300">últimas 24 horas</strong> · Usa el buscador para encontrar pedidos anteriores</>
-        }
-      </div>
+      {search && (
+        <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/5 px-4 py-2 text-xs text-cyan-400">
+          {isIdSearch(search)
+            ? <>Buscando ID <strong>···{search.toUpperCase()}</strong> — historial completo</>
+            : <>Resultados para <strong>&ldquo;{search}&rdquo;</strong> — historial completo</>}
+        </div>
+      )}
 
       {/* ── Notice ── */}
       {notice && (
@@ -1369,15 +1373,21 @@ export default function AdminOrdersPage() {
         <OrdersTable orders={orders} {...commonTableProps} />
       )}
 
-      {/* Load more */}
-      {hasMore && (
-        <div className="flex justify-center pt-2">
+      {/* Load more / load older */}
+      <div className="flex justify-center gap-3 pt-2">
+        {hasMore && (
           <button type="button" onClick={() => void loadMore()} disabled={loadingMore}
             className="rounded-xl border border-slate-700 bg-[#050816] px-5 py-2.5 text-sm font-semibold text-slate-300 transition hover:border-cyan-500 hover:text-white disabled:opacity-50">
-            {loadingMore ? "Cargando..." : "Cargar mas"}
+            {loadingMore ? "Cargando..." : "Cargar más"}
           </button>
-        </div>
-      )}
+        )}
+        {!hasMore && !noWindow && !search && activeTab !== "blocks" && activeTab !== "enviadas" && (
+          <button type="button" onClick={() => setNoWindow(true)} disabled={loadingMore}
+            className="rounded-xl border border-slate-700 bg-[#050816] px-5 py-2.5 text-sm font-semibold text-slate-400 transition hover:border-slate-500 hover:text-white disabled:opacity-50">
+            Ver pedidos anteriores
+          </button>
+        )}
+      </div>
 
       {/* Cancel dialog */}
       {cancelTarget && (
