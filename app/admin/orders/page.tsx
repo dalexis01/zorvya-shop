@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
@@ -15,7 +15,7 @@ import type { AdminOrderRecord, AdminOrdersMeta } from "@/lib/shop/admin-types";
 import type { ProductAccountingEntry } from "@/app/api/admin/products/accounting/route";
 import type { DeliveryBlock } from "@/lib/server/admin/delivery-blocks-store";
 
-// â”€â”€â”€ types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── types ────────────────────────────────────────────────────────────────────
 type Tab = "blocks" | "orders" | "pickups" | "cancelled" | "completed";
 type StatusFilter = "all" | "pending" | "completed" | "cancelled";
 type DeliveryFilter = "all" | "delivery" | "pickup";
@@ -34,7 +34,7 @@ const TAB_PARAMS: Record<Tab, { status: StatusFilter; deliveryType: DeliveryFilt
   completed: { status: "completed", deliveryType: "all"      },
 };
 
-// â”€â”€â”€ helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── helpers ──────────────────────────────────────────────────────────────────
 function getInitialStatus(o: AdminOrderRecord) { return o.adminStatus ?? ""; }
 
 function mergeOrders(a: AdminOrderRecord[], b: AdminOrderRecord[]) {
@@ -112,7 +112,7 @@ function countPackages(order: AdminOrderRecord) {
   return Math.max(1, order.items.reduce((sum, item) => sum + item.quantity, 0));
 }
 
-// â”€â”€â”€ shared table shell â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── shared table shell ───────────────────────────────────────────────────────
 function TH({ children, right }: { children: React.ReactNode; right?: boolean }) {
   return (
     <th className={`border-b border-r border-slate-700 bg-[#0a0f1e] px-3 py-2.5 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-300 whitespace-nowrap ${right ? "text-right" : "text-left"}`}>
@@ -144,7 +144,7 @@ function formatDate(iso: string) {
 }
 
 
-// â”€â”€â”€ click-menu (address / phone) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── click-menu (address / phone) ────────────────────────────────────────────
 function ClickMenu({
   open,
   onClose,
@@ -195,7 +195,7 @@ function ClickMenu({
   );
 }
 
-// â”€â”€â”€ order row (used in both the orders/pickups table AND block sub-rows) â”€â”€â”€â”€â”€
+// ─── order row (used in both the orders/pickups table AND block sub-rows) ─────
 function OrderRow({
   order, rowIndex, statusDraft, activeOrderId, pendingAction,
   stopInfo, accountingMap, onDraftChange, onSaveStatus, onOpenCancel,
@@ -226,7 +226,7 @@ function OrderRow({
   return (
     <tr className={`${rowBg} transition-colors hover:bg-[#0c1530]`}>
 
-      {/* â”€â”€ Estado + Fecha + ID + Parada (todo en una casilla) â”€â”€ */}
+      {/* ── Estado + Fecha + ID + Parada (todo en una casilla) ── */}
       <TD cls="w-48">
         <div className="space-y-3">
           {stopInfo ? (
@@ -250,7 +250,7 @@ function OrderRow({
             target="_blank"
             className="block font-mono text-sm font-bold text-cyan-400 hover:text-cyan-200 hover:underline"
           >
-            Â·Â·Â·{order.idTail}
+            ···{order.idTail}
           </Link>
         </div>
       </TD>
@@ -261,7 +261,7 @@ function OrderRow({
         <p className="text-[11px] text-slate-400 mt-0.5">{order.customerPhone}</p>
       </TD>
 
-      {/* DirecciÃ³n â€” clickable â†’ Google Maps / Copiar */}
+      {/* Dirección — clickable → Google Maps / Copiar */}
       <TD cls="min-w-[200px]">
         <div className="relative">
           <button
@@ -270,7 +270,7 @@ function OrderRow({
             className="text-left text-xs leading-snug text-slate-200 hover:text-cyan-300 focus:outline-none"
           >
             {order.customerAddress}
-            <span className="ml-1 text-[9px] text-slate-600">â–¼</span>
+            <span className="ml-1 text-[9px] text-slate-600">▼</span>
           </button>
           <ClickMenu
             open={addrMenuOpen}
@@ -278,13 +278,13 @@ function OrderRow({
             items={[
               {
                 label: "Abrir en Google Maps",
-                icon: "ðŸ“",
+                icon: "📍",
                 href: mapsUrl,
                 onClick: () => {},
               },
               {
                 label: "Copiar direccion",
-                icon: "ðŸ“‹",
+                icon: "📋",
                 onClick: () => navigator.clipboard.writeText(order.customerAddress),
               },
             ]}
@@ -301,7 +301,7 @@ function OrderRow({
             return (
               <div key={i} className="space-y-0.5">
                 <p className="text-xs font-semibold leading-tight text-white">
-                  <span className="font-bold text-cyan-300">{item.quantity}Ã—</span>{" "}
+                  <span className="font-bold text-cyan-300">{item.quantity}×</span>{" "}
                   <Link href={item.href} className="hover:text-cyan-300">{item.name}</Link>
                 </p>
                 {acc ? (
@@ -317,13 +317,13 @@ function OrderRow({
                         {formatCurrencySrd(acc.costPrice)}
                         {item.quantity > 1 && (
                           <span className="text-slate-500 ml-1">
-                            Ã— {item.quantity} ={" "}
+                            × {item.quantity} ={" "}
                             {formatCurrencySrd(acc.costPrice * item.quantity)}
                           </span>
                         )}
                       </p>
                     )}
-                    {/* TelÃ©fono proveedor â€” clic para Copiar / Llamar */}
+                    {/* Teléfono proveedor — clic para Copiar / Llamar */}
                     {phone ? (
                       <div className="relative">
                         <button
@@ -334,7 +334,7 @@ function OrderRow({
                           }}
                           className="text-[10px] font-semibold text-emerald-300 hover:text-emerald-200"
                         >
-                          ðŸ“ž {phone}
+                          📞 {phone}
                         </button>
                         <ClickMenu
                           open={phoneMenu === phone}
@@ -342,12 +342,12 @@ function OrderRow({
                           items={[
                             {
                               label: "Copiar numero",
-                              icon: "ðŸ“‹",
+                              icon: "📋",
                               onClick: () => navigator.clipboard.writeText(phone),
                             },
                             {
                               label: "Llamar",
-                              icon: "ðŸ“ž",
+                              icon: "📞",
                               href: `tel:${phone}`,
                               onClick: () => {},
                             },
@@ -410,7 +410,7 @@ function OrderRow({
               disabled={saving || order.isCancelled || !statusDraft || statusDraft === order.adminStatus}
               className="rounded border border-cyan-500/50 bg-cyan-500/15 px-2 py-1.5 text-[11px] font-bold text-cyan-300 transition hover:bg-cyan-500/25 disabled:cursor-not-allowed disabled:opacity-30"
             >
-              {saving ? "â€¦" : "âœ“"}
+              {saving ? "…" : "✓"}
             </button>
           </div>
 
@@ -422,7 +422,7 @@ function OrderRow({
                 disabled={canceling}
                 className="flex-1 rounded border border-rose-500/40 bg-rose-500/10 px-2 py-1.5 text-[11px] font-semibold text-rose-300 transition hover:bg-rose-500/20 disabled:cursor-not-allowed"
               >
-                {canceling ? "â€¦" : "Cancelar"}
+                {canceling ? "…" : "Cancelar"}
               </button>
             ) : (
               <span className="flex-1 rounded border border-slate-700 px-2 py-1.5 text-center text-[11px] font-medium text-slate-500">
@@ -442,7 +442,7 @@ function OrderRow({
   );
 }
 
-// â”€â”€â”€ orders table (Pedidos / Recogida tabs) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── orders table (Pedidos / Recogida tabs) ───────────────────────────────────
 function OrdersTable({
   orders, statusDrafts, activeOrderId, pendingAction, accountingMap,
   onDraftChange, onSaveStatus, onOpenCancel,
@@ -493,7 +493,7 @@ function OrdersTable({
   );
 }
 
-// â”€â”€â”€ blocks table (Bloques de ordenes tab) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── blocks table (Bloques de ordenes tab) ────────────────────────────────────
 function BlocksTable({
   routeBlocks, nonRouteOrders, statusDrafts, activeOrderId, pendingAction,
   sentBlocks, sendingBlockId, bulkingBlockId, accountingMap,
@@ -570,7 +570,7 @@ function BlocksTable({
                             onClick={() => toggleBlock(block.id)}
                             className="flex h-6 w-6 items-center justify-center rounded border border-slate-600 bg-[#050816] text-xs text-slate-400 hover:border-cyan-500 hover:text-white"
                           >
-                            {isCollapsed ? "+" : "âˆ’"}
+                            {isCollapsed ? "+" : "−"}
                           </button>
 
                           {/* Block label */}
@@ -599,7 +599,7 @@ function BlocksTable({
                           )}
                           {isSent && (
                             <span className="rounded border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-300">
-                              âœ“ Enviado
+                              ✓ Enviado
                             </span>
                           )}
 
@@ -611,7 +611,7 @@ function BlocksTable({
                               onClick={() => void onBulkStatus(block, "Confirmando stock")}
                               className="rounded border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-[11px] font-semibold text-amber-300 transition hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-40"
                             >
-                              ðŸ“‹ Confirmar stock
+                              📋 Confirmar stock
                             </button>
                             <button
                               type="button"
@@ -619,7 +619,7 @@ function BlocksTable({
                               onClick={() => void onBulkStatus(block, "Preparando pedido")}
                               className="rounded border border-violet-500/30 bg-violet-500/10 px-2.5 py-1 text-[11px] font-semibold text-violet-300 transition hover:bg-violet-500/20 disabled:cursor-not-allowed disabled:opacity-40"
                             >
-                              ðŸ“¦ Preparar
+                              📦 Preparar
                             </button>
                             <button
                               type="button"
@@ -627,7 +627,7 @@ function BlocksTable({
                               onClick={() => void onBulkStatus(block, "En delivery")}
                               className="rounded border border-sky-500/30 bg-sky-500/10 px-2.5 py-1 text-[11px] font-semibold text-sky-300 transition hover:bg-sky-500/20 disabled:cursor-not-allowed disabled:opacity-40"
                             >
-                              ðŸšš En delivery
+                              🚚 En delivery
                             </button>
                           </div>
 
@@ -640,7 +640,7 @@ function BlocksTable({
                                 rel="noopener noreferrer"
                                 className="rounded border border-emerald-500/40 bg-emerald-500/10 px-3 py-1 text-[11px] font-semibold text-emerald-300 transition hover:bg-emerald-500/20"
                               >
-                                ðŸ—º Maps
+                                🗺 Maps
                               </a>
                             )}
                             <button
@@ -692,7 +692,7 @@ function BlocksTable({
       {nonRouteOrders.length > 0 && (
         <div>
           <p className="mb-2 px-1 text-[10px] font-semibold uppercase tracking-[0.25em] text-amber-400">
-            âš  Ã“rdenes sin bloque Â· {nonRouteOrders.length} orden{nonRouteOrders.length !== 1 ? "es" : ""} Â· (recogida, ya completadas, o exceden el lÃ­mite de bloques)
+            ⚠ Órdenes sin bloque · {nonRouteOrders.length} orden{nonRouteOrders.length !== 1 ? "es" : ""} · (recogida, ya completadas, o exceden el límite de bloques)
           </p>
           <div className="overflow-x-auto rounded-[1.5rem] border border-slate-700 shadow-[0_16px_60px_rgba(0,0,0,0.4)]">
             <table className="w-full border-collapse">
@@ -736,7 +736,7 @@ function BlocksTable({
   );
 }
 
-// â”€â”€â”€ page â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── page ─────────────────────────────────────────────────────────────────────
 export default function AdminOrdersPage() {
   const [activeTab, setActiveTab] = useState<Tab>("blocks");
   const [orders, setOrders] = useState<AdminOrderRecord[]>([]);
@@ -764,7 +764,7 @@ export default function AdminOrdersPage() {
   const [globalSearch, setGlobalSearch] = useState("");
   const [globalSearchInput, setGlobalSearchInput] = useState("");
 
-  // â”€â”€ Persistent blocks â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Persistent blocks ────────────────────────────────────────────────────────
   const [persistentBlocks, setPersistentBlocks] = useState<DeliveryBlock[]>([]);
   const [persistentBlockOrders, setPersistentBlockOrders] = useState<AdminOrderRecord[]>([]);
   const [persistentBlocksLoading, setPersistentBlocksLoading] = useState(false);
@@ -791,7 +791,7 @@ export default function AdminOrdersPage() {
   async function loadPersistentBlocks() {
     setPersistentBlocksLoading(true);
     try {
-      // Use two proper GET endpoints â€” the HEAD endpoint was broken (HTTP spec strips body).
+      // Use two proper GET endpoints — the HEAD endpoint was broken (HTTP spec strips body).
       const [blocksRes, assignedRes] = await Promise.all([
         fetch("/api/admin/blocks", { cache: "no-store" }),
         fetch("/api/admin/blocks/assigned", { cache: "no-store" }),
@@ -844,7 +844,7 @@ export default function AdminOrdersPage() {
       if (d.success) {
         setAutoMode(next);
         setRefreshKey((k) => k + 1);
-        setNotice({ tone: "success", message: next ? "Modo automÃ¡tico activado." : "Modo automÃ¡tico desactivado. Control manual." });
+        setNotice({ tone: "success", message: next ? "Modo automático activado." : "Modo automático desactivado. Control manual." });
       }
     } finally {
       setAutoModeLoading(false);
@@ -866,7 +866,7 @@ export default function AdminOrdersPage() {
     const fails = results.filter((r) => r.status === "rejected" || (r.status === "fulfilled" && !(r.value as { success?: boolean }).success));
     setBulkingBlockId(null);
     if (fails.length === 0) {
-      setNotice({ tone: "success", message: `${block.label}: ${ids.length} ordenes â†’ "${newStatus}"` });
+      setNotice({ tone: "success", message: `${block.label}: ${ids.length} ordenes → "${newStatus}"` });
     } else {
       setNotice({ tone: "warning", message: `${block.label}: ${fails.length} error(es) al actualizar.` });
     }
@@ -1037,7 +1037,7 @@ export default function AdminOrdersPage() {
     const fails = results.filter((r) => r.status === "rejected" || (r.status === "fulfilled" && !r.value?.success));
     setSendingBlockId(null);
     setSentBlocks((p) => new Set([...p, block.id]));
-    setNotice({ tone: fails.length === 0 ? "success" : "warning", message: fails.length === 0 ? `${block.label} enviado â€” ${ids.length} ordenes listas.` : `${block.label} enviado con ${fails.length} error(es).` });
+    setNotice({ tone: fails.length === 0 ? "success" : "warning", message: fails.length === 0 ? `${block.label} enviado — ${ids.length} ordenes listas.` : `${block.label} enviado con ${fails.length} error(es).` });
     window.dispatchEvent(new Event("admin-orders-updated"));
     setActiveModalBlock(null);
   }
@@ -1104,7 +1104,7 @@ export default function AdminOrdersPage() {
           totalAmount: block.totalAmount,
           deliveryFees: block.totalDeliveryFee,
           areas,
-          routePreview: stops.map((stop) => stop.addressLabel).join(" → "),
+          routePreview: stops.map((stop) => stop.addressLabel).join(" ? "),
           isPartial: blockOrders.length < TARGET_ROUTE_BLOCK_SIZE,
           isSent: block.status === "in_delivery" || block.status === "completed",
         };
@@ -1130,7 +1130,7 @@ export default function AdminOrdersPage() {
   return (
     <div className="space-y-3">
 
-      {/* â”€â”€ Header bar â”€â”€ */}
+      {/* ── Header bar ── */}
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-[1.75rem] border border-slate-800 bg-[#050816] px-5 py-4 shadow-[0_12px_40px_rgba(0,0,0,0.3)]">
         <div className="flex flex-wrap items-center gap-3">
           <h1 className="text-xl font-semibold text-white">Ordenes</h1>
@@ -1157,7 +1157,7 @@ export default function AdminOrdersPage() {
               : "border-slate-700 bg-[#0a1020] text-slate-400 hover:border-slate-500 hover:text-white"
           }`}
         >
-          {autoMode ? "âš¡ Auto: ON" : "âš¡ Auto: OFF"}
+          {autoMode ? "⚡ Auto: ON" : "⚡ Auto: OFF"}
         </button>
 
         {/* Search by ID */}
@@ -1172,21 +1172,21 @@ export default function AdminOrdersPage() {
             className="w-20 bg-transparent text-xs font-medium text-white outline-none placeholder:text-slate-600"
           />
           {last4 && (
-            <button type="button" onClick={() => setLast4("")} className="text-[10px] text-slate-500 hover:text-white">âœ•</button>
+            <button type="button" onClick={() => setLast4("")} className="text-[10px] text-slate-500 hover:text-white">✕</button>
           )}
         </div>
 
-        {/* Global search (name / phone / email â€” searches all tabs) */}
+        {/* Global search (name / phone / email — searches all tabs) */}
         <form
           onSubmit={(e) => { e.preventDefault(); setGlobalSearch(globalSearchInput.trim()); }}
           className={`flex items-center gap-2 rounded-full border px-3 py-1.5 transition ${globalSearch ? "border-cyan-500/50 bg-cyan-500/10" : "border-slate-700 bg-[#0a1020]"}`}
         >
-          <span className="text-[11px] text-slate-500">ðŸ”</span>
+          <span className="text-[11px] text-slate-500">🔍</span>
           <input
             type="text"
             value={globalSearchInput}
             onChange={(e) => { setGlobalSearchInput(e.target.value); if (!e.target.value.trim()) setGlobalSearch(""); }}
-            placeholder="Nombre / telÃ©fono / email"
+            placeholder="Nombre / teléfono / email"
             className="w-40 bg-transparent text-xs font-medium text-white outline-none placeholder:text-slate-600"
           />
           {(globalSearchInput || globalSearch) && (
@@ -1194,12 +1194,12 @@ export default function AdminOrdersPage() {
               type="button"
               onClick={() => { setGlobalSearchInput(""); setGlobalSearch(""); }}
               className="text-[10px] text-slate-500 hover:text-white"
-            >âœ•</button>
+            >✕</button>
           )}
         </form>
       </div>
 
-      {/* â”€â”€ Tabs â”€â”€ */}
+      {/* ── Tabs ── */}
       <div className="flex flex-wrap gap-2">
         {TABS.map((tab) => {
           const isActive = activeTab === tab.id;
@@ -1225,28 +1225,28 @@ export default function AdminOrdersPage() {
         })}
       </div>
 
-      {/* â”€â”€ Global search notice â”€â”€ */}
+      {/* ── Global search notice ── */}
       {globalSearch && (
         <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/10 px-4 py-3 text-sm text-cyan-200">
-          Mostrando resultados globales para <strong>&ldquo;{globalSearch}&rdquo;</strong> â€” buscando en todas las pestaÃ±as.
+          Mostrando resultados globales para <strong>&ldquo;{globalSearch}&rdquo;</strong> — buscando en todas las pestañas.
         </div>
       )}
 
-      {/* â”€â”€ Notice â”€â”€ */}
+      {/* ── Notice ── */}
       {notice && (
         <div className={`rounded-xl border px-4 py-3 text-sm ${noticeClass(notice.tone)}`}>
           {notice.message}
         </div>
       )}
 
-      {/* â”€â”€ Content â”€â”€ */}
+      {/* ── Content ── */}
       {loading ? (
         <div className="rounded-xl border border-slate-800 bg-[#050816] py-16 text-center text-xs uppercase tracking-[0.3em] text-slate-600">
           Cargando...
         </div>
       ) : activeTab === "blocks" ? (
         <>
-          {/* â”€â”€ Blocks header bar â”€â”€ */}
+          {/* ── Blocks header bar ── */}
           <div className="flex flex-wrap items-center gap-3 rounded-xl border border-slate-800 bg-[#050816] px-4 py-2.5 text-xs">
             {orders.length === 0 ? (
               <span className="text-slate-500">No hay pedidos de delivery pendientes.</span>
@@ -1255,11 +1255,11 @@ export default function AdminOrdersPage() {
                 <span className="font-semibold text-slate-300">
                   {orders.length} delivery pendiente{orders.length !== 1 ? "s" : ""}
                 </span>
-                <span className="text-slate-600">Â·</span>
+                <span className="text-slate-600">·</span>
                 <span className="text-cyan-300">
                   <strong>{activePersistentBlocks.length}</strong> bloque{activePersistentBlocks.length !== 1 ? "s" : ""} activo{activePersistentBlocks.length !== 1 ? "s" : ""}
                   </span>
-                <span className="text-slate-600">Â·</span>
+                <span className="text-slate-600">·</span>
                 <span className={ordersWithoutBlock.length > 0 ? "text-amber-300" : "text-emerald-300"}>
                   <strong>{ordersWithoutBlock.length}</strong> sin bloque
                 </span>
@@ -1278,7 +1278,7 @@ export default function AdminOrdersPage() {
                 onClick={() => setRefreshKey((k) => k + 1)}
                 className="rounded-md border border-slate-700 bg-[#0a1020] px-2.5 py-1 text-[10px] font-semibold text-slate-400 hover:border-slate-500 hover:text-white"
               >
-                â†» Actualizar
+                ↻ Actualizar
               </button>
             </div>
           </div>
