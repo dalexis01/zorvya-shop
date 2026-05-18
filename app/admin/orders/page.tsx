@@ -507,12 +507,19 @@ function OrdersTable({
 }
 
 // ─── block profitability ─────────────────────────────────────────────────────
+type SupplierEntry = {
+  name: string;
+  phone: string;
+  cost: number;
+  items: Array<{ productName: string; quantity: number; salePrice: number; costPrice: number }>;
+};
+
 function computeBlockProfit(
   block: AdminOrderRouteBlock,
   accountingMap: Map<string, ProductAccountingEntry>
 ) {
   let totalCost = 0;
-  const supplierMap = new Map<string, { name: string; phone: string; cost: number }>();
+  const supplierMap = new Map<string, SupplierEntry>();
 
   for (const stop of block.stops) {
     for (const item of stop.order.items) {
@@ -521,8 +528,9 @@ function computeBlockProfit(
         const cost = acc.costPrice * item.quantity;
         totalCost += cost;
         const key = acc.supplier || "Sin proveedor";
-        const prev = supplierMap.get(key) ?? { name: key, phone: acc.supplierPhone ?? "", cost: 0 };
+        const prev = supplierMap.get(key) ?? { name: key, phone: acc.supplierPhone ?? "", cost: 0, items: [] };
         prev.cost += cost;
+        prev.items.push({ productName: item.name, quantity: item.quantity, salePrice: item.price, costPrice: acc.costPrice });
         supplierMap.set(key, prev);
       }
     }
@@ -559,6 +567,7 @@ function BlocksTable({
   onOpenCancel: (o: AdminOrderRecord) => void;
 }) {
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set(routeBlocks.map((b) => b.id)));
+  const [supplierPanel, setSupplierPanel] = useState<string | null>(null);
 
   function toggleBlock(id: string) {
     setCollapsed((prev) => {
@@ -617,9 +626,9 @@ function BlocksTable({
                             {isCollapsed ? "+" : "−"}
                           </button>
 
-                          {/* Block ID */}
+                          {/* Block ID — last 4 chars only */}
                           <span className="rounded border border-slate-600 bg-[#050816] px-2 py-0.5 font-mono text-[10px] font-bold text-slate-300">
-                            {block.id}
+                            {block.id.slice(-4).toUpperCase()}
                           </span>
 
                           {/* Block label */}
@@ -638,14 +647,14 @@ function BlocksTable({
                           </div>
 
                           {/* Badges */}
-                          {block.isPartial && (
+                          {block.isPartial && !isSent && (
                             <span className="rounded border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold text-amber-300">
                               Parcial
                             </span>
                           )}
                           {isSent && (
-                            <span className="rounded border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-300">
-                              ✓ Enviado
+                            <span className="rounded border border-emerald-400/60 bg-emerald-500/20 px-3 py-0.5 text-[11px] font-bold text-emerald-300">
+                              ✓ ENVIADO
                             </span>
                           )}
 
@@ -680,31 +689,55 @@ function BlocksTable({
                         </div>
 
                         {/* ── Row 2: Contabilidad del bloque ── */}
-                        <div className="mt-2 flex flex-wrap items-center gap-x-5 gap-y-1.5 border-t border-slate-700/40 pt-2 text-xs">
+                        <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-slate-700/40 pt-2 text-xs">
                           <span className="text-slate-500">Cobro:</span>
                           <span className="font-mono font-bold text-cyan-300">{formatCurrencySrd(block.totalAmount)}</span>
-                          <span className="text-slate-600">·</span>
-                          <span className="text-slate-500">Costo prov.:</span>
-                          <span className="font-mono font-bold text-amber-300">{formatCurrencySrd(profit.cost)}</span>
                           <span className="text-slate-600">·</span>
                           <span className="text-slate-500">Ganancia:</span>
                           <span className={`font-mono font-bold ${profit.profit >= 0 ? "text-emerald-300" : "text-rose-400"}`}>
                             {formatCurrencySrd(profit.profit)}
                           </span>
-                          {profit.suppliers.length > 0 && (
+                          {profit.cost > 0 && (
                             <>
-                              <span className="text-slate-600">|</span>
-                              <span className="text-slate-500">Pagar a:</span>
-                              {profit.suppliers.map((s) => (
-                                <span key={s.name} className="text-slate-300">
-                                  <strong className="text-amber-200">{s.name}</strong>
-                                  <span className="font-mono text-amber-300"> {formatCurrencySrd(s.cost)}</span>
-                                  {s.phone && <span className="ml-1 text-slate-500">({s.phone})</span>}
-                                </span>
-                              ))}
+                              <span className="text-slate-600">·</span>
+                              <button
+                                type="button"
+                                onClick={() => setSupplierPanel((p) => (p === block.id ? null : block.id))}
+                                className="flex items-center gap-1.5 rounded border border-amber-500/30 bg-amber-500/10 px-2.5 py-0.5 font-semibold text-amber-300 transition hover:bg-amber-500/20"
+                              >
+                                Pago a proveedores: <span className="font-mono">{formatCurrencySrd(profit.cost)}</span>
+                                <span className="text-[9px]">{supplierPanel === block.id ? "▲" : "▼"}</span>
+                              </button>
                             </>
                           )}
                         </div>
+
+                        {/* ── Supplier breakdown panel ── */}
+                        {supplierPanel === block.id && profit.suppliers.length > 0 && (
+                          <div className="mt-2 space-y-2 rounded-xl border border-amber-500/20 bg-[#0a0e1c] p-3">
+                            {profit.suppliers.map((s) => (
+                              <div key={s.name}>
+                                <div className="flex items-center gap-2">
+                                  <span className="font-semibold text-amber-200 text-xs">{s.name}</span>
+                                  {s.phone && <span className="text-[10px] text-slate-500">{s.phone}</span>}
+                                  <span className="ml-auto font-mono text-xs font-bold text-amber-300">{formatCurrencySrd(s.cost)}</span>
+                                </div>
+                                <div className="mt-1 space-y-0.5 border-l border-amber-500/20 pl-3">
+                                  {s.items.map((item, ii) => (
+                                    <div key={ii} className="flex items-center gap-2 text-[10px] text-slate-400">
+                                      <span className="font-semibold text-slate-300">{item.quantity}× {item.productName}</span>
+                                      <span className="text-slate-600">—</span>
+                                      <span>Costo: <strong className="font-mono text-rose-300">{formatCurrencySrd(item.costPrice)}</strong></span>
+                                      <span className="text-slate-600">·</span>
+                                      <span>Venta: <strong className="font-mono text-emerald-300">{formatCurrencySrd(item.salePrice)}</strong></span>
+                                      <span className="ml-auto font-mono font-bold text-amber-200">{formatCurrencySrd(item.costPrice * item.quantity)}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </td>
                     </tr>
 

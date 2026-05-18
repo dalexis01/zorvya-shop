@@ -196,13 +196,13 @@ export async function POST(_req: Request, ctx: RouteContext) {
 
     await reorderBlockOrders(id, optimizedOrders.map((order) => order.id));
 
+    // Delivery route only — store → stops (no return leg)
     const waypoints: [number, number][] = [
       [storeCoords.latitude, storeCoords.longitude],
       ...optimizedOrders.map((order) => {
         const coords = coordsByOrderId.get(order.id)!;
         return [coords.latitude, coords.longitude] as [number, number];
       }),
-      [storeCoords.latitude, storeCoords.longitude],
     ];
 
     const coords = waypoints.map(([lat, lng]) => `${lng},${lat}`).join(";");
@@ -243,7 +243,7 @@ export async function POST(_req: Request, ctx: RouteContext) {
       legs: legData,
     });
 
-    const addresses = [STORE_ADDRESS, ...optimizedOrders.map((order) => order.customerAddress), STORE_ADDRESS];
+    const addresses = [STORE_ADDRESS, ...optimizedOrders.map((order) => order.customerAddress)];
     const gmapsUrl = buildGoogleMapsUrl(addresses);
 
     return NextResponse.json({

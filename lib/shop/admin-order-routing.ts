@@ -236,8 +236,6 @@ function buildRouteBlock(orders: AdminOrderRecord[], blockIndex: number): AdminO
     };
   });
 
-  const estimatedReturnKm =
-    orders.length > 0 ? estimateLegDistance(orders[orders.length - 1].customerAddress, STORE_ADDRESS) : 0;
   const areas = Array.from(new Set(stops.map((stop) => stop.areaLabel).filter(Boolean)));
   const drivingMinutes = cumulativeKm > 0 ? (cumulativeKm / AVERAGE_SPEED_KMH) * 60 : 0;
   const estimatedTimeMinutes = Math.round(drivingMinutes + stops.length * SERVICE_MINUTES_PER_STOP);
@@ -251,8 +249,8 @@ function buildRouteBlock(orders: AdminOrderRecord[], blockIndex: number): AdminO
     packagesCount: stops.reduce((sum, stop) => sum + stop.packages, 0),
     itemsCount: orders.reduce((sum, order) => sum + countItems(order), 0),
     estimatedDriveKm: Number(cumulativeKm.toFixed(1)),
-    estimatedReturnKm: Number(estimatedReturnKm.toFixed(1)),
-    estimatedTotalKm: Number((cumulativeKm + estimatedReturnKm).toFixed(1)),
+    estimatedReturnKm: 0,
+    estimatedTotalKm: Number(cumulativeKm.toFixed(1)), // delivery only, no return km
     estimatedTimeMinutes,
     totalAmount: Number(orders.reduce((sum, order) => sum + order.total, 0).toFixed(2)),
     deliveryFees: Number(orders.reduce((sum, order) => sum + order.deliveryFee, 0).toFixed(2)),
