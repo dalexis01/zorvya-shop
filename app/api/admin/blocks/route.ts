@@ -3,13 +3,12 @@ import { NextResponse } from "next/server";
 import {
   createDeliveryBlock,
   listDeliveryBlocks,
+  MAX_ORDERS_PER_BLOCK,
 } from "@/lib/server/admin/delivery-blocks-store";
 import { getAdminOrdersByIds } from "@/lib/server/admin/orders";
 import { requireAdminRequestUser } from "@/lib/server/admin/request-auth";
 
 export const dynamic = "force-dynamic";
-
-export const MAX_ORDERS_PER_BLOCK = 5;
 
 export async function GET() {
   const auth = await requireAdminRequestUser();
@@ -63,6 +62,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ success: true, block }, { status: 201 });
   } catch (err) {
     console.error("[blocks] POST error:", err);
+    if (err instanceof Error && err.message.startsWith("BLOCK_LIMIT_EXCEEDED:")) {
+      return NextResponse.json(
+        { success: false, error: `Un bloque puede tener maximo ${MAX_ORDERS_PER_BLOCK} pedidos.` },
+        { status: 400 }
+      );
+    }
     return NextResponse.json({ success: false, error: "No se pudo crear el bloque." }, { status: 500 });
   }
 }

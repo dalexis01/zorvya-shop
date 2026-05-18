@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import {
   addOrderToBlock,
   getDeliveryBlockById,
+  MAX_ORDERS_PER_BLOCK,
 } from "@/lib/server/admin/delivery-blocks-store";
 import { requireAdminRequestUser } from "@/lib/server/admin/request-auth";
 
@@ -31,6 +32,12 @@ export async function POST(request: Request, ctx: RouteContext) {
     return NextResponse.json({ success: true, block: updated });
   } catch (err) {
     console.error("[blocks/orders] POST error:", err);
+    if (err instanceof Error && err.message.startsWith("BLOCK_LIMIT_EXCEEDED:")) {
+      return NextResponse.json(
+        { success: false, error: `Este bloque ya tiene ${MAX_ORDERS_PER_BLOCK} pedidos. Crea otro bloque para seguir.` },
+        { status: 400 }
+      );
+    }
     return NextResponse.json({ success: false, error: "No se pudo agregar la orden." }, { status: 500 });
   }
 }

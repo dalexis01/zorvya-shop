@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 
-import { Pool } from "pg";
+import { Pool, type PoolClient } from "pg";
 
 const BLOCKS_SCHEMA_FILE = path.join(
   process.cwd(),
@@ -15,6 +15,8 @@ const BLOCKS_SCHEMA_FILE = path.join(
 
 let blocksPoolInstance: Pool | null = null;
 let blocksSchemaReadyPromise: Promise<void> | null = null;
+
+export const MAX_ORDERS_PER_BLOCK = 5;
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -126,7 +128,59 @@ export async function listDeliveryBlocks(): Promise<DeliveryBlock[]> {
   const res = await pool.query<Record<string, unknown>>(
     `SELECT * FROM delivery_blocks ORDER BY created_at DESC LIMIT 100`
   );
-  return res.rows.map(toBlock);
+  const blocks = res.rows.map(toBlock);
+
+  if (blocks.length === 0) {
+    return blocks;
+  }
+
+  const slotsRes = await pool.query<Record<string, unknown>>(
+    `SELECT * FROM delivery_block_orders
+     WHERE block_id = ANY($1::text[])
+     ORDER BY block_id ASC, position ASC`,
+    [blocks.map((block) => block.id)]
+  );
+
+  const slotsByBlock = new Map<string, DeliveryBlockOrderSlot[]>();
+  for (const row of slotsRes.rows) {
+    const slot = toSlot(row);
+    const current = slotsByBlock.get(slot.blockId) ?? [];
+    current.push(slot);
+    slotsByBlock.set(slot.blockId, current);
+  }
+
+  for (const block of blocks) {
+    block.orders = slotsByBlock.get(block.id) ?? [];
+  }
+
+  return blocks;
+}
+
+async function recalculateBlockTotals(client: PoolClient, blockId: string, updatedAtIso: string) {
+  const totalsRes = await client.query<{ total_amount: string | number | null; total_delivery_fee: string | number | null }>(
+    `SELECT
+       COALESCE(SUM(o.total), 0) AS total_amount,
+       COALESCE(SUM(o.delivery_fee), 0) AS total_delivery_fee
+     FROM delivery_block_orders dbo
+     JOIN orders o ON o.id = dbo.order_id
+     WHERE dbo.block_id = $1`,
+    [blockId]
+  );
+
+  const totals = totalsRes.rows[0];
+  await client.query(
+    `UPDATE delivery_blocks
+     SET total_amount = $1,
+         total_delivery_fee = $2,
+         updated_at = $3::timestamptz
+     WHERE id = $4`,
+    [
+      Number(totals?.total_amount ?? 0),
+      Number(totals?.total_delivery_fee ?? 0),
+      updatedAtIso,
+      blockId,
+    ]
+  );
 }
 
 export async function getDeliveryBlockById(id: string): Promise<DeliveryBlock | null> {
@@ -160,6 +214,11 @@ export async function createDeliveryBlock(input: {
   const pool = await getBlocksPool();
   const id = `BLK-${randomUUID().slice(0, 8).toUpperCase()}`;
   const now = new Date().toISOString();
+  const uniqueOrderIds = Array.from(new Set(input.orderIds.filter(Boolean)));
+
+  if (uniqueOrderIds.length > MAX_ORDERS_PER_BLOCK) {
+    throw new Error(`BLOCK_LIMIT_EXCEEDED:${MAX_ORDERS_PER_BLOCK}`);
+  }
 
   const client = await pool.connect();
   try {
@@ -171,14 +230,16 @@ export async function createDeliveryBlock(input: {
       [id, input.name.trim(), input.totalAmount ?? 0, input.totalDeliveryFee ?? 0, now, input.createdBy ?? "admin"]
     );
 
-    for (let i = 0; i < input.orderIds.length; i++) {
+    for (let i = 0; i < uniqueOrderIds.length; i++) {
       await client.query(
         `INSERT INTO delivery_block_orders (block_id, order_id, position, created_at)
          VALUES ($1, $2, $3, $4::timestamptz)
          ON CONFLICT (order_id) DO UPDATE SET block_id = $1, position = $3`,
-        [id, input.orderIds[i], i, now]
+        [id, uniqueOrderIds[i], i, now]
       );
     }
+
+    await recalculateBlockTotals(client, id, now);
 
     await client.query("COMMIT");
   } catch (err) {
@@ -240,48 +301,90 @@ export async function deleteDeliveryBlock(id: string): Promise<void> {
 export async function addOrderToBlock(blockId: string, orderId: string): Promise<void> {
   const pool = await getBlocksPool();
   const now = new Date().toISOString();
+  const client = await pool.connect();
 
-  const posRes = await pool.query<{ max: number | null }>(
-    `SELECT MAX(position) AS max FROM delivery_block_orders WHERE block_id = $1`,
-    [blockId]
-  );
-  const nextPos = (posRes.rows[0]?.max ?? -1) + 1;
+  try {
+    await client.query("BEGIN");
 
-  await pool.query(
-    `INSERT INTO delivery_block_orders (block_id, order_id, position, created_at)
-     VALUES ($1, $2, $3, $4::timestamptz)
-     ON CONFLICT (order_id) DO UPDATE SET block_id = $1, position = $3`,
-    [blockId, orderId, nextPos, now]
-  );
+    const [countRes, currentRes] = await Promise.all([
+      client.query<{ total: number }>(
+        `SELECT COUNT(*)::int AS total FROM delivery_block_orders WHERE block_id = $1`,
+        [blockId]
+      ),
+      client.query<{ block_id: string }>(
+        `SELECT block_id FROM delivery_block_orders WHERE order_id = $1 LIMIT 1`,
+        [orderId]
+      ),
+    ]);
 
-  await pool.query(
-    `UPDATE delivery_blocks SET updated_at = $1::timestamptz WHERE id = $2`,
-    [now, blockId]
-  );
+    const currentBlockId = currentRes.rows[0]?.block_id ?? null;
+    if (currentBlockId === blockId) {
+      await client.query("COMMIT");
+      return;
+    }
+
+    const currentCount = Number(countRes.rows[0]?.total ?? 0);
+    if (currentCount >= MAX_ORDERS_PER_BLOCK) {
+      throw new Error(`BLOCK_LIMIT_EXCEEDED:${MAX_ORDERS_PER_BLOCK}`);
+    }
+
+    const posRes = await client.query<{ max: number | null }>(
+      `SELECT MAX(position) AS max FROM delivery_block_orders WHERE block_id = $1`,
+      [blockId]
+    );
+    const nextPos = (posRes.rows[0]?.max ?? -1) + 1;
+
+    await client.query(
+      `INSERT INTO delivery_block_orders (block_id, order_id, position, created_at)
+       VALUES ($1, $2, $3, $4::timestamptz)
+       ON CONFLICT (order_id) DO UPDATE SET block_id = $1, position = $3`,
+      [blockId, orderId, nextPos, now]
+    );
+
+    await recalculateBlockTotals(client, blockId, now);
+    if (currentBlockId && currentBlockId !== blockId) {
+      await recalculateBlockTotals(client, currentBlockId, now);
+    }
+
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 export async function removeOrderFromBlock(blockId: string, orderId: string): Promise<void> {
   const pool = await getBlocksPool();
   const now = new Date().toISOString();
+  const client = await pool.connect();
 
-  await pool.query(
-    `DELETE FROM delivery_block_orders WHERE block_id = $1 AND order_id = $2`,
-    [blockId, orderId]
-  );
+  try {
+    await client.query("BEGIN");
 
-  // Reorder remaining slots
-  await pool.query(
-    `UPDATE delivery_block_orders SET position = sub.new_pos
-     FROM (SELECT order_id, ROW_NUMBER() OVER (ORDER BY position ASC) - 1 AS new_pos
-           FROM delivery_block_orders WHERE block_id = $1) AS sub
-     WHERE delivery_block_orders.order_id = sub.order_id AND delivery_block_orders.block_id = $1`,
-    [blockId]
-  );
+    await client.query(
+      `DELETE FROM delivery_block_orders WHERE block_id = $1 AND order_id = $2`,
+      [blockId, orderId]
+    );
 
-  await pool.query(
-    `UPDATE delivery_blocks SET updated_at = $1::timestamptz WHERE id = $2`,
-    [now, blockId]
-  );
+    await client.query(
+      `UPDATE delivery_block_orders SET position = sub.new_pos
+       FROM (SELECT order_id, ROW_NUMBER() OVER (ORDER BY position ASC) - 1 AS new_pos
+             FROM delivery_block_orders WHERE block_id = $1) AS sub
+       WHERE delivery_block_orders.order_id = sub.order_id AND delivery_block_orders.block_id = $1`,
+      [blockId]
+    );
+
+    await recalculateBlockTotals(client, blockId, now);
+
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 export async function reorderBlockOrders(blockId: string, orderedIds: string[]): Promise<void> {

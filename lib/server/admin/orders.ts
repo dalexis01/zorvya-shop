@@ -1,6 +1,5 @@
 import "server-only";
 
-import { getProductsForOrderLookup } from "@/lib/server/admin/products";
 import { getAllOrders, getOrderById, getOrdersByIds } from "@/lib/server/orders";
 import {
   loadAdminOrdersMetaFromStore,
@@ -18,36 +17,26 @@ import type {
 } from "@/lib/shop/admin-types";
 import type { DeliveryType, StoredOrder } from "@/lib/shop/types";
 
-function normalizeText(value: string) {
-  return value.trim().toLowerCase();
-}
-
 function getOrderIdTail(orderId: string) {
   return orderId.slice(-4).toUpperCase();
 }
 
-type ProductLookup = { id: string; name: string };
-
-function buildProductNameMap(products: ProductLookup[]) {
-  const map = new Map<string, ProductLookup>();
-  for (const product of products) {
-    map.set(normalizeText(product.name), product);
-  }
-  return map;
-}
-
 function resolveOrderItems(
-  order: StoredOrder,
-  productsByName: Map<string, ProductLookup>
+  order: StoredOrder
 ) {
   return order.items.map<AdminOrderItemRecord>((item, index) => {
-    const matchedProduct = productsByName.get(normalizeText(item.name));
+    const linkedAdminProductId =
+      item.productId !== undefined &&
+      item.productId !== null &&
+      String(item.productId).trim().length > 0
+        ? String(item.productId)
+        : null;
 
     return {
       ...item,
-      linkedAdminProductId: matchedProduct?.id ?? null,
-      href: matchedProduct
-        ? `/admin/products/${matchedProduct.id}`
+      linkedAdminProductId,
+      href: linkedAdminProductId
+        ? `/admin/products/${linkedAdminProductId}`
         : `/admin/orders/${order.id}#item-${index}`,
     };
   });
@@ -55,14 +44,13 @@ function resolveOrderItems(
 
 function toAdminOrderRecord(
   order: StoredOrder,
-  productsByName: Map<string, ProductLookup>,
   autoMode = false
 ): AdminOrderRecord {
   const status = getOrderStatus(order, { autoMode });
 
   return {
     ...order,
-    items: resolveOrderItems(order, productsByName),
+    items: resolveOrderItems(order),
     status,
     statusDetail: getOrderStatusDetail(order),
     isPending: !order.cancelledAt && !isOrderCompletedStatus(status),
@@ -83,44 +71,35 @@ export async function getAdminOrders(options?: {
   autoMode?: boolean;
 }) {
   const autoMode = options?.autoMode ?? false;
-  const [{ orders, hasMore, nextCursor }, products] = await Promise.all([
-    loadPaginatedAdminOrdersFromStore({
-      status: options?.status,
-      deliveryType: options?.deliveryType,
-      search: options?.search,
-      last4: options?.last4,
-      cursor: options?.cursor,
-      limit: options?.limit,
-      autoMode,
-    }),
-    getProductsForOrderLookup(),
-  ]);
-
-  const productsByName = buildProductNameMap(products);
+  const { orders, hasMore, nextCursor } = await loadPaginatedAdminOrdersFromStore({
+    status: options?.status,
+    deliveryType: options?.deliveryType,
+    search: options?.search,
+    last4: options?.last4,
+    cursor: options?.cursor,
+    limit: options?.limit,
+    autoMode,
+  });
   return {
-    orders: orders.map((order) => toAdminOrderRecord(order, productsByName, autoMode)),
+    orders: orders.map((order) => toAdminOrderRecord(order, autoMode)),
     hasMore,
     nextCursor,
   };
 }
 
 export async function getAllAdminOrders(options?: { windowDays?: number }) {
-  const [orders, products] = await Promise.all([
-    getAllOrders(options),
-    getProductsForOrderLookup(),
-  ]);
-  const productsByName = buildProductNameMap(products);
-  return orders.map((order) => toAdminOrderRecord(order, productsByName));
+  const orders = await getAllOrders(options);
+  return orders.map((order) => toAdminOrderRecord(order));
 }
 
 export async function getAdminOrderById(orderId: string) {
-  const [order, products] = await Promise.all([getOrderById(orderId), getProductsForOrderLookup()]);
+  const order = await getOrderById(orderId);
 
   if (!order) {
     return null;
   }
 
-  return toAdminOrderRecord(order, buildProductNameMap(products));
+  return toAdminOrderRecord(order);
 }
 
 export async function getAdminOrdersMeta(): Promise<AdminOrdersMeta> {
@@ -131,10 +110,6 @@ export async function getAdminOrdersMeta(): Promise<AdminOrdersMeta> {
 // Used by block creation and autoroute to get accurate data regardless of order count.
 export async function getAdminOrdersByIds(ids: string[]): Promise<AdminOrderRecord[]> {
   if (ids.length === 0) return [];
-  const [orders, products] = await Promise.all([
-    getOrdersByIds(ids),
-    getProductsForOrderLookup(),
-  ]);
-  const productsByName = buildProductNameMap(products);
-  return orders.map((order) => toAdminOrderRecord(order, productsByName));
+  const orders = await getOrdersByIds(ids);
+  return orders.map((order) => toAdminOrderRecord(order));
 }

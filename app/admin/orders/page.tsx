@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
@@ -8,13 +8,14 @@ import BlockManagerModal from "@/components/admin/BlockManagerModal";
 import CancelOrderDialog from "@/components/admin/CancelOrderDialog";
 import RouteBlockModal from "@/components/admin/RouteBlockModal";
 import { formatCurrencySrd, formatKilometers } from "@/lib/shop/number-format";
-import { planAdminOrderRoutes, type AdminOrderRouteBlock, type AdminOrderRouteStop } from "@/lib/shop/admin-order-routing";
+import { planAdminOrderRoutes, TARGET_ROUTE_BLOCK_SIZE, type AdminOrderRouteBlock, type AdminOrderRouteStop } from "@/lib/shop/admin-order-routing";
+import { STORE_ADDRESS } from "@/helpers/delivery";
 import { ADMIN_ORDER_STATUS_OPTIONS } from "@/lib/shop/order-status";
 import type { AdminOrderRecord, AdminOrdersMeta } from "@/lib/shop/admin-types";
 import type { ProductAccountingEntry } from "@/app/api/admin/products/accounting/route";
 import type { DeliveryBlock } from "@/lib/server/admin/delivery-blocks-store";
 
-// ─── types ────────────────────────────────────────────────────────────────────
+// â”€â”€â”€ types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 type Tab = "blocks" | "orders" | "pickups" | "cancelled" | "completed";
 type StatusFilter = "all" | "pending" | "completed" | "cancelled";
 type DeliveryFilter = "all" | "delivery" | "pickup";
@@ -32,7 +33,7 @@ const TAB_PARAMS: Record<Tab, { status: StatusFilter; deliveryType: DeliveryFilt
   completed: { status: "completed", deliveryType: "all"      },
 };
 
-// ─── helpers ──────────────────────────────────────────────────────────────────
+// â”€â”€â”€ helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function getInitialStatus(o: AdminOrderRecord) { return o.adminStatus ?? ""; }
 
 function mergeOrders(a: AdminOrderRecord[], b: AdminOrderRecord[]) {
@@ -67,13 +68,24 @@ function statusBadge(o: AdminOrderRecord) {
   return { text: o.status, cls: "bg-slate-500/20 text-slate-300 border-slate-500/30" };
 }
 
+// Builds a Google Maps directions URL from a list of stops (no API key needed).
+function buildMapsUrl(stops: string[]): string {
+  if (stops.length < 2) return "";
+  const all = [STORE_ADDRESS, ...stops, STORE_ADDRESS];
+  const origin = encodeURIComponent(all[0]);
+  const destination = encodeURIComponent(all[all.length - 1]);
+  const waypoints = all.slice(1, -1).map(encodeURIComponent).join("|");
+  const base = `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}&travelmode=driving`;
+  return waypoints ? `${base}&waypoints=${waypoints}` : base;
+}
+
 function formatTime(m: number) {
   if (m < 60) return `~${m}m`;
   const h = Math.floor(m / 60); const r = m % 60;
   return r > 0 ? `~${h}h${r}m` : `~${h}h`;
 }
 
-// ─── shared table shell ───────────────────────────────────────────────────────
+// â”€â”€â”€ shared table shell â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function TH({ children, right }: { children: React.ReactNode; right?: boolean }) {
   return (
     <th className={`border-b border-r border-slate-700 bg-[#0a0f1e] px-3 py-2.5 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-300 whitespace-nowrap ${right ? "text-right" : "text-left"}`}>
@@ -105,7 +117,7 @@ function formatDate(iso: string) {
 }
 
 
-// ─── click-menu (address / phone) ────────────────────────────────────────────
+// â”€â”€â”€ click-menu (address / phone) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function ClickMenu({
   open,
   onClose,
@@ -156,7 +168,7 @@ function ClickMenu({
   );
 }
 
-// ─── order row (used in both the orders/pickups table AND block sub-rows) ─────
+// â”€â”€â”€ order row (used in both the orders/pickups table AND block sub-rows) â”€â”€â”€â”€â”€
 function OrderRow({
   order, rowIndex, statusDraft, activeOrderId, pendingAction,
   stopInfo, accountingMap, onDraftChange, onSaveStatus, onOpenCancel,
@@ -187,7 +199,7 @@ function OrderRow({
   return (
     <tr className={`${rowBg} transition-colors hover:bg-[#0c1530]`}>
 
-      {/* ── Estado + Fecha + ID + Parada (todo en una casilla) ── */}
+      {/* â”€â”€ Estado + Fecha + ID + Parada (todo en una casilla) â”€â”€ */}
       <TD cls="w-48">
         <div className="space-y-3">
           {stopInfo ? (
@@ -211,7 +223,7 @@ function OrderRow({
             target="_blank"
             className="block font-mono text-sm font-bold text-cyan-400 hover:text-cyan-200 hover:underline"
           >
-            ···{order.idTail}
+            Â·Â·Â·{order.idTail}
           </Link>
         </div>
       </TD>
@@ -222,7 +234,7 @@ function OrderRow({
         <p className="text-[11px] text-slate-400 mt-0.5">{order.customerPhone}</p>
       </TD>
 
-      {/* Dirección — clickable → Google Maps / Copiar */}
+      {/* DirecciÃ³n â€” clickable â†’ Google Maps / Copiar */}
       <TD cls="min-w-[200px]">
         <div className="relative">
           <button
@@ -231,7 +243,7 @@ function OrderRow({
             className="text-left text-xs leading-snug text-slate-200 hover:text-cyan-300 focus:outline-none"
           >
             {order.customerAddress}
-            <span className="ml-1 text-[9px] text-slate-600">▼</span>
+            <span className="ml-1 text-[9px] text-slate-600">â–¼</span>
           </button>
           <ClickMenu
             open={addrMenuOpen}
@@ -239,13 +251,13 @@ function OrderRow({
             items={[
               {
                 label: "Abrir en Google Maps",
-                icon: "📍",
+                icon: "ðŸ“",
                 href: mapsUrl,
                 onClick: () => {},
               },
               {
                 label: "Copiar direccion",
-                icon: "📋",
+                icon: "ðŸ“‹",
                 onClick: () => navigator.clipboard.writeText(order.customerAddress),
               },
             ]}
@@ -262,7 +274,7 @@ function OrderRow({
             return (
               <div key={i} className="space-y-0.5">
                 <p className="text-xs font-semibold leading-tight text-white">
-                  <span className="font-bold text-cyan-300">{item.quantity}×</span>{" "}
+                  <span className="font-bold text-cyan-300">{item.quantity}Ã—</span>{" "}
                   <Link href={item.href} className="hover:text-cyan-300">{item.name}</Link>
                 </p>
                 {acc ? (
@@ -278,13 +290,13 @@ function OrderRow({
                         {formatCurrencySrd(acc.costPrice)}
                         {item.quantity > 1 && (
                           <span className="text-slate-500 ml-1">
-                            × {item.quantity} ={" "}
+                            Ã— {item.quantity} ={" "}
                             {formatCurrencySrd(acc.costPrice * item.quantity)}
                           </span>
                         )}
                       </p>
                     )}
-                    {/* Teléfono proveedor — clic para Copiar / Llamar */}
+                    {/* TelÃ©fono proveedor â€” clic para Copiar / Llamar */}
                     {phone ? (
                       <div className="relative">
                         <button
@@ -295,7 +307,7 @@ function OrderRow({
                           }}
                           className="text-[10px] font-semibold text-emerald-300 hover:text-emerald-200"
                         >
-                          📞 {phone}
+                          ðŸ“ž {phone}
                         </button>
                         <ClickMenu
                           open={phoneMenu === phone}
@@ -303,12 +315,12 @@ function OrderRow({
                           items={[
                             {
                               label: "Copiar numero",
-                              icon: "📋",
+                              icon: "ðŸ“‹",
                               onClick: () => navigator.clipboard.writeText(phone),
                             },
                             {
                               label: "Llamar",
-                              icon: "📞",
+                              icon: "ðŸ“ž",
                               href: `tel:${phone}`,
                               onClick: () => {},
                             },
@@ -371,7 +383,7 @@ function OrderRow({
               disabled={saving || order.isCancelled || !statusDraft || statusDraft === order.adminStatus}
               className="rounded border border-cyan-500/50 bg-cyan-500/15 px-2 py-1.5 text-[11px] font-bold text-cyan-300 transition hover:bg-cyan-500/25 disabled:cursor-not-allowed disabled:opacity-30"
             >
-              {saving ? "…" : "✓"}
+              {saving ? "â€¦" : "âœ“"}
             </button>
           </div>
 
@@ -383,7 +395,7 @@ function OrderRow({
                 disabled={canceling}
                 className="flex-1 rounded border border-rose-500/40 bg-rose-500/10 px-2 py-1.5 text-[11px] font-semibold text-rose-300 transition hover:bg-rose-500/20 disabled:cursor-not-allowed"
               >
-                {canceling ? "…" : "Cancelar"}
+                {canceling ? "â€¦" : "Cancelar"}
               </button>
             ) : (
               <span className="flex-1 rounded border border-slate-700 px-2 py-1.5 text-center text-[11px] font-medium text-slate-500">
@@ -403,7 +415,7 @@ function OrderRow({
   );
 }
 
-// ─── orders table (Pedidos / Recogida tabs) ───────────────────────────────────
+// â”€â”€â”€ orders table (Pedidos / Recogida tabs) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function OrdersTable({
   orders, statusDrafts, activeOrderId, pendingAction, accountingMap,
   onDraftChange, onSaveStatus, onOpenCancel,
@@ -454,7 +466,7 @@ function OrdersTable({
   );
 }
 
-// ─── blocks table (Bloques de ordenes tab) ────────────────────────────────────
+// â”€â”€â”€ blocks table (Bloques de ordenes tab) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function BlocksTable({
   routeBlocks, nonRouteOrders, statusDrafts, activeOrderId, pendingAction,
   sentBlocks, sendingBlockId, bulkingBlockId, accountingMap,
@@ -531,12 +543,15 @@ function BlocksTable({
                             onClick={() => toggleBlock(block.id)}
                             className="flex h-6 w-6 items-center justify-center rounded border border-slate-600 bg-[#050816] text-xs text-slate-400 hover:border-cyan-500 hover:text-white"
                           >
-                            {isCollapsed ? "+" : "−"}
+                            {isCollapsed ? "+" : "âˆ’"}
                           </button>
 
                           {/* Block label */}
                           <span className="text-xs font-bold uppercase tracking-[0.25em] text-cyan-300">
                             {block.label}
+                          </span>
+                          <span className="rounded border border-slate-700 bg-[#050816] px-2 py-0.5 text-[10px] font-semibold text-slate-400">
+                            {block.stopsCount}/{TARGET_ROUTE_BLOCK_SIZE} pedidos
                           </span>
 
                           {/* Metrics */}
@@ -557,7 +572,7 @@ function BlocksTable({
                           )}
                           {isSent && (
                             <span className="rounded border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-300">
-                              ✓ Enviado
+                              âœ“ Enviado
                             </span>
                           )}
 
@@ -569,7 +584,7 @@ function BlocksTable({
                               onClick={() => void onBulkStatus(block, "Confirmando stock")}
                               className="rounded border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-[11px] font-semibold text-amber-300 transition hover:bg-amber-500/20 disabled:cursor-not-allowed disabled:opacity-40"
                             >
-                              📋 Confirmar stock
+                              ðŸ“‹ Confirmar stock
                             </button>
                             <button
                               type="button"
@@ -577,7 +592,7 @@ function BlocksTable({
                               onClick={() => void onBulkStatus(block, "Preparando pedido")}
                               className="rounded border border-violet-500/30 bg-violet-500/10 px-2.5 py-1 text-[11px] font-semibold text-violet-300 transition hover:bg-violet-500/20 disabled:cursor-not-allowed disabled:opacity-40"
                             >
-                              📦 Preparar
+                              ðŸ“¦ Preparar
                             </button>
                             <button
                               type="button"
@@ -585,12 +600,22 @@ function BlocksTable({
                               onClick={() => void onBulkStatus(block, "En delivery")}
                               className="rounded border border-sky-500/30 bg-sky-500/10 px-2.5 py-1 text-[11px] font-semibold text-sky-300 transition hover:bg-sky-500/20 disabled:cursor-not-allowed disabled:opacity-40"
                             >
-                              🚚 En delivery
+                              ðŸšš En delivery
                             </button>
                           </div>
 
                           {/* Actions */}
                           <div className="ml-auto flex gap-2">
+                            {block.stops.length > 0 && (
+                              <a
+                                href={buildMapsUrl(block.stops.map((s) => s.order.customerAddress))}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="rounded border border-emerald-500/40 bg-emerald-500/10 px-3 py-1 text-[11px] font-semibold text-emerald-300 transition hover:bg-emerald-500/20"
+                              >
+                                ðŸ—º Maps
+                              </a>
+                            )}
                             <button
                               type="button"
                               onClick={() => onViewRoute(block)}
@@ -640,7 +665,7 @@ function BlocksTable({
       {nonRouteOrders.length > 0 && (
         <div>
           <p className="mb-2 px-1 text-[10px] font-semibold uppercase tracking-[0.25em] text-amber-400">
-            ⚠ Órdenes sin bloque · {nonRouteOrders.length} orden{nonRouteOrders.length !== 1 ? "es" : ""} · (recogida, ya completadas, o exceden el límite de bloques)
+            âš  Ã“rdenes sin bloque Â· {nonRouteOrders.length} orden{nonRouteOrders.length !== 1 ? "es" : ""} Â· (recogida, ya completadas, o exceden el lÃ­mite de bloques)
           </p>
           <div className="overflow-x-auto rounded-[1.5rem] border border-slate-700 shadow-[0_16px_60px_rgba(0,0,0,0.4)]">
             <table className="w-full border-collapse">
@@ -684,7 +709,7 @@ function BlocksTable({
   );
 }
 
-// ─── page ─────────────────────────────────────────────────────────────────────
+// â”€â”€â”€ page â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export default function AdminOrdersPage() {
   const [activeTab, setActiveTab] = useState<Tab>("blocks");
   const [orders, setOrders] = useState<AdminOrderRecord[]>([]);
@@ -712,7 +737,7 @@ export default function AdminOrdersPage() {
   const [globalSearch, setGlobalSearch] = useState("");
   const [globalSearchInput, setGlobalSearchInput] = useState("");
 
-  // ── Persistent blocks ────────────────────────────────────────────────────────
+  // â”€â”€ Persistent blocks â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const [persistentBlocks, setPersistentBlocks] = useState<DeliveryBlock[]>([]);
   const [persistentBlocksLoading, setPersistentBlocksLoading] = useState(false);
   const [assignedOrderIds, setAssignedOrderIds] = useState<Set<string>>(new Set());
@@ -738,7 +763,7 @@ export default function AdminOrdersPage() {
   async function loadPersistentBlocks() {
     setPersistentBlocksLoading(true);
     try {
-      // Use two proper GET endpoints — the HEAD endpoint was broken (HTTP spec strips body).
+      // Use two proper GET endpoints â€” the HEAD endpoint was broken (HTTP spec strips body).
       const [blocksRes, assignedRes] = await Promise.all([
         fetch("/api/admin/blocks", { cache: "no-store" }),
         fetch("/api/admin/blocks/assigned", { cache: "no-store" }),
@@ -790,7 +815,7 @@ export default function AdminOrdersPage() {
       if (d.success) {
         setAutoMode(next);
         setRefreshKey((k) => k + 1);
-        setNotice({ tone: "success", message: next ? "Modo automático activado." : "Modo automático desactivado. Control manual." });
+        setNotice({ tone: "success", message: next ? "Modo automÃ¡tico activado." : "Modo automÃ¡tico desactivado. Control manual." });
       }
     } finally {
       setAutoModeLoading(false);
@@ -812,7 +837,7 @@ export default function AdminOrdersPage() {
     const fails = results.filter((r) => r.status === "rejected" || (r.status === "fulfilled" && !(r.value as { success?: boolean }).success));
     setBulkingBlockId(null);
     if (fails.length === 0) {
-      setNotice({ tone: "success", message: `${block.label}: ${ids.length} ordenes → "${newStatus}"` });
+      setNotice({ tone: "success", message: `${block.label}: ${ids.length} ordenes â†’ "${newStatus}"` });
     } else {
       setNotice({ tone: "warning", message: `${block.label}: ${fails.length} error(es) al actualizar.` });
     }
@@ -825,19 +850,23 @@ export default function AdminOrdersPage() {
     setOrders([]);
     setHasMore(false);
     setNextCursor(null);
+    setAccountingMap(new Map());
 
     async function load() {
       const abort = new AbortController();
       const timer = setTimeout(() => abort.abort(), 25_000);
       try {
-        const [ordRes, metaRes] = await Promise.all([
+        const requests: Array<Promise<Response>> = [
           fetch(apiUrl({ status, deliveryType, last4, autoMode, globalSearch: globalSearch || undefined }), { cache: "no-store", signal: abort.signal }),
-          fetch("/api/admin/orders/meta", { cache: "no-store", signal: abort.signal }),
-        ]);
-        const [ordData, metaData] = await Promise.all([
-          ordRes.json() as Promise<AdminOrdersResponse>,
-          metaRes.json() as Promise<{ success?: boolean; meta?: AdminOrdersMeta }>,
-        ]);
+        ];
+        if (activeTab !== "blocks") {
+          requests.push(fetch("/api/admin/orders/meta", { cache: "no-store", signal: abort.signal }));
+        }
+        const [ordRes, metaRes] = await Promise.all(requests);
+        const ordData = (await ordRes.json()) as AdminOrdersResponse;
+        const metaData = metaRes
+          ? ((await metaRes.json()) as { success?: boolean; meta?: AdminOrdersMeta })
+          : null;
         if (!alive) return;
         if (!ordData.success) {
           setNotice({ tone: "error", message: "Error al cargar ordenes. Intenta de nuevo." });
@@ -873,7 +902,7 @@ export default function AdminOrdersPage() {
               .catch(() => {/* non-critical */});
           }
         }
-        if (metaData.success) setMeta(metaData.meta ?? null);
+        if (metaData?.success) setMeta(metaData.meta ?? null);
       } catch (err) {
         if (!alive) return;
         const isTimeout = err instanceof DOMException && err.name === "AbortError";
@@ -958,14 +987,27 @@ export default function AdminOrdersPage() {
     const fails = results.filter((r) => r.status === "rejected" || (r.status === "fulfilled" && !r.value?.success));
     setSendingBlockId(null);
     setSentBlocks((p) => new Set([...p, block.id]));
-    setNotice({ tone: fails.length === 0 ? "success" : "warning", message: fails.length === 0 ? `${block.label} enviado — ${ids.length} ordenes listas.` : `${block.label} enviado con ${fails.length} error(es).` });
+    setNotice({ tone: fails.length === 0 ? "success" : "warning", message: fails.length === 0 ? `${block.label} enviado â€” ${ids.length} ordenes listas.` : `${block.label} enviado con ${fails.length} error(es).` });
     window.dispatchEvent(new Event("admin-orders-updated"));
     setActiveModalBlock(null);
   }
 
+  const ordersWithoutBlock = useMemo(
+    () =>
+      activeTab === "blocks"
+        ? orders.filter((order) => !assignedOrderIds.has(order.id))
+        : [],
+    [activeTab, orders, assignedOrderIds]
+  );
+
   const routePlan = useMemo(
-    () => (activeTab === "blocks" ? planAdminOrderRoutes(orders) : null),
-    [activeTab, orders]
+    () => (activeTab === "blocks" ? planAdminOrderRoutes(ordersWithoutBlock) : null),
+    [activeTab, ordersWithoutBlock]
+  );
+
+  const activePersistentBlocks = useMemo(
+    () => persistentBlocks.filter((block) => block.status !== "completed" && block.status !== "cancelled"),
+    [persistentBlocks]
   );
 
   const TABS: Array<{ id: Tab; label: string; accent?: string }> = [
@@ -986,7 +1028,7 @@ export default function AdminOrdersPage() {
   return (
     <div className="space-y-3">
 
-      {/* ── Header bar ── */}
+      {/* â”€â”€ Header bar â”€â”€ */}
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-[1.75rem] border border-slate-800 bg-[#050816] px-5 py-4 shadow-[0_12px_40px_rgba(0,0,0,0.3)]">
         <div className="flex flex-wrap items-center gap-3">
           <h1 className="text-xl font-semibold text-white">Ordenes</h1>
@@ -1013,7 +1055,7 @@ export default function AdminOrdersPage() {
               : "border-slate-700 bg-[#0a1020] text-slate-400 hover:border-slate-500 hover:text-white"
           }`}
         >
-          {autoMode ? "⚡ Auto: ON" : "⚡ Auto: OFF"}
+          {autoMode ? "âš¡ Auto: ON" : "âš¡ Auto: OFF"}
         </button>
 
         {/* Search by ID */}
@@ -1028,21 +1070,21 @@ export default function AdminOrdersPage() {
             className="w-20 bg-transparent text-xs font-medium text-white outline-none placeholder:text-slate-600"
           />
           {last4 && (
-            <button type="button" onClick={() => setLast4("")} className="text-[10px] text-slate-500 hover:text-white">✕</button>
+            <button type="button" onClick={() => setLast4("")} className="text-[10px] text-slate-500 hover:text-white">âœ•</button>
           )}
         </div>
 
-        {/* Global search (name / phone / email — searches all tabs) */}
+        {/* Global search (name / phone / email â€” searches all tabs) */}
         <form
           onSubmit={(e) => { e.preventDefault(); setGlobalSearch(globalSearchInput.trim()); }}
           className={`flex items-center gap-2 rounded-full border px-3 py-1.5 transition ${globalSearch ? "border-cyan-500/50 bg-cyan-500/10" : "border-slate-700 bg-[#0a1020]"}`}
         >
-          <span className="text-[11px] text-slate-500">🔍</span>
+          <span className="text-[11px] text-slate-500">ðŸ”</span>
           <input
             type="text"
             value={globalSearchInput}
             onChange={(e) => { setGlobalSearchInput(e.target.value); if (!e.target.value.trim()) setGlobalSearch(""); }}
-            placeholder="Nombre / teléfono / email"
+            placeholder="Nombre / telÃ©fono / email"
             className="w-40 bg-transparent text-xs font-medium text-white outline-none placeholder:text-slate-600"
           />
           {(globalSearchInput || globalSearch) && (
@@ -1050,12 +1092,12 @@ export default function AdminOrdersPage() {
               type="button"
               onClick={() => { setGlobalSearchInput(""); setGlobalSearch(""); }}
               className="text-[10px] text-slate-500 hover:text-white"
-            >✕</button>
+            >âœ•</button>
           )}
         </form>
       </div>
 
-      {/* ── Tabs ── */}
+      {/* â”€â”€ Tabs â”€â”€ */}
       <div className="flex flex-wrap gap-2">
         {TABS.map((tab) => {
           const isActive = activeTab === tab.id;
@@ -1081,56 +1123,46 @@ export default function AdminOrdersPage() {
         })}
       </div>
 
-      {/* ── Global search notice ── */}
+      {/* â”€â”€ Global search notice â”€â”€ */}
       {globalSearch && (
         <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/10 px-4 py-3 text-sm text-cyan-200">
-          Mostrando resultados globales para <strong>&ldquo;{globalSearch}&rdquo;</strong> — buscando en todas las pestañas.
+          Mostrando resultados globales para <strong>&ldquo;{globalSearch}&rdquo;</strong> â€” buscando en todas las pestaÃ±as.
         </div>
       )}
 
-      {/* ── Notice ── */}
+      {/* â”€â”€ Notice â”€â”€ */}
       {notice && (
         <div className={`rounded-xl border px-4 py-3 text-sm ${noticeClass(notice.tone)}`}>
           {notice.message}
         </div>
       )}
 
-      {/* ── Content ── */}
+      {/* â”€â”€ Content â”€â”€ */}
       {loading ? (
         <div className="rounded-xl border border-slate-800 bg-[#050816] py-16 text-center text-xs uppercase tracking-[0.3em] text-slate-600">
           Cargando...
         </div>
       ) : activeTab === "blocks" ? (
         <>
-          {/* ── Blocks header bar ── */}
+          {/* â”€â”€ Blocks header bar â”€â”€ */}
           <div className="flex flex-wrap items-center gap-3 rounded-xl border border-slate-800 bg-[#050816] px-4 py-2.5 text-xs">
             {orders.length === 0 ? (
               <span className="text-slate-500">No hay pedidos de delivery pendientes.</span>
-            ) : routePlan ? (
+            ) : (
               <>
                 <span className="font-semibold text-slate-300">
                   {orders.length} delivery pendiente{orders.length !== 1 ? "s" : ""}
                 </span>
-                <span className="text-slate-600">·</span>
-                {routePlan.routeBlocks.length > 0 ? (
-                  <span className="text-cyan-300">
-                    <strong>{routePlan.routeOrders.length}</strong> en <strong>{routePlan.routeBlocks.length}</strong> bloque{routePlan.routeBlocks.length !== 1 ? "s" : ""}
+                <span className="text-slate-600">Â·</span>
+                <span className="text-cyan-300">
+                  <strong>{activePersistentBlocks.length}</strong> bloque{activePersistentBlocks.length !== 1 ? "s" : ""} activo{activePersistentBlocks.length !== 1 ? "s" : ""}
                   </span>
-                ) : (
-                  <span className="text-amber-400 font-semibold">
-                    ⚠ 0 bloques — {routePlan.nonRouteOrders.length} pedidos sin asignar
-                  </span>
-                )}
-                {routePlan.nonRouteOrders.length > 0 && routePlan.routeBlocks.length > 0 && (
-                  <>
-                    <span className="text-slate-600">·</span>
-                    <span className="text-amber-300">
-                      <strong>{routePlan.nonRouteOrders.length}</strong> sin bloque
-                    </span>
-                  </>
-                )}
+                <span className="text-slate-600">Â·</span>
+                <span className={ordersWithoutBlock.length > 0 ? "text-amber-300" : "text-emerald-300"}>
+                  <strong>{ordersWithoutBlock.length}</strong> sin bloque
+                </span>
               </>
-            ) : null}
+            )}
             <div className="ml-auto flex gap-2">
               <button
                 type="button"
@@ -1144,25 +1176,51 @@ export default function AdminOrdersPage() {
                 onClick={() => setRefreshKey((k) => k + 1)}
                 className="rounded-md border border-slate-700 bg-[#0a1020] px-2.5 py-1 text-[10px] font-semibold text-slate-400 hover:border-slate-500 hover:text-white"
               >
-                ↻ Actualizar
+                â†» Actualizar
               </button>
             </div>
           </div>
 
-          {orders.length > 0 && routePlan ? (
-            <BlocksTable
-              key={routePlan.routeBlocks.map((block) => block.id).join("|")}
-              routeBlocks={routePlan.routeBlocks}
-              nonRouteOrders={routePlan.nonRouteOrders}
-              sentBlocks={sentBlocks}
-              sendingBlockId={sendingBlockId}
-              bulkingBlockId={bulkingBlockId}
-              onViewRoute={setActiveModalBlock}
-              onSend={handleSendBlock}
-              onBulkStatus={handleBulkBlockStatus}
-              {...commonTableProps}
-            />
-          ) : null}
+          <PersistentBlocksPanel
+            blocks={persistentBlocks}
+            loading={persistentBlocksLoading}
+            onCreateBlock={() => setShowCreateBlock(true)}
+            onManageBlock={(blockId) => void handleOpenBlockManager(blockId)}
+          />
+
+          {ordersWithoutBlock.length > 0 ? (
+            <div className="space-y-3">
+              <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+                Ordenes sin bloque: {ordersWithoutBlock.length}. Todo pedido nuevo queda visible aqui hasta que se asigne a un bloque real.
+              </div>
+
+              {routePlan && routePlan.routeBlocks.length > 0 ? (
+                <BlocksTable
+                  key={routePlan.routeBlocks.map((block) => block.id).join("|")}
+                  routeBlocks={routePlan.routeBlocks}
+                  nonRouteOrders={routePlan.nonRouteOrders}
+                  sentBlocks={sentBlocks}
+                  sendingBlockId={sendingBlockId}
+                  bulkingBlockId={bulkingBlockId}
+                  onViewRoute={setActiveModalBlock}
+                  onSend={handleSendBlock}
+                  onBulkStatus={handleBulkBlockStatus}
+                  {...commonTableProps}
+                />
+              ) : null}
+
+              <div className="space-y-2">
+                <p className="px-1 text-[10px] font-semibold uppercase tracking-[0.25em] text-amber-400">
+                  Ordenes sin bloque listas para asignacion manual
+                </p>
+                <OrdersTable orders={ordersWithoutBlock} {...commonTableProps} />
+              </div>
+            </div>
+          ) : (
+            <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-6 text-center text-sm text-emerald-100">
+              Todas las ordenes pendientes de delivery ya estan dentro de un bloque activo.
+            </div>
+          )}
         </>
       ) : orders.length === 0 ? (
         <div className="rounded-xl border border-slate-800 bg-[#050816] py-16 text-center text-sm text-slate-500">
@@ -1208,7 +1266,7 @@ export default function AdminOrdersPage() {
       {/* Create block modal */}
       {showCreateBlock && (
         <BlockCreateModal
-          availableOrders={orders}
+          availableOrders={activeTab === "blocks" ? ordersWithoutBlock : orders}
           assignedOrderIds={assignedOrderIds}
           onClose={() => setShowCreateBlock(false)}
           onCreate={handleCreateBlock}
@@ -1230,29 +1288,42 @@ export default function AdminOrdersPage() {
           assignedOrderIds={assignedOrderIds}
           onClose={() => { setManagingBlock(null); void loadPersistentBlocks(); }}
           onReorder={async (orderedIds) => {
-            await fetch(`/api/admin/blocks/${managingBlock.id}`, {
+            const response = await fetch(`/api/admin/blocks/${managingBlock.id}`, {
               method: "PUT", headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ orderedIds }),
             });
+            if (!response.ok) {
+              throw new Error("No se pudo guardar el orden del bloque.");
+            }
           }}
           onRemoveOrder={async (orderId) => {
-            await fetch(`/api/admin/blocks/${managingBlock.id}/orders/${orderId}`, { method: "DELETE" });
+            const response = await fetch(`/api/admin/blocks/${managingBlock.id}/orders/${orderId}`, { method: "DELETE" });
+            if (!response.ok) {
+              throw new Error("No se pudo quitar la orden del bloque.");
+            }
             const updated = await fetch(`/api/admin/blocks/${managingBlock.id}`, { cache: "no-store" }).then((r) => r.json()) as { block?: DeliveryBlock };
             if (updated.block) setManagingBlock(updated.block);
           }}
           onAddOrder={async (orderId) => {
-            await fetch(`/api/admin/blocks/${managingBlock.id}/orders`, {
+            const response = await fetch(`/api/admin/blocks/${managingBlock.id}/orders`, {
               method: "POST", headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ orderId }),
             });
+            const payload = (await response.json()) as { success?: boolean; error?: string };
+            if (!response.ok || !payload.success) {
+              throw new Error(payload.error ?? "No se pudo agregar la orden al bloque.");
+            }
             const updated = await fetch(`/api/admin/blocks/${managingBlock.id}`, { cache: "no-store" }).then((r) => r.json()) as { block?: DeliveryBlock };
             if (updated.block) setManagingBlock(updated.block);
           }}
           onUpdateStatus={async (status) => {
-            await fetch(`/api/admin/blocks/${managingBlock.id}`, {
+            const response = await fetch(`/api/admin/blocks/${managingBlock.id}`, {
               method: "PUT", headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ status }),
             });
+            if (!response.ok) {
+              throw new Error("No se pudo actualizar el estado del bloque.");
+            }
             const updated = await fetch(`/api/admin/blocks/${managingBlock.id}`, { cache: "no-store" }).then((r) => r.json()) as { block?: DeliveryBlock };
             if (updated.block) setManagingBlock(updated.block);
           }}
@@ -1284,7 +1355,7 @@ export default function AdminOrdersPage() {
   );
 }
 
-// ─── Persistent blocks panel ──────────────────────────────────────────────────
+// â”€â”€â”€ Persistent blocks panel â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function PersistentBlocksPanel({
   blocks, loading, onCreateBlock, onManageBlock,
 }: {
@@ -1309,7 +1380,7 @@ function PersistentBlocksPanel({
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className="text-xs font-bold uppercase tracking-[0.25em] text-cyan-300">Mis bloques guardados</p>
-          <p className="text-xs text-slate-500 mt-0.5">{activeBlocks.length} activos · {doneBlocks.length} completados</p>
+          <p className="text-xs text-slate-500 mt-0.5">{activeBlocks.length} activos Â· {doneBlocks.length} completados</p>
         </div>
         <button
           type="button"
@@ -1348,15 +1419,21 @@ function PersistentBlocksPanel({
                 </div>
                 <p className="mt-1 font-mono text-xs text-cyan-400">{block.id}</p>
                 <div className="mt-2 flex flex-wrap gap-3 text-xs text-slate-400">
-                  <span><strong className="text-white">{orderCount}</strong> paradas</span>
+                  <span><strong className="text-white">{orderCount}</strong> / {TARGET_ROUTE_BLOCK_SIZE} pedidos</span>
                   {block.routeDistanceKm && (
-                    <span>🛣 <strong className="text-white">{block.routeDistanceKm} km</strong></span>
+                    <span>ðŸ›£ <strong className="text-white">{block.routeDistanceKm} km</strong></span>
                   )}
+                  {block.routeDurationMinutes ? (
+                    <span>â± <strong className="text-white">{formatTime(block.routeDurationMinutes)}</strong></span>
+                  ) : null}
                   {block.totalAmount > 0 && (
-                    <span>💰 <strong className="text-cyan-300">
+                    <span>ðŸ’° <strong className="text-cyan-300">
                       {new Intl.NumberFormat("nl-SR", { minimumFractionDigits: 2 }).format(block.totalAmount)} SRD
                     </strong></span>
                   )}
+                  {block.totalDeliveryFee > 0 ? (
+                    <span>Delivery <strong className="text-emerald-300">{formatCurrencySrd(block.totalDeliveryFee)}</strong></span>
+                  ) : null}
                 </div>
                 <p className="mt-1.5 text-[10px] text-slate-600">
                   {new Date(block.createdAt).toLocaleDateString("es", { day: "2-digit", month: "short", year: "numeric" })}

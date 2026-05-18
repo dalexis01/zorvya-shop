@@ -91,8 +91,8 @@ export default function BlockManagerModal({
     try {
       await onReorder(localOrders.map((o) => o.id));
       setNotice({ tone: "success", msg: "Orden de paradas guardado." });
-    } catch {
-      setNotice({ tone: "error", msg: "No se pudo guardar el orden." });
+    } catch (error) {
+      setNotice({ tone: "error", msg: error instanceof Error ? error.message : "No se pudo guardar el orden." });
     } finally {
       setActionLoading(null);
     }
@@ -110,8 +110,8 @@ export default function BlockManagerModal({
       } else {
         setNotice({ tone: "error", msg: "No se pudo calcular la ruta." });
       }
-    } catch {
-      setNotice({ tone: "error", msg: "Error al calcular la ruta." });
+    } catch (error) {
+      setNotice({ tone: "error", msg: error instanceof Error ? error.message : "Error al calcular la ruta." });
     } finally {
       setRouting(false);
     }
@@ -123,8 +123,8 @@ export default function BlockManagerModal({
       await onRemoveOrder(orderId);
       setLocalOrders((prev) => prev.filter((o) => o.id !== orderId));
       setNotice({ tone: "success", msg: "Orden quitada del bloque." });
-    } catch {
-      setNotice({ tone: "error", msg: "No se pudo quitar la orden." });
+    } catch (error) {
+      setNotice({ tone: "error", msg: error instanceof Error ? error.message : "No se pudo quitar la orden." });
     } finally {
       setActionLoading(null);
     }
@@ -136,8 +136,8 @@ export default function BlockManagerModal({
       await onAddOrder(order.id);
       setLocalOrders((prev) => [...prev, order]);
       setNotice({ tone: "success", msg: `${order.customerName} agregado al bloque.` });
-    } catch {
-      setNotice({ tone: "error", msg: "No se pudo agregar la orden." });
+    } catch (error) {
+      setNotice({ tone: "error", msg: error instanceof Error ? error.message : "No se pudo agregar la orden." });
     } finally {
       setActionLoading(null);
     }
@@ -148,8 +148,8 @@ export default function BlockManagerModal({
     try {
       await onUpdateStatus(status);
       setNotice({ tone: "success", msg: `Bloque marcado como: ${STATUS_COLORS[status]?.label ?? status}` });
-    } catch {
-      setNotice({ tone: "error", msg: "No se pudo actualizar el estado." });
+    } catch (error) {
+      setNotice({ tone: "error", msg: error instanceof Error ? error.message : "No se pudo actualizar el estado." });
     } finally {
       setActionLoading(null);
     }
@@ -160,8 +160,8 @@ export default function BlockManagerModal({
     try {
       await onBulkOrderStatus(status);
       setNotice({ tone: "success", msg: `${localOrders.length} ordenes → "${status}"` });
-    } catch {
-      setNotice({ tone: "error", msg: "No se pudo actualizar las ordenes." });
+    } catch (error) {
+      setNotice({ tone: "error", msg: error instanceof Error ? error.message : "No se pudo actualizar las ordenes." });
     } finally {
       setActionLoading(null);
     }
@@ -172,8 +172,8 @@ export default function BlockManagerModal({
     try {
       await onDelete();
       onClose();
-    } catch {
-      setNotice({ tone: "error", msg: "No se pudo eliminar el bloque." });
+    } catch (error) {
+      setNotice({ tone: "error", msg: error instanceof Error ? error.message : "No se pudo eliminar el bloque." });
       setConfirmDelete(false);
     } finally {
       setActionLoading(null);
