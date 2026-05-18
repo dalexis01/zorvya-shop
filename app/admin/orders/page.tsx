@@ -605,7 +605,7 @@ function BlocksTable({
             <tbody>
               {routeBlocks.map((block, blockIndex) => {
                 const isCollapsed = collapsed.has(block.id);
-                const isSent = sentBlocks.has(block.id);
+                const isSent = sentBlocks.has(block.id) || block.isSent;
                 const sending = sendingBlockId === block.id;
                 const bulking = bulkingBlockId === block.id;
                 const profit = computeBlockProfit(block, accountingMap);
