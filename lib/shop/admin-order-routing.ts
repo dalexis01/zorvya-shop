@@ -5,8 +5,8 @@ export const TARGET_ROUTE_BLOCK_SIZE = 5;
 export const MAX_PACKAGES_PER_BLOCK = 5;
 export const MAX_ROUTE_BLOCKS = 10; // supports up to 50 pending delivery orders
 
-const AVERAGE_SPEED_KMH = 25;
-const SERVICE_MINUTES_PER_STOP = 5;
+export const AVERAGE_SPEED_KMH = 25;
+export const SERVICE_MINUTES_PER_STOP = 5;
 
 export type AdminOrderRouteStop = {
   order: AdminOrderRecord;
@@ -111,7 +111,7 @@ function countItems(order: AdminOrderRecord) {
   return order.items.length;
 }
 
-function estimateLegDistance(fromAddress: string, toAddress: string) {
+export function estimateLegDistance(fromAddress: string, toAddress: string) {
   const normalizedFrom = normalizeText(fromAddress);
   const normalizedTo = normalizeText(toAddress);
   const normalizedStore = normalizeText(STORE_ADDRESS);

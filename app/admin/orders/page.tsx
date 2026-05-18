@@ -8,7 +8,14 @@ import BlockManagerModal from "@/components/admin/BlockManagerModal";
 import CancelOrderDialog from "@/components/admin/CancelOrderDialog";
 import RouteBlockModal from "@/components/admin/RouteBlockModal";
 import { formatCurrencySrd, formatKilometers } from "@/lib/shop/number-format";
-import { TARGET_ROUTE_BLOCK_SIZE, type AdminOrderRouteBlock, type AdminOrderRouteStop } from "@/lib/shop/admin-order-routing";
+import {
+  TARGET_ROUTE_BLOCK_SIZE,
+  AVERAGE_SPEED_KMH,
+  SERVICE_MINUTES_PER_STOP,
+  estimateLegDistance,
+  type AdminOrderRouteBlock,
+  type AdminOrderRouteStop,
+} from "@/lib/shop/admin-order-routing";
 import { STORE_ADDRESS } from "@/helpers/delivery";
 import { ADMIN_ORDER_STATUS_OPTIONS } from "@/lib/shop/order-status";
 import type { AdminOrderRecord, AdminOrdersMeta } from "@/lib/shop/admin-types";
@@ -499,6 +506,36 @@ function OrdersTable({
   );
 }
 
+// ─── block profitability ─────────────────────────────────────────────────────
+function computeBlockProfit(
+  block: AdminOrderRouteBlock,
+  accountingMap: Map<string, ProductAccountingEntry>
+) {
+  let totalCost = 0;
+  const supplierMap = new Map<string, { name: string; phone: string; cost: number }>();
+
+  for (const stop of block.stops) {
+    for (const item of stop.order.items) {
+      const acc = accountingMap.get(String(item.productId ?? ""));
+      if (acc && acc.costPrice > 0) {
+        const cost = acc.costPrice * item.quantity;
+        totalCost += cost;
+        const key = acc.supplier || "Sin proveedor";
+        const prev = supplierMap.get(key) ?? { name: key, phone: acc.supplierPhone ?? "", cost: 0 };
+        prev.cost += cost;
+        supplierMap.set(key, prev);
+      }
+    }
+  }
+
+  return {
+    revenue: block.totalAmount,
+    cost: totalCost,
+    profit: block.totalAmount - totalCost,
+    suppliers: Array.from(supplierMap.values()).sort((a, b) => b.cost - a.cost),
+  };
+}
+
 // ─── blocks table (Bloques de ordenes tab) ────────────────────────────────────
 function BlocksTable({
   routeBlocks, nonRouteOrders, statusDrafts, activeOrderId, pendingAction,
@@ -564,11 +601,14 @@ function BlocksTable({
 
                 const bulking = bulkingBlockId === block.id;
 
+                const profit = computeBlockProfit(block, accountingMap);
+
                 return (
                   <React.Fragment key={block.id}>
                     {/* Block header row */}
                     <tr className="bg-[#0a1428]">
-                      <td colSpan={COLS} className="border-b border-t border-slate-600 px-4 py-2.5">
+                      <td colSpan={COLS} className="border-b border-t border-slate-600 px-4 py-3">
+                        {/* ── Row 1: ID / label / metrics / badges / actions ── */}
                         <div className="flex flex-wrap items-center gap-3">
                           {/* Expand toggle */}
                           <button
@@ -579,6 +619,11 @@ function BlocksTable({
                             {isCollapsed ? "+" : "−"}
                           </button>
 
+                          {/* Block ID */}
+                          <span className="rounded border border-slate-600 bg-[#050816] px-2 py-0.5 font-mono text-[10px] font-bold text-slate-300">
+                            {block.id}
+                          </span>
+
                           {/* Block label */}
                           <span className="text-xs font-bold uppercase tracking-[0.25em] text-cyan-300">
                             {block.label}
@@ -587,14 +632,11 @@ function BlocksTable({
                             {block.stopsCount}/{TARGET_ROUTE_BLOCK_SIZE} pedidos
                           </span>
 
-                          {/* Metrics */}
+                          {/* Route metrics */}
                           <div className="flex flex-wrap gap-3 text-xs text-slate-400">
-                            <span><strong className="text-white">{block.stopsCount}</strong> paradas</span>
-                            <span><strong className="text-white">{block.packagesCount}</strong> paquetes</span>
-                            <span><strong className="text-white">{formatKilometers(block.estimatedTotalKm)}</strong></span>
+                            <span><strong className="text-white">{formatKilometers(block.estimatedTotalKm)}</strong> ruta</span>
                             <span><strong className="text-white">{formatTime(block.estimatedTimeMinutes)}</strong></span>
-                            <span>Cobro <strong className="text-cyan-300">{formatCurrencySrd(block.totalAmount)}</strong></span>
-                            <span>Delivery <strong className="text-emerald-300">{formatCurrencySrd(block.deliveryFees)}</strong></span>
+                            <span><strong className="text-white">{block.packagesCount}</strong> paq.</span>
                           </div>
 
                           {/* Badges */}
@@ -667,6 +709,32 @@ function BlocksTable({
                           </div>
                         </div>
 
+                        {/* ── Row 2: Contabilidad del bloque ── */}
+                        <div className="mt-2 flex flex-wrap items-center gap-x-5 gap-y-1.5 border-t border-slate-700/40 pt-2 text-xs">
+                          <span className="text-slate-500">Cobro:</span>
+                          <span className="font-mono font-bold text-cyan-300">{formatCurrencySrd(block.totalAmount)}</span>
+                          <span className="text-slate-600">·</span>
+                          <span className="text-slate-500">Costo prov.:</span>
+                          <span className="font-mono font-bold text-amber-300">{formatCurrencySrd(profit.cost)}</span>
+                          <span className="text-slate-600">·</span>
+                          <span className="text-slate-500">Ganancia:</span>
+                          <span className={`font-mono font-bold ${profit.profit >= 0 ? "text-emerald-300" : "text-rose-400"}`}>
+                            {formatCurrencySrd(profit.profit)}
+                          </span>
+                          {profit.suppliers.length > 0 && (
+                            <>
+                              <span className="text-slate-600">|</span>
+                              <span className="text-slate-500">Pagar a:</span>
+                              {profit.suppliers.map((s) => (
+                                <span key={s.name} className="text-slate-300">
+                                  <strong className="text-amber-200">{s.name}</strong>
+                                  <span className="font-mono text-amber-300"> {formatCurrencySrd(s.cost)}</span>
+                                  {s.phone && <span className="ml-1 text-slate-500">({s.phone})</span>}
+                                </span>
+                              ))}
+                            </>
+                          )}
+                        </div>
                       </td>
                     </tr>
 
@@ -835,17 +903,28 @@ export default function AdminOrdersPage() {
         fetch(`/api/admin/orders/${id}`, {
           method: "PATCH", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ action: "update-status", status: newStatus }),
-        }).then((r) => r.json())
+        }).then((r) => r.json() as Promise<{ success?: boolean }>)
       )
     );
-    const fails = results.filter((r) => r.status === "rejected" || (r.status === "fulfilled" && !(r.value as { success?: boolean }).success));
+    const successIds = new Set(
+      ids.filter((_, i) => {
+        const r = results[i];
+        return r.status === "fulfilled" && r.value.success;
+      })
+    );
+    const fails = ids.length - successIds.size;
     setBulkingBlockId(null);
-    if (fails.length === 0) {
-      setNotice({ tone: "success", message: `${block.label}: ${ids.length} ordenes → "${newStatus}"` });
-    } else {
-      setNotice({ tone: "warning", message: `${block.label}: ${fails.length} error(es) al actualizar.` });
-    }
-    window.dispatchEvent(new Event("admin-orders-updated"));
+    // Update local state only — no page reload
+    setOrders((prev) => prev.map((o) => (successIds.has(o.id) ? { ...o, adminStatus: newStatus as AdminOrderRecord["adminStatus"] } : o)));
+    setStatusDrafts((prev) => {
+      const next = { ...prev };
+      for (const id of successIds) next[id] = newStatus;
+      return next;
+    });
+    setNotice(fails === 0
+      ? { tone: "success", message: `${block.label}: ${ids.length} ordenes → "${newStatus}"` }
+      : { tone: "warning", message: `${block.label}: ${fails} error(es) al actualizar.` }
+    );
   }
 
   useEffect(() => {
@@ -1051,7 +1130,10 @@ export default function AdminOrdersPage() {
         let cumulativeKm = 0;
         const stops = blockOrders.map((order, index) => {
           const slot = slots.find((current) => current.orderId === order.id);
-          const legKm = slot?.legDistanceKm ?? 0;
+          const fromAddr = index === 0 ? STORE_ADDRESS : blockOrders[index - 1].customerAddress;
+          const legKm = (slot?.legDistanceKm != null && slot.legDistanceKm > 0)
+            ? slot.legDistanceKm
+            : estimateLegDistance(fromAddr, order.customerAddress);
           cumulativeKm += legKm;
           return {
             order,
@@ -1079,7 +1161,8 @@ export default function AdminOrdersPage() {
           estimatedDriveKm: Number(cumulativeKm.toFixed(1)),
           estimatedReturnKm: 0,
           estimatedTotalKm: Number((block.routeDistanceKm ?? cumulativeKm).toFixed(1)),
-          estimatedTimeMinutes: block.routeDurationMinutes ?? 0,
+          estimatedTimeMinutes: block.routeDurationMinutes
+            ?? Math.round((cumulativeKm / AVERAGE_SPEED_KMH) * 60 + blockOrders.length * SERVICE_MINUTES_PER_STOP),
           totalAmount: block.totalAmount,
           deliveryFees: block.totalDeliveryFee,
           areas,
