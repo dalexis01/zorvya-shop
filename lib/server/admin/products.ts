@@ -381,7 +381,7 @@ async function getProductsPool() {
       connectionString,
       max: 3,
       idleTimeoutMillis: 30_000,
-      connectionTimeoutMillis: 8_000,
+      connectionTimeoutMillis: 20_000,
       ssl: shouldUseSsl(connectionString) ? { rejectUnauthorized: false } : undefined,
     });
   }

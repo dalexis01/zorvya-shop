@@ -682,7 +682,7 @@ export default function AdminOrdersPage() {
 
     async function load() {
       const abort = new AbortController();
-      const timer = setTimeout(() => abort.abort(), 12_000);
+      const timer = setTimeout(() => abort.abort(), 25_000);
       try {
         const [ordRes, metaRes] = await Promise.all([
           fetch(apiUrl({ status, deliveryType, last4 }), { cache: "no-store", signal: abort.signal }),
@@ -693,6 +693,9 @@ export default function AdminOrdersPage() {
           metaRes.json() as Promise<{ success?: boolean; meta?: AdminOrdersMeta }>,
         ]);
         if (!alive) return;
+        if (!ordData.success) {
+          setNotice({ tone: "error", message: "Error al cargar ordenes. Intenta de nuevo." });
+        }
         if (ordData.success) {
           const next = ordData.orders ?? [];
           setOrders(next);
