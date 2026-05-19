@@ -114,6 +114,10 @@ function normalizeColors(value: string | undefined) {
 }
 
 function hasFreeDelivery(product: Product) {
+  if (product.internal?.isHeavy) {
+    return false;
+  }
+
   const rawFlag = product.attributes?.freeDelivery;
 
   if (rawFlag === "true") {
@@ -153,6 +157,7 @@ export function toStorefrontProduct(product: Product): StorefrontProduct {
     inventoryLabel: product.inventoryLabel,
     deliveryLabel: product.deliveryLabel,
     hasFreeDelivery: hasFreeDelivery(product),
+    isHeavy: Boolean(product.internal?.isHeavy),
     stock: product.stock,
     showStock: product.showStock,
     displayOrder: product.displayOrder,

@@ -2,7 +2,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { ACCEPTED_IMAGE_TYPES, imageFileToDataUrl } from "@/lib/shop/image-upload";
 import type { Product } from "@/lib/shop/admin-types";
@@ -49,6 +49,7 @@ interface ProductFormState {
   supplierPhone: string;
   internalNotes: string;
   accountingImageUrl: string;
+  isHeavy: boolean;
   publishedAt: string;
   stockAddedAt: string;
   lastSoldAt: string;
@@ -103,6 +104,7 @@ function createEmptyFormState(): ProductFormState {
     supplierPhone: "",
     internalNotes: "",
     accountingImageUrl: "",
+    isHeavy: false,
     publishedAt: "",
     stockAddedAt: "",
     lastSoldAt: "",
@@ -306,6 +308,7 @@ function createFormStateFromProduct(product: Product): ProductFormState {
     supplierPhone: product.internal.supplierPhone ?? "",
     internalNotes: product.internal.internalNotes,
     accountingImageUrl: product.internal.accountingImageUrl,
+    isHeavy: Boolean(product.internal.isHeavy),
     publishedAt: product.publishedAt ?? "",
     stockAddedAt: product.stockAddedAt ?? "",
     lastSoldAt: product.lastSoldAt ?? "",
@@ -444,7 +447,7 @@ export default function ProductEditorForm({ mode, productId }: ProductEditorForm
   // Uploads a resized image (data URL from imageFileToDataUrl) to Vercel Blob.
   // Sends raw binary — no base64 JSON overhead.
   // Falls back to data URL if Blob is not yet configured (503).
-  async function uploadToBlob(dataUrl: string, filename: string): Promise<string> {
+  const uploadToBlob = useCallback(async (dataUrl: string, filename: string): Promise<string> => {
     try {
       const fileBlob = dataUrlToBlob(dataUrl);
       const res = await fetch(`/api/admin/upload-image?filename=${encodeURIComponent(filename)}`, {
@@ -460,9 +463,9 @@ export default function ProductEditorForm({ mode, productId }: ProductEditorForm
     } catch {
       return dataUrl;
     }
-  }
+  }, []);
 
-  async function appendImages(files: FileList | File[]) {
+  const appendImages = useCallback(async (files: FileList | File[]) => {
     setImageUploadError("");
     setUploadingImageCount(Array.from(files).length);
     try {
@@ -480,7 +483,29 @@ export default function ProductEditorForm({ mode, productId }: ProductEditorForm
     } finally {
       setUploadingImageCount(0);
     }
-  }
+  }, [uploadToBlob]);
+
+  useEffect(() => {
+    const handlePaste = (event: ClipboardEvent) => {
+      const clipboardItems = Array.from(event.clipboardData?.items ?? []);
+      const imageFiles = clipboardItems
+        .filter((item) => item.type.startsWith("image/"))
+        .map((item) => item.getAsFile())
+        .filter((file): file is File => Boolean(file));
+
+      if (imageFiles.length === 0) {
+        return;
+      }
+
+      event.preventDefault();
+      void appendImages(imageFiles);
+    };
+
+    window.addEventListener("paste", handlePaste);
+    return () => {
+      window.removeEventListener("paste", handlePaste);
+    };
+  }, [appendImages]);
 
   async function replaceImage(index: number, file: File) {
     setImageUploadError("");
@@ -696,6 +721,7 @@ export default function ProductEditorForm({ mode, productId }: ProductEditorForm
         trimText(formState.supplier) ||
         trimText(formState.internalNotes) ||
         trimText(formState.accountingImageUrl) ||
+        formState.isHeavy ||
         formState.images.length ||
         formState.colors.some((color) => trimText(color)) ||
         formState.variants.some(
@@ -773,6 +799,7 @@ export default function ProductEditorForm({ mode, productId }: ProductEditorForm
       internal: {
         costPrice,
         purchasePrice: costPrice,
+        isHeavy: formState.isHeavy,
         supplier: trimText(formState.supplier),
         supplierPhone: trimText(formState.supplierPhone),
         internalNotes: trimText(formState.internalNotes),
@@ -923,6 +950,9 @@ export default function ProductEditorForm({ mode, productId }: ProductEditorForm
                   />
                 </label>
               </div>
+              <p className="mt-2 text-xs text-slate-500">
+                Tambien puedes pegar una imagen del portapapeles con <span className="font-semibold text-cyan-300">Ctrl + V</span>.
+              </p>
 
               {uploadingImageCount > 0 && (
                 <p className="mt-3 text-xs font-medium text-cyan-400 animate-pulse">
@@ -1315,6 +1345,29 @@ export default function ProductEditorForm({ mode, productId }: ProductEditorForm
           <section className="rounded-[1.2rem] border border-amber-500/20 bg-[#0c0b08] p-3 xl:col-start-3 xl:row-start-1">
 
             <div className="mt-2 space-y-3">
+              <div>
+                <div className="rounded-[1rem] border border-amber-500/20 bg-[#161008] p-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold text-white">Articulo heavy</p>
+                      <p className="mt-1 text-xs text-amber-100/80">
+                        No aplica para delivery gratis y el envio se calcula a 100 SRD por KM.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => updateField("isHeavy", !formState.isHeavy)}
+                      className={`inline-flex min-w-[6.25rem] items-center justify-center rounded-2xl border px-3 py-2 text-xs font-semibold uppercase tracking-[0.18em] transition ${
+                        formState.isHeavy
+                          ? "border-amber-300 bg-amber-400/20 text-amber-100"
+                          : "border-slate-700 bg-[#0a1020] text-slate-300 hover:border-amber-400"
+                      }`}
+                    >
+                      {formState.isHeavy ? "Heavy" : "Normal"}
+                    </button>
+                  </div>
+                </div>
+              </div>
               <div>
                 <label className="block text-sm font-medium text-slate-200">
                   Costo real del producto

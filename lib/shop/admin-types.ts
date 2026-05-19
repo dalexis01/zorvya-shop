@@ -65,6 +65,7 @@ export interface ProductInternalDetails {
   costPrice: number;
   purchasePrice: number;
   shippingFee: number;
+  isHeavy: boolean;
   supplier: string;
   supplierPhone: string;
   internalCode: string;

@@ -22,6 +22,7 @@ export async function prepareOrderPlacement(
   }
 
   const stockErrors: string[] = [];
+  let containsHeavyItems = false;
 
   for (const item of validation.data.items) {
     const productId = item.productId ? String(item.productId) : "";
@@ -36,6 +37,10 @@ export async function prepareOrderPlacement(
     if (!liveProduct || !liveProduct.isActive || !liveProduct.isVisible) {
       stockErrors.push(`"${item.name}" ya no esta disponible para pago.`);
       continue;
+    }
+
+    if (liveProduct.internal?.isHeavy) {
+      containsHeavyItems = true;
     }
 
     const availableStock = getProductAvailableStock(liveProduct);
@@ -67,6 +72,7 @@ export async function prepareOrderPlacement(
           const deliveryQuote = await resolveDeliveryQuote({
             address: validation.data.customerAddress,
             subtotal: validation.data.subtotal,
+            hasHeavy: containsHeavyItems,
           });
 
           if (!deliveryQuote.isValidSurinameAddress) {

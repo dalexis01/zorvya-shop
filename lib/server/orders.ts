@@ -5,6 +5,7 @@ import { randomUUID } from "node:crypto";
 import { calculateDeliveryFee } from "@/helpers/delivery";
 import { registerProductSalesFromOrder } from "@/lib/server/admin/products";
 import { resolveDeliveryQuote } from "@/lib/server/delivery-quote";
+import { getProductById } from "@/lib/server/admin/products";
 import { buildOrderItemMediaProxyUrl } from "@/lib/server/order-media";
 import {
   insertOrderIntoStore,
@@ -260,9 +261,28 @@ function mergeItems(existingItems: OrderLineItem[], newItems: OrderLineItem[]) {
   return mergedItems;
 }
 
+async function hasHeavyItems(items: OrderLineItem[]) {
+  for (const item of items) {
+    const productId = item.productId ? String(item.productId) : "";
+
+    if (!productId) {
+      continue;
+    }
+
+    const product = await getProductById(productId);
+
+    if (product?.internal?.isHeavy) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 function recalculateTotals(
   order: Pick<StoredOrder, "deliveryType" | "customerAddress" | "deliveryDistanceKm">,
-  items: OrderLineItem[]
+  items: OrderLineItem[],
+  containsHeavyItems: boolean
 ) {
   const subtotal = Math.round(
     items.reduce((sum, item) => sum + item.price * item.quantity, 0) * 100
@@ -291,7 +311,10 @@ function recalculateTotals(
     };
   }
 
-  const deliveryFee = calculateDeliveryFee(distanceKm, subtotal).fee;
+  const deliveryFee = calculateDeliveryFee(distanceKm, {
+    subtotal,
+    hasHeavy: containsHeavyItems,
+  }).fee;
   const total = Math.round((subtotal + deliveryFee) * 100) / 100;
 
   return {
@@ -309,7 +332,8 @@ async function recalculateTotalsWithRoute(
   >,
   items: OrderLineItem[]
 ) {
-  const baseTotals = recalculateTotals(order, items);
+  const containsHeavyItems = await hasHeavyItems(items);
+  const baseTotals = recalculateTotals(order, items, containsHeavyItems);
 
   if (order.deliveryType !== "delivery" || baseTotals.deliveryDistanceKm) {
     return {
@@ -321,6 +345,7 @@ async function recalculateTotalsWithRoute(
   const deliveryQuote = await resolveDeliveryQuote({
     address: order.customerAddress,
     subtotal: baseTotals.subtotal,
+    hasHeavy: containsHeavyItems,
   });
 
   if (!deliveryQuote.allowsDelivery && !deliveryQuote.requiresAgentReview) {

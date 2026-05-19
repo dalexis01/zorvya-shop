@@ -133,6 +133,7 @@ type ProductSummaryRow = QueryResultRow & {
   cost_price_value: string | number | null;
   purchase_price_value: string | number | null;
   shipping_fee_value: string | number | null;
+  is_heavy_value: string | null;
   internal_code_value: string | null;
   internal_notes_value: string | null;
   created_at: Date | string;
@@ -316,6 +317,7 @@ function normalizeInternalDetails(
     costPrice: Number(internal?.costPrice ?? 0),
     purchasePrice: Number(internal?.purchasePrice ?? 0),
     shippingFee: Number(internal?.shippingFee ?? 0),
+    isHeavy: Boolean(internal?.isHeavy),
     supplier: trimText(internal?.supplier),
     supplierPhone: trimText(internal?.supplierPhone),
     internalCode: trimText(internal?.internalCode),
@@ -653,6 +655,7 @@ function productSummaryRowToProduct(row: ProductSummaryRow): Product {
     costPrice: Number(row.cost_price_value ?? 0),
     purchasePrice: Number(row.purchase_price_value ?? 0),
     shippingFee: Number(row.shipping_fee_value ?? 0),
+    isHeavy: row.is_heavy_value === "true",
     internalCode: row.internal_code_value ?? "",
     internalNotes: row.internal_notes_value ?? "",
   });
@@ -757,6 +760,7 @@ async function readProductSummariesFromDatabase(options?: {
         internal_json ->> 'costPrice' AS cost_price_value,
         internal_json ->> 'purchasePrice' AS purchase_price_value,
         internal_json ->> 'shippingFee' AS shipping_fee_value,
+        internal_json ->> 'isHeavy' AS is_heavy_value,
         internal_json ->> 'internalCode' AS internal_code_value,
         internal_json ->> 'internalNotes' AS internal_notes_value,
         created_at,

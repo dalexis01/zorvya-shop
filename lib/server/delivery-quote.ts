@@ -877,6 +877,7 @@ export async function searchGoogleAddressSuggestions(input: {
 export async function resolveDeliveryQuote(input: {
   address: string;
   subtotal?: number;
+  hasHeavy?: boolean;
   locale?: Locale;
 }): Promise<ResolvedDeliveryQuote> {
   const locale = input.locale ?? "es";
@@ -936,7 +937,10 @@ export async function resolveDeliveryQuote(input: {
   const allowsDelivery =
     realRoute.distanceKm > 0 && realRoute.distanceKm <= MAX_DELIVERY_DISTANCE_KM;
   const feeDetails = allowsDelivery
-    ? calculateDeliveryFee(realRoute.distanceKm, input.subtotal)
+    ? calculateDeliveryFee(realRoute.distanceKm, {
+        subtotal: input.subtotal,
+        hasHeavy: input.hasHeavy,
+      })
     : {
         fee: 0,
         isFree: false,

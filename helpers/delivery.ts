@@ -6,6 +6,7 @@ const STORE_COORDINATES = {
 const MAX_DELIVERY_DISTANCE_KM = 30;
 const DELIVERY_FEE_PER_8KM_SRD = 150;
 const DELIVERY_DISTANCE_STEP_KM = 8;
+const HEAVY_DELIVERY_FEE_PER_KM_SRD = 100;
 
 const SURINAME_DISTRICTS = [
   "paramaribo",
@@ -411,7 +412,10 @@ export function getFreeDeliveryProgress(distance: number | null | undefined, sub
   };
 }
 
-export function calculateDeliveryFee(distance: number, subtotal?: number): {
+export function calculateDeliveryFee(
+  distance: number,
+  options?: number | { subtotal?: number; hasHeavy?: boolean }
+): {
   fee: number;
   isFree: boolean;
   isAvailable: boolean;
@@ -426,12 +430,17 @@ export function calculateDeliveryFee(distance: number, subtotal?: number): {
     };
   }
 
-  const _subtotal = subtotal;
+  const normalizedOptions =
+    typeof options === "number" ? { subtotal: options, hasHeavy: false } : options ?? {};
+  const hasHeavy = Boolean(normalizedOptions.hasHeavy);
+  const _subtotal = normalizedOptions.subtotal;
   void _subtotal;
-  const fee = Math.max(
-    DELIVERY_FEE_PER_8KM_SRD,
-    Math.ceil(distance / DELIVERY_DISTANCE_STEP_KM) * DELIVERY_FEE_PER_8KM_SRD
-  );
+  const fee = hasHeavy
+    ? Math.max(HEAVY_DELIVERY_FEE_PER_KM_SRD, Math.ceil(distance) * HEAVY_DELIVERY_FEE_PER_KM_SRD)
+    : Math.max(
+        DELIVERY_FEE_PER_8KM_SRD,
+        Math.ceil(distance / DELIVERY_DISTANCE_STEP_KM) * DELIVERY_FEE_PER_8KM_SRD
+      );
   return {
     fee,
     isFree: false,
@@ -443,6 +452,7 @@ export function calculateDeliveryFee(distance: number, subtotal?: number): {
 export {
   DELIVERY_DISTANCE_STEP_KM,
   DELIVERY_FEE_PER_8KM_SRD,
+  HEAVY_DELIVERY_FEE_PER_KM_SRD,
   MAX_DELIVERY_DISTANCE_KM,
   REAL_SURINAME_ADDRESS_SUGGESTIONS,
   STORE_ADDRESS,

@@ -13,6 +13,7 @@ export async function GET(request: NextRequest) {
   const address = request.nextUrl.searchParams.get("address")?.trim() ?? "";
   const localeParam = request.nextUrl.searchParams.get("locale");
   const subtotal = Number(request.nextUrl.searchParams.get("subtotal") ?? "0");
+  const hasHeavy = request.nextUrl.searchParams.get("hasHeavy") === "true";
   const locale: Locale = isLocale(localeParam) ? localeParam : "es";
 
   if (address.length < 5) {
@@ -39,6 +40,7 @@ export async function GET(request: NextRequest) {
   const quote = await resolveDeliveryQuote({
     address,
     subtotal: Number.isFinite(subtotal) ? subtotal : 0,
+    hasHeavy,
     locale,
   });
 

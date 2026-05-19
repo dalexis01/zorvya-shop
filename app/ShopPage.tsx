@@ -579,6 +579,7 @@ function buildOrderPayload(
         : undefined,
     pickupTime: customerData.deliveryType === "pickup" ? customerData.pickupTime : undefined,
     requestedAgentCall: customerData.requestedAgentCall,
+    containsHeavyItems: customerData.containsHeavyItems,
     paymentMethod: customerData.paymentMethod,
     paypalDisplayCurrency:
       customerData.paymentMethod === "paypal" ? customerData.paypalDisplayCurrency : null,
@@ -2668,6 +2669,7 @@ export default function ShopPage({
         <CheckoutModal
           locale={locale}
           subtotal={selectedSubtotal}
+          containsHeavyItems={selectedCart.some((entry) => entry.product.isHeavy)}
           initialData={
             checkoutData ?? {
               name: sessionUser?.name ?? "",

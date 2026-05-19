@@ -89,6 +89,7 @@ export interface StorefrontProduct {
   inventoryLabel: string;
   deliveryLabel: string;
   hasFreeDelivery: boolean;
+  isHeavy: boolean;
   stock: number;
   showStock: boolean;
   displayOrder: number;
@@ -135,6 +136,7 @@ export interface CheckoutCustomerData {
   pickupDate?: Date;
   pickupTime?: string;
   requestedAgentCall: boolean;
+  containsHeavyItems?: boolean;
   deliveryDistanceKm?: number;
   deliveryFee?: number;
   paymentMethod: PaymentMethod;

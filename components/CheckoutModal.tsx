@@ -273,6 +273,7 @@ const texts: Texts = {
 interface CheckoutModalProps {
   locale: Locale;
   subtotal: number;
+  containsHeavyItems?: boolean;
   initialData?: Partial<CheckoutCustomerData>;
   onClose: () => void;
   onSubmit: (data: CheckoutCustomerData) => void;
@@ -285,6 +286,7 @@ function isValidEmailAddress(value: string) {
 export default function CheckoutModal({
   locale,
   subtotal,
+  containsHeavyItems = false,
   initialData,
   onClose,
   onSubmit,
@@ -336,7 +338,7 @@ export default function CheckoutModal({
     const timeout = window.setTimeout(async () => {
       try {
         const response = await fetch(
-          `/api/delivery-quote?address=${encodeURIComponent(trimmedAddress)}&locale=${locale}&subtotal=${encodeURIComponent(String(subtotal))}`,
+          `/api/delivery-quote?address=${encodeURIComponent(trimmedAddress)}&locale=${locale}&subtotal=${encodeURIComponent(String(subtotal))}&hasHeavy=${containsHeavyItems ? "true" : "false"}`,
           {
             cache: "no-store",
             signal: controller.signal,
@@ -360,7 +362,7 @@ export default function CheckoutModal({
       controller.abort();
       window.clearTimeout(timeout);
     };
-  }, [address, addressAssessment.isValidSurinameAddress, locale, subtotal]);
+  }, [address, addressAssessment.isValidSurinameAddress, containsHeavyItems, locale, subtotal]);
 
   const handleDeliveryTypeChange = (nextType: "delivery" | "pickup") => {
     if (nextType === "delivery" && !isValidSurinameAddress) {
@@ -495,6 +497,7 @@ export default function CheckoutModal({
         effectiveDeliveryType === "pickup"
           ? requestedAgentCall
           : requiresAgentReview,
+      containsHeavyItems,
       deliveryDistanceKm:
         effectiveDeliveryType === "delivery" &&
         serverDeliveryQuote &&

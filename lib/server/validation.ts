@@ -512,6 +512,7 @@ export function validateOrderPayload(
       ? body.pickupTime
       : null;
   const requestedAgentCall = Boolean(body.requestedAgentCall);
+  const containsHeavyItems = body.containsHeavyItems === true;
   const paymentMethod: PaymentMethod = normalizePaymentMethod(body.paymentMethod);
   const paypalDisplayCurrency: PayPalDisplayCurrency | null =
     paymentMethod === "paypal" ? normalizePayPalDisplayCurrency(body.paypalDisplayCurrency) : null;
@@ -560,7 +561,10 @@ export function validateOrderPayload(
   );
   const deliveryFee =
     deliveryType === "delivery"
-      ? calculateDeliveryFee(estimateDeliveryDistance(customerAddress), subtotal).fee
+      ? calculateDeliveryFee(estimateDeliveryDistance(customerAddress), {
+          subtotal,
+          hasHeavy: containsHeavyItems,
+        }).fee
       : 0;
   const total = roundCurrency(subtotal + deliveryFee);
 
