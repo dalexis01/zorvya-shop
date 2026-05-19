@@ -176,9 +176,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     : "Busqueda interna del panel";
 
   return (
-    <div className="min-h-screen bg-[linear-gradient(180deg,_#040816_0%,_#060b16_100%)] text-white">
-      <div className="flex min-h-screen">
-        <aside className="hidden w-[11rem] border-r border-slate-800 bg-[#040816] text-slate-100 xl:flex xl:flex-col">
+    <div className="h-screen overflow-hidden bg-[linear-gradient(180deg,_#040816_0%,_#060b16_100%)] text-white">
+      <div className="flex h-full">
+        <aside className="hidden h-full w-[11rem] shrink-0 border-r border-slate-800 bg-[#040816] text-slate-100 xl:flex xl:flex-col">
           <div className="border-b border-slate-800 px-4 py-4">
             <h1 className="text-base font-semibold tracking-tight text-white">ZorvyA Admin</h1>
           </div>
@@ -234,8 +234,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           </div>
         </aside>
 
-        <main className="flex-1">
-          <div className="border-b border-slate-800 bg-[#040816] px-5 py-3 xl:px-6">
+        <main className="flex min-h-0 flex-1 flex-col overflow-hidden">
+          <div className="shrink-0 border-b border-slate-800 bg-[#040816] px-5 py-3 xl:px-6">
             <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
               <div className="text-xs text-slate-300">{getPathLabel(pathname)}</div>
               <div className="flex flex-1 items-center justify-end gap-3">
@@ -282,7 +282,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               </div>
             </div>
           </div>
-          <div className="p-3 xl:p-4">{children}</div>
+          <div className="flex-1 overflow-y-auto overscroll-contain p-3 xl:p-4" style={{ WebkitOverflowScrolling: "touch" }}>{children}</div>
         </main>
       </div>
     </div>

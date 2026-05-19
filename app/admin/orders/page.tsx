@@ -471,7 +471,7 @@ function OrdersTable({
   onOpenCancel: (o: AdminOrderRecord) => void;
 }) {
   return (
-    <div className="overflow-x-auto rounded-[1.5rem] border border-slate-700 shadow-[0_16px_60px_rgba(0,0,0,0.4)]">
+    <div className="overflow-x-auto rounded-[1.5rem] border border-slate-700 shadow-sm">
       <table className="w-full border-collapse">
         <thead>
           <tr>
@@ -587,7 +587,7 @@ function BlocksTable({
           No hay ordenes activas de delivery para construir bloques.
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-[1.5rem] border border-slate-700 shadow-[0_16px_60px_rgba(0,0,0,0.4)]">
+        <div className="overflow-x-auto rounded-[1.5rem] border border-slate-700 shadow-sm">
           <table className="w-full border-collapse">
             <thead>
               <tr>
@@ -776,7 +776,7 @@ function BlocksTable({
           <p className="mb-2 px-1 text-[10px] font-semibold uppercase tracking-[0.25em] text-amber-400">
             ⚠ Órdenes sin bloque · {nonRouteOrders.length} orden{nonRouteOrders.length !== 1 ? "es" : ""} · (recogida, ya completadas, o exceden el límite de bloques)
           </p>
-          <div className="overflow-x-auto rounded-[1.5rem] border border-slate-700 shadow-[0_16px_60px_rgba(0,0,0,0.4)]">
+          <div className="overflow-x-auto rounded-[1.5rem] border border-slate-700 shadow-sm">
             <table className="w-full border-collapse">
               <thead>
                 <tr>
