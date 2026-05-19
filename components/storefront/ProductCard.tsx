@@ -138,7 +138,7 @@ function ProductCard({
 
   return (
     <article
-      className={`${styles.card} group flex h-full min-h-[13.65rem] flex-col overflow-hidden rounded-[1rem] border border-slate-600/80 shadow-[0_12px_30px_rgba(2,6,23,0.38)] transition hover:-translate-y-1 hover:border-cyan-300/70 sm:min-h-[15.25rem] sm:rounded-[1.2rem] sm:shadow-[0_16px_40px_rgba(2,6,23,0.45)]`}
+      className={`${styles.card} group flex h-full min-h-[12.55rem] flex-col overflow-hidden rounded-[1rem] border border-slate-600/80 shadow-[0_12px_30px_rgba(2,6,23,0.38)] transition hover:-translate-y-1 hover:border-cyan-300/70 sm:min-h-[15.25rem] sm:rounded-[1.2rem] sm:shadow-[0_16px_40px_rgba(2,6,23,0.45)]`}
     >
       <div aria-hidden="true" className={styles.cardBackdrop} />
       <div aria-hidden="true" className={styles.cardOverlay} />
@@ -148,7 +148,7 @@ function ProductCard({
           <button
             type="button"
             onClick={openProduct}
-            className="block h-[54%] min-h-0 w-full shrink-0 text-left sm:h-[55%]"
+            className="block h-[56%] min-h-0 w-full shrink-0 text-left sm:h-[55%]"
           >
             <div className={`relative h-full overflow-hidden border-b border-slate-800 ${styles.mediaShell}`}>
               <div className="absolute left-2 top-2 z-[2] sm:hidden">
@@ -164,7 +164,7 @@ function ProductCard({
           <Link
             href={`/products/${product.id}`}
             prefetch
-            className="block h-[54%] min-h-0 w-full shrink-0 sm:h-[55%]"
+            className="block h-[56%] min-h-0 w-full shrink-0 sm:h-[55%]"
           >
             <div className={`relative h-full overflow-hidden border-b border-slate-800 ${styles.mediaShell}`}>
               <div className="absolute left-2 top-2 z-[2] sm:hidden">
@@ -178,8 +178,8 @@ function ProductCard({
           </Link>
         )}
 
-        <div className="flex min-h-0 flex-1 flex-col gap-1 p-2 pt-1.5 sm:gap-1.5 sm:p-2.5 sm:pt-2">
-          <div className="flex min-h-0 flex-1 items-end justify-between gap-2 sm:gap-2.5">
+        <div className="flex min-h-0 flex-1 flex-col gap-0.5 p-1.5 pt-1 sm:gap-1.5 sm:p-2.5 sm:pt-2">
+          <div className="flex min-h-0 flex-1 items-end justify-between gap-1.5 sm:gap-2.5">
             <div className="min-w-0 flex-1">
               <div className="mb-1 hidden sm:block">
                 <DeliveryEstimateBadge
@@ -219,7 +219,7 @@ function ProductCard({
                 </div>
               </div>
 
-              <div className="mt-1">
+              <div className="mt-0.5">
                 <div className={styles.priceScene}>
                   <div className={`${styles.priceCube} ${styles.priceCubeMobile}`}>
                     <span className={`${styles.price} ${styles.priceSideTop} text-[14px] leading-none sm:text-[17px]`}>

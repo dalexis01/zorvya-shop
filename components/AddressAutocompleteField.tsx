@@ -101,7 +101,7 @@ export default function AddressAutocompleteField({
   className,
   locale,
   disabled = false,
-  maxSuggestions = 6,
+  maxSuggestions = 3,
   panelClassName = "border border-slate-700 bg-[#050816]",
   suggestionClassName = "text-slate-200 hover:bg-[#0a1020]",
   headerClassName = "border-slate-800 text-slate-500",
@@ -292,32 +292,34 @@ export default function AddressAutocompleteField({
           disabled={disabled}
           className={className}
         />
-        <div className="pointer-events-none absolute inset-y-0 right-4 flex items-center">
+        <div className="absolute inset-y-0 right-3 flex items-center">
           {selectedValue && selectedValue === value.trim() ? (
-            <span className="rounded-full bg-emerald-500/15 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-300">
+            <span className="pointer-events-none rounded-full bg-emerald-500/15 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-300">
               {t.valid}
             </span>
-          ) : isLoading ? (
-            <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-cyan-300">
+          ) : isLoading || isLocating ? (
+            <span className="pointer-events-none text-[10px] font-semibold uppercase tracking-[0.18em] text-cyan-300">
               {t.searching}
             </span>
-          ) : null}
+          ) : (
+            <button
+              type="button"
+              onClick={handleShareLocation}
+              disabled={disabled}
+              className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-600 bg-[#0a1020] text-cyan-300 transition hover:border-cyan-400 hover:text-cyan-200 disabled:cursor-not-allowed disabled:opacity-50"
+              aria-label={t.shareLocation}
+              title={t.shareLocation}
+            >
+              <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 2v2.75M12 19.25V22M4.22 4.22l1.94 1.94M17.84 17.84l1.94 1.94M2 12h2.75M19.25 12H22M4.22 19.78l1.94-1.94M17.84 6.16l1.94-1.94" />
+                <circle cx="12" cy="12" r="4.25" />
+              </svg>
+            </button>
+          )}
         </div>
       </div>
 
-      <div className="flex items-center justify-between gap-3">
-        <div className="min-w-0 flex-1">
-          {actionRowContent}
-        </div>
-        <button
-          type="button"
-          onClick={handleShareLocation}
-          disabled={disabled || isLocating}
-          className="rounded-full border border-slate-600 bg-[#0a1020] px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-cyan-300 transition hover:border-cyan-400 hover:text-cyan-200 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          {isLocating ? t.locating : t.shareLocation}
-        </button>
-      </div>
+      {actionRowContent ? <div className="min-w-0">{actionRowContent}</div> : null}
 
       {locationError ? (
         <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
@@ -350,7 +352,7 @@ export default function AddressAutocompleteField({
 
       {shouldShowSuggestions ? (
         <div
-          className={`absolute inset-x-0 top-[calc(100%+4.8rem)] z-40 overflow-hidden rounded-2xl shadow-[0_18px_50px_rgba(0,0,0,0.28)] ${panelClassName}`}
+          className={`absolute inset-x-0 top-[calc(100%+0.35rem)] z-40 overflow-hidden rounded-2xl shadow-[0_18px_50px_rgba(0,0,0,0.28)] ${panelClassName}`}
         >
           <div
             className={`border-b px-4 py-3 text-[10px] font-semibold uppercase tracking-[0.22em] ${headerClassName}`}

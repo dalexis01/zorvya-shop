@@ -1119,9 +1119,9 @@ function ProductDetailClient({
           <button
             type="button"
             onClick={() => setLightboxOpen(false)}
-            className="absolute right-4 top-4 rounded-full border border-slate-700 bg-black/50 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-white"
+            className="absolute right-3 top-3 z-20 inline-flex h-10 w-10 items-center justify-center rounded-full border border-slate-700 bg-black/65 text-sm font-semibold text-white sm:right-4 sm:top-4"
           >
-            {t.close}
+            X
           </button>
 
           {gallery.length > 1 ? (
@@ -1129,14 +1129,14 @@ function ProductDetailClient({
               <button
                 type="button"
                 onClick={() => moveLightbox(-1)}
-                className="absolute left-4 rounded-full border border-slate-700 bg-black/50 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-white"
+                className="absolute left-4 z-20 rounded-full border border-slate-700 bg-black/50 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-white"
               >
                 {t.previous}
               </button>
               <button
                 type="button"
                 onClick={() => moveLightbox(1)}
-                className="absolute right-4 top-1/2 -translate-y-1/2 rounded-full border border-slate-700 bg-black/50 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-white"
+                className="absolute right-4 top-1/2 z-20 -translate-y-1/2 rounded-full border border-slate-700 bg-black/50 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-white"
               >
                 {t.next}
               </button>

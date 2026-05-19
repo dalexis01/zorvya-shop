@@ -541,7 +541,7 @@ export default function CheckoutModal({
             placeholder={t.name}
             value={name}
             onChange={(event) => setName(event.target.value)}
-            className="w-full rounded-2xl border border-slate-700 bg-[#0a1020] px-3.5 py-2.5 text-[13px] text-white outline-none transition focus:border-cyan-400 sm:px-4 sm:py-3 sm:text-sm"
+            className="w-full rounded-2xl border border-slate-700 bg-[#0a1020] px-3.5 py-2.5 text-base text-white outline-none transition focus:border-cyan-400 sm:px-4 sm:py-3 sm:text-sm"
           />
 
           <input
@@ -549,7 +549,7 @@ export default function CheckoutModal({
             placeholder={t.phone}
             value={phone}
             onChange={(event) => setPhone(event.target.value)}
-            className="w-full rounded-2xl border border-slate-700 bg-[#0a1020] px-3.5 py-2.5 text-[13px] text-white outline-none transition focus:border-cyan-400 sm:px-4 sm:py-3 sm:text-sm"
+            className="w-full rounded-2xl border border-slate-700 bg-[#0a1020] px-3.5 py-2.5 text-base text-white outline-none transition focus:border-cyan-400 sm:px-4 sm:py-3 sm:text-sm"
           />
 
           <input
@@ -557,7 +557,7 @@ export default function CheckoutModal({
             placeholder={t.email}
             value={email}
             onChange={(event) => setEmail(event.target.value)}
-            className="w-full rounded-2xl border border-slate-700 bg-[#0a1020] px-3.5 py-2.5 text-[13px] text-white outline-none transition focus:border-cyan-400 sm:px-4 sm:py-3 sm:text-sm"
+            className="w-full rounded-2xl border border-slate-700 bg-[#0a1020] px-3.5 py-2.5 text-base text-white outline-none transition focus:border-cyan-400 sm:px-4 sm:py-3 sm:text-sm"
           />
 
           <AddressAutocompleteField
@@ -568,17 +568,7 @@ export default function CheckoutModal({
               setAddress(nextValue);
               setValidationMessage("");
             }}
-            actionRowContent={
-              serverDeliveryQuote?.isValidSurinameAddress &&
-              allowsDelivery &&
-              !serverDeliveryQuote.requiresAgentReview &&
-              serverDeliveryQuote.distanceKm > 0 ? (
-                <p className="truncate px-1 text-xs text-cyan-100 sm:text-sm">
-                  {t.deliveryEstimate(serverDeliveryQuote.fee)}
-                </p>
-              ) : null
-            }
-            className="w-full rounded-2xl border border-slate-700 bg-[#0a1020] px-3.5 py-2.5 text-[13px] text-white outline-none transition focus:border-cyan-400 sm:px-4 sm:py-3 sm:text-sm"
+            className="w-full rounded-2xl border border-slate-700 bg-[#0a1020] px-3.5 py-2.5 pr-12 text-base text-white outline-none transition focus:border-cyan-400 sm:px-4 sm:py-3 sm:pr-12 sm:text-sm"
           />
 
           {!isValidSurinameAddress && address.trim().length > 0 ? (
@@ -638,7 +628,17 @@ export default function CheckoutModal({
                 }
               />
               <span className="checkout-choice__control" aria-hidden="true" />
-              <span className="text-[13px] text-slate-200 sm:text-sm">{t.delivery}</span>
+              <span className="flex min-w-0 flex-1 flex-col">
+                <span className="text-[13px] text-slate-200 sm:text-sm">{t.delivery}</span>
+                {serverDeliveryQuote?.isValidSurinameAddress &&
+                allowsDelivery &&
+                !serverDeliveryQuote.requiresAgentReview &&
+                serverDeliveryQuote.distanceKm > 0 ? (
+                  <span className="mt-1 text-[11px] font-medium leading-4 text-cyan-100 sm:text-xs">
+                    {t.deliveryEstimate(serverDeliveryQuote.fee)} · {serverDeliveryQuote.distanceKm.toFixed(1)} km
+                  </span>
+                ) : null}
+              </span>
             </label>
 
             <label
@@ -678,7 +678,7 @@ export default function CheckoutModal({
                   filterDate={isWeekday}
                   minDate={new Date()}
                   maxDate={maxDate}
-                  className="w-full rounded-2xl border border-slate-700 bg-[#050816] px-3.5 py-2.5 text-[13px] text-white outline-none transition focus:border-cyan-400 sm:px-4 sm:py-3 sm:text-sm"
+                  className="w-full rounded-2xl border border-slate-700 bg-[#050816] px-3.5 py-2.5 text-base text-white outline-none transition focus:border-cyan-400 sm:px-4 sm:py-3 sm:text-sm"
                   placeholderText={t.selectDate}
                 />
               </div>
@@ -690,7 +690,7 @@ export default function CheckoutModal({
                 <select
                   value={pickupTime}
                   onChange={(event) => setPickupTime(event.target.value)}
-                  className="w-full rounded-2xl border border-slate-700 bg-[#050816] px-3.5 py-2.5 text-[13px] text-white outline-none transition focus:border-cyan-400 sm:px-4 sm:py-3 sm:text-sm"
+                  className="w-full rounded-2xl border border-slate-700 bg-[#050816] px-3.5 py-2.5 text-base text-white outline-none transition focus:border-cyan-400 sm:px-4 sm:py-3 sm:text-sm"
                 >
                   <option value="">{t.selectTime}</option>
                   {PICKUP_TIME_OPTIONS.map((timeOption) => (
