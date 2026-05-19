@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 import {
   Fragment,
   useCallback,
@@ -231,19 +232,19 @@ function CatalogPromoBanner({
 
 function getMobilePromoInsertionIndexes(productCount: number) {
   const indexes = new Set<number>();
-  const intervals = [8, 12, 6] as const;
+  const intervals = [4, 8, 12] as const;
 
-  if (productCount <= 1) {
+  if (productCount <= 4) {
     return indexes;
   }
 
-  let nextIndex = 1;
+  let nextIndex = intervals[0];
   let intervalIndex = 0;
 
-  while (nextIndex < productCount - 1) {
-    indexes.add(nextIndex);
-    nextIndex += intervals[intervalIndex % intervals.length];
+  while (nextIndex < productCount) {
+    indexes.add(nextIndex - 1);
     intervalIndex += 1;
+    nextIndex += intervals[intervalIndex % intervals.length];
   }
 
   return indexes;
@@ -661,6 +662,7 @@ export default function ShopPage({
   initialClientTheme,
   paypalClientId,
 }: ShopPageProps) {
+  const router = useRouter();
   const [locale, setLocale] = useState<Locale>("es");
   const [clientTheme, setClientTheme] = useState<ClientTheme>(initialClientTheme);
   const [products, setProducts] = useState<StorefrontProduct[]>(() =>
@@ -1643,12 +1645,20 @@ export default function ShopPage({
         setRelatedRefreshIndex(0);
       }
 
+      if (isCompactViewport) {
+        setAccountOpen(false);
+        setAssistantOpen(false);
+        setCartOpen(false);
+        router.push(`/products/${product.id}`);
+        return;
+      }
+
       setQuickViewState({
         productId: String(product.id),
         initialSelection: options?.initialSelection,
       });
     },
-    [enqueueAssistantBubbleMessage, locale]
+    [enqueueAssistantBubbleMessage, isCompactViewport, locale, router]
   );
 
   const closeProduct = useCallback(() => {
@@ -1712,9 +1722,12 @@ export default function ShopPage({
       setLastOverlayOpened("cart");
       setCartOpen(true);
       setCartPulseActive(true);
+      if (isCompactViewport && typeof window !== "undefined" && "vibrate" in window.navigator) {
+        window.navigator.vibrate?.([20, 30, 20]);
+      }
       enqueueAssistantBubbleMessage(`${t.cartAdded}. ${t.cartAddedDetail}`);
     },
-    [enqueueAssistantBubbleMessage, t.cartAdded, t.cartAddedDetail, t.cartOutOfStock]
+    [enqueueAssistantBubbleMessage, isCompactViewport, t.cartAdded, t.cartAddedDetail, t.cartOutOfStock]
   );
 
   const removeFromCart = useCallback((cartKey: string) => {
@@ -1809,6 +1822,7 @@ export default function ShopPage({
 
   const openUnifiedChat = useCallback((mode: "assistant" | "support") => {
     if (isCompactViewport) {
+      setQuickViewState(null);
       setCartOpen(false);
       setAccountOpen(false);
     }
@@ -1823,6 +1837,7 @@ export default function ShopPage({
 
   const openAccountPanel = useCallback(() => {
     if (isCompactViewport) {
+      setQuickViewState(null);
       setCartOpen(false);
       setAssistantOpen(false);
     }
@@ -1832,6 +1847,7 @@ export default function ShopPage({
 
   const openCartPanel = useCallback(() => {
     if (isCompactViewport) {
+      setQuickViewState(null);
       setAssistantOpen(false);
       setAccountOpen(false);
     }

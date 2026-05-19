@@ -178,27 +178,7 @@ function ProductCard({
           </Link>
         )}
 
-        <div className="flex min-h-0 flex-1 flex-col gap-1.5 p-2 pt-1.5 sm:gap-2 sm:p-2.5 sm:pt-2">
-          <div className="min-h-[2rem] sm:min-h-[2.25rem]">
-            {useOverlay ? (
-              <button type="button" onClick={openProduct} className="block w-full text-left">
-                <h3
-                  className={`${styles.title} line-clamp-2 text-[11.5px] leading-[1.22] transition hover:text-cyan-100 sm:text-[13.5px]`}
-                >
-                  {product.name}
-                </h3>
-              </button>
-            ) : (
-              <Link href={`/products/${product.id}`} prefetch className="block">
-                <h3
-                  className={`${styles.title} line-clamp-2 text-[11.5px] leading-[1.22] transition hover:text-cyan-100 sm:text-[13.5px]`}
-                >
-                  {product.name}
-                </h3>
-              </Link>
-            )}
-          </div>
-
+        <div className="flex min-h-0 flex-1 flex-col gap-1 p-2 pt-1.5 sm:gap-1.5 sm:p-2.5 sm:pt-2">
           <div className="flex min-h-0 flex-1 items-end justify-between gap-2 sm:gap-2.5">
             <div className="min-w-0 flex-1">
               <div className="mb-1 hidden sm:block">
@@ -208,25 +188,47 @@ function ProductCard({
                 />
               </div>
 
-              <div className="mb-1 flex items-center gap-1.5 sm:mb-1.5">
-                <span className="block max-w-full overflow-hidden text-[12px] leading-none tracking-[0.04em] text-amber-400 sm:text-[13px]">
-                  {reviewStars}
-                </span>
-                {product.reviewCount > 0 ? (
-                  <span className="shrink-0 text-[9px] leading-none text-slate-400 sm:text-[10px]">
-                    ({product.reviewCount})
+              <div className="space-y-0.5">
+                {useOverlay ? (
+                  <button type="button" onClick={openProduct} className="block w-full text-left">
+                    <h3
+                      className={`${styles.title} line-clamp-2 text-[11.5px] leading-[1.18] transition hover:text-cyan-100 sm:text-[13.5px]`}
+                    >
+                      {product.name}
+                    </h3>
+                  </button>
+                ) : (
+                  <Link href={`/products/${product.id}`} prefetch className="block">
+                    <h3
+                      className={`${styles.title} line-clamp-2 text-[11.5px] leading-[1.18] transition hover:text-cyan-100 sm:text-[13.5px]`}
+                    >
+                      {product.name}
+                    </h3>
+                  </Link>
+                )}
+
+                <div className="flex items-center gap-1.5">
+                  <span className="block max-w-full overflow-hidden text-[12px] leading-none tracking-[0.04em] text-amber-400 sm:text-[13px]">
+                    {reviewStars}
                   </span>
-                ) : null}
+                  {product.reviewCount > 0 ? (
+                    <span className="shrink-0 text-[9px] leading-none text-slate-400 sm:text-[10px]">
+                      ({product.reviewCount})
+                    </span>
+                  ) : null}
+                </div>
               </div>
 
-              <div className={styles.priceScene}>
-                <div className={`${styles.priceCube} ${styles.priceCubeMobile}`}>
-                  <span className={`${styles.price} ${styles.priceSideTop} text-[14px] leading-none sm:text-[17px]`}>
-                    {formatCurrency(product.price)}
-                  </span>
-                  <span className={`${styles.price} ${styles.priceSideFront} text-[11px] leading-none sm:text-[14px]`}>
-                    {priceInUsd}
-                  </span>
+              <div className="mt-1">
+                <div className={styles.priceScene}>
+                  <div className={`${styles.priceCube} ${styles.priceCubeMobile}`}>
+                    <span className={`${styles.price} ${styles.priceSideTop} text-[14px] leading-none sm:text-[17px]`}>
+                      {formatCurrency(product.price)}
+                    </span>
+                    <span className={`${styles.price} ${styles.priceSideFront} text-[11px] leading-none sm:text-[14px]`}>
+                      {priceInUsd}
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>
