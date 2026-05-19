@@ -993,25 +993,70 @@ html[data-client-theme="light"] .account-auth-submit {
 }
 
 .zorvyabot-bubble {
+  --c: #38bdf8;
+  position: relative;
   max-width: 260px;
   padding: 12px 14px;
-  border: 1px solid rgb(251 191 36 / 0.42);
+  border: 1px solid rgb(125 211 252 / 0.32);
   border-radius: 18px 18px 6px 18px;
-  background:
-    linear-gradient(135deg, rgb(255 247 237 / 0.98), rgb(254 240 138 / 0.98) 58%, rgb(251 113 133 / 0.96));
-  color: #172554;
+  background-color: #020617;
+  background-image:
+    radial-gradient(4px 100px at 0px 235px, var(--c), #0000),
+    radial-gradient(4px 100px at 300px 235px, var(--c), #0000),
+    radial-gradient(1.5px 1.5px at 150px 117.5px, var(--c) 100%, #0000 150%),
+    radial-gradient(4px 100px at 0px 252px, var(--c), #0000),
+    radial-gradient(4px 100px at 300px 252px, var(--c), #0000),
+    radial-gradient(1.5px 1.5px at 150px 126px, var(--c) 100%, #0000 150%),
+    radial-gradient(4px 100px at 0px 150px, var(--c), #0000),
+    radial-gradient(4px 100px at 300px 150px, var(--c), #0000),
+    radial-gradient(1.5px 1.5px at 150px 75px, var(--c) 100%, #0000 150%),
+    radial-gradient(4px 100px at 0px 204px, var(--c), #0000),
+    radial-gradient(4px 100px at 300px 204px, var(--c), #0000),
+    radial-gradient(1.5px 1.5px at 150px 102px, var(--c) 100%, #0000 150%);
+  background-size:
+    300px 235px,
+    300px 235px,
+    300px 235px,
+    300px 252px,
+    300px 252px,
+    300px 252px,
+    300px 150px,
+    300px 150px,
+    300px 150px,
+    300px 204px,
+    300px 204px,
+    300px 204px;
+  color: #f8fafc;
   font-size: 12px;
   font-weight: 800;
   line-height: 1.45;
   box-shadow:
     0 18px 40px rgb(0 0 0 / 0.34),
-    0 0 0 1px rgb(255 255 255 / 0.18) inset;
+    0 0 0 1px rgb(255 255 255 / 0.12) inset;
   backdrop-filter: blur(16px);
-  text-shadow: 0 1px 0 rgb(255 255 255 / 0.3);
+  text-shadow: 0 1px 8px rgb(2 6 23 / 0.75);
   transform-origin: bottom right;
   transition:
     opacity 0.25s ease,
     transform 0.25s ease;
+  overflow: hidden;
+  isolation: isolate;
+  animation: zorvyabot-rain 90s linear infinite;
+}
+
+.zorvyabot-bubble::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  backdrop-filter: blur(1em) brightness(1.15);
+  background-image: radial-gradient(
+    circle at 50% 50%,
+    #0000 0,
+    #0000 2px,
+    rgb(2 6 23 / 0.82) 2px
+  );
+  background-size: 8px 8px;
 }
 
 .zorvyabot-bubble--open {
@@ -1232,6 +1277,39 @@ html[data-client-theme="light"] .account-auth-submit {
   50% {
     transform: scale(1.08);
     opacity: 0.18;
+  }
+}
+
+@keyframes zorvyabot-rain {
+  0% {
+    background-position:
+      0px 220px,
+      3px 220px,
+      151.5px 337.5px,
+      25px 24px,
+      28px 24px,
+      176.5px 150px,
+      50px 16px,
+      53px 16px,
+      201.5px 91px,
+      100px 19px,
+      103px 19px,
+      251.5px 121px;
+  }
+  100% {
+    background-position:
+      0px 6800px,
+      3px 6800px,
+      151.5px 6917.5px,
+      25px 13632px,
+      28px 13632px,
+      176.5px 13758px,
+      50px 5416px,
+      53px 5416px,
+      201.5px 5491px,
+      100px 5119px,
+      103px 5119px,
+      251.5px 5221px;
   }
 }
 
