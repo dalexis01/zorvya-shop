@@ -77,6 +77,7 @@ export type AdminOrdersMetaResult = {
   newOrdersCount: number;
   totalOrdersCount: number;
   pendingOrdersCount: number;
+  pickupOrdersCount: number;
   completedOrdersCount: number;
   cancelledOrdersCount: number;
 };
@@ -966,6 +967,7 @@ export async function loadAdminOrdersMetaFromStore(): Promise<AdminOrdersMetaRes
     new_orders_count: number | string;
     total_orders_count: number | string;
     pending_orders_count: number | string;
+    pickup_orders_count: number | string;
     completed_orders_count: number | string;
     cancelled_orders_count: number | string;
   }>(
@@ -975,6 +977,11 @@ export async function loadAdminOrdersMetaFromStore(): Promise<AdminOrdersMetaRes
         COUNT(*) FILTER (WHERE admin_reviewed_at IS NULL)::int AS new_orders_count,
         COUNT(*) FILTER (WHERE cancelled_at IS NOT NULL)::int AS cancelled_orders_count,
         COUNT(*) FILTER (WHERE ${getCompletedStatusSql()})::int AS completed_orders_count,
+        COUNT(*) FILTER (
+          WHERE delivery_type = 'pickup'
+            AND cancelled_at IS NULL
+            AND NOT ${getCompletedStatusSql()}
+        )::int AS pickup_orders_count,
         COUNT(*) FILTER (
           WHERE cancelled_at IS NULL AND NOT ${getCompletedStatusSql()}
         )::int AS pending_orders_count
@@ -988,6 +995,7 @@ export async function loadAdminOrdersMetaFromStore(): Promise<AdminOrdersMetaRes
     newOrdersCount: toNumber(row.new_orders_count),
     totalOrdersCount: toNumber(row.total_orders_count),
     pendingOrdersCount: toNumber(row.pending_orders_count),
+    pickupOrdersCount: toNumber(row.pickup_orders_count),
     completedOrdersCount: toNumber(row.completed_orders_count),
     cancelledOrdersCount: toNumber(row.cancelled_orders_count),
   };

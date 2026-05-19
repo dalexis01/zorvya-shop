@@ -157,6 +157,31 @@ function formatDate(iso: string) {
   return d.toLocaleDateString("es", { day: "2-digit", month: "2-digit", year: "2-digit" });
 }
 
+function formatPickupSchedule(pickupDate: string | null, pickupTime: string | null) {
+  if (!pickupDate && !pickupTime) {
+    return "Recogida programada";
+  }
+
+  const hasValidDate = pickupDate && !Number.isNaN(new Date(pickupDate).getTime());
+  const formattedDate = hasValidDate
+    ? new Date(pickupDate).toLocaleDateString("es", {
+        day: "2-digit",
+        month: "long",
+        year: "numeric",
+      })
+    : pickupDate;
+
+  if (formattedDate && pickupTime) {
+    return `Recogida programada para ${formattedDate} a las ${pickupTime}`;
+  }
+
+  if (formattedDate) {
+    return `Recogida programada para ${formattedDate}`;
+  }
+
+  return `Recogida programada a las ${pickupTime}`;
+}
+
 
 // ─── click-menu (address / phone) ────────────────────────────────────────────
 function ClickMenu({
@@ -236,6 +261,8 @@ function OrderRow({
   const pay      = paymentLabel(order);
 
   const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(order.customerAddress)}`;
+  const isPickupOrder = order.deliveryType === "pickup";
+  const pickupScheduleText = formatPickupSchedule(order.pickupDate, order.pickupTime);
 
   return (
     <tr className={`${rowBg} transition-colors hover:bg-[#0c1530]`}>
@@ -277,6 +304,14 @@ function OrderRow({
 
       {/* Dirección — clickable → Google Maps / Copiar */}
       <TD cls="min-w-[200px]">
+        {isPickupOrder ? (
+          <div className="space-y-1">
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-sky-300">
+              Recogida programada
+            </p>
+            <p className="text-sm leading-snug text-slate-100">{pickupScheduleText}</p>
+          </div>
+        ) : (
         <div className="relative">
           <button
             type="button"
@@ -304,6 +339,7 @@ function OrderRow({
             ]}
           />
         </div>
+        )}
       </TD>
 
       {/* Productos + info contable inline */}
@@ -934,9 +970,7 @@ export default function AdminOrdersPage() {
             { cache: "no-store", signal: abort.signal }
           ),
         ];
-        if (activeTab !== "blocks" && activeTab !== "enviadas") {
-          requests.push(fetch("/api/admin/orders/meta", { cache: "no-store", signal: abort.signal }));
-        }
+        requests.push(fetch("/api/admin/orders/meta", { cache: "no-store", signal: abort.signal }));
         const [ordRes, metaRes] = await Promise.all(requests);
         const ordData = (await ordRes.json()) as AdminOrdersResponse;
         const metaData = metaRes
@@ -1167,7 +1201,7 @@ export default function AdminOrdersPage() {
   const TABS: Array<{ id: Tab; label: string; accent?: string; badge?: number }> = [
     { id: "blocks",    label: "Bloques de ordenes" },
     { id: "orders",    label: "Pedidos" },
-    { id: "pickups",   label: "Recogida" },
+    { id: "pickups",   label: "Recogida", accent: "sky", badge: meta?.pickupOrdersCount || undefined },
     { id: "enviadas",  label: "Enviadas", accent: "sky", badge: sentPersistentBlocks.length || undefined },
     { id: "cancelled", label: "Canceladas", accent: "rose" },
     { id: "completed", label: "Completadas", accent: "emerald" },

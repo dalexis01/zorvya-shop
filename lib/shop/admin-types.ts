@@ -416,6 +416,7 @@ export interface AdminOrdersMeta {
   newOrdersCount: number;
   totalOrdersCount: number;
   pendingOrdersCount: number;
+  pickupOrdersCount: number;
   completedOrdersCount: number;
   cancelledOrdersCount: number;
 }

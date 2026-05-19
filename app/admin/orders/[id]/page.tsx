@@ -26,6 +26,31 @@ function getNoticeClasses(tone: Notice["tone"]) {
   return "border-rose-500/20 bg-rose-500/10 text-rose-100";
 }
 
+function formatPickupSchedule(pickupDate: string | null, pickupTime: string | null) {
+  if (!pickupDate && !pickupTime) {
+    return "Recogida programada";
+  }
+
+  const hasValidDate = pickupDate && !Number.isNaN(new Date(pickupDate).getTime());
+  const formattedDate = hasValidDate
+    ? new Date(pickupDate).toLocaleDateString("es", {
+        day: "2-digit",
+        month: "long",
+        year: "numeric",
+      })
+    : pickupDate;
+
+  if (formattedDate && pickupTime) {
+    return `Recogida programada para ${formattedDate} a las ${pickupTime}`;
+  }
+
+  if (formattedDate) {
+    return `Recogida programada para ${formattedDate}`;
+  }
+
+  return `Recogida programada a las ${pickupTime}`;
+}
+
 export default function AdminOrderDetailPage() {
   const router = useRouter();
   const params = useParams<{ id: string }>();
@@ -39,6 +64,10 @@ export default function AdminOrderDetailPage() {
   const [cancelSaving, setCancelSaving] = useState(false);
   const [cancelError, setCancelError] = useState("");
   const [notice, setNotice] = useState<Notice | null>(null);
+  const isPickupOrder = order?.deliveryType === "pickup";
+  const pickupScheduleText = order
+    ? formatPickupSchedule(order.pickupDate, order.pickupTime)
+    : "Recogida programada";
 
   useEffect(() => {
     if (!orderId) {
@@ -275,8 +304,12 @@ export default function AdminOrderDetailPage() {
                 <p className="mt-2 text-base font-semibold text-white">{order.customerPhone}</p>
               </div>
               <div>
-                <p className="text-sm text-slate-500">Direccion</p>
-                <p className="mt-2 text-base font-semibold text-white">{order.customerAddress}</p>
+                <p className="text-sm text-slate-500">
+                  {isPickupOrder ? "Recogida programada" : "Direccion"}
+                </p>
+                <p className="mt-2 text-base font-semibold text-white">
+                  {isPickupOrder ? pickupScheduleText : order.customerAddress}
+                </p>
               </div>
             </div>
           </div>
