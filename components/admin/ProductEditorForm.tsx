@@ -18,6 +18,12 @@ interface ProductImageDraft {
   url: string;
 }
 
+interface ProductColorDraft {
+  id: string;
+  name: string;
+  imageUrl: string;
+}
+
 interface ProductVariantDraft {
   id: string;
   name: string;
@@ -53,7 +59,7 @@ interface ProductFormState {
   publishedAt: string;
   stockAddedAt: string;
   lastSoldAt: string;
-  colors: string[];
+  colors: ProductColorDraft[];
   variants: ProductVariantDraft[];
 }
 
@@ -81,6 +87,14 @@ function createVariantDraft(): ProductVariantDraft {
     costPrice: "",
     supplier: "",
     internalNotes: "",
+  };
+}
+
+function createColorDraft(): ProductColorDraft {
+  return {
+    id: createId(),
+    name: "",
+    imageUrl: "",
   };
 }
 
@@ -254,9 +268,32 @@ async function cropImageUrl(imageUrl: string, zoom: number, offsetX: number, off
 }
 
 function createFormStateFromProduct(product: Product): ProductFormState {
-  const colors = parseStoredList(product.attributes.colors).filter(
-    (color): color is string => typeof color === "string" && trimText(color).length > 0
-  );
+  const storedColorOptions = parseStoredList(product.attributes.colorOptions);
+  const colors = storedColorOptions.length
+    ? storedColorOptions
+        .map((colorOption) => {
+          const colorRecord =
+            colorOption && typeof colorOption === "object"
+              ? (colorOption as Record<string, unknown>)
+              : {};
+
+          return {
+            id:
+              typeof colorRecord.id === "string" && colorRecord.id
+                ? colorRecord.id
+                : createId(),
+            name: typeof colorRecord.name === "string" ? colorRecord.name : "",
+            imageUrl: typeof colorRecord.imageUrl === "string" ? colorRecord.imageUrl : "",
+          } satisfies ProductColorDraft;
+        })
+        .filter((color) => trimText(color.name).length > 0 || trimText(color.imageUrl).length > 0)
+    : parseStoredList(product.attributes.colors)
+        .filter((color): color is string => typeof color === "string" && trimText(color).length > 0)
+        .map((color) => ({
+          id: createId(),
+          name: color,
+          imageUrl: "",
+        }));
   const variants = parseStoredList(product.attributes.variants).map((variant) => {
     const variantRecord =
       variant && typeof variant === "object" ? (variant as Record<string, unknown>) : {};
@@ -573,6 +610,61 @@ export default function ProductEditorForm({ mode, productId }: ProductEditorForm
     updateField("accountingImageUrl", "");
   }
 
+  async function updateColorImage(colorId: string, file: File) {
+    setImageUploadError("");
+    const dataUrl = await imageFileToDataUrl(file);
+    const url = await uploadToBlob(dataUrl, `color-${createId()}.${file.type.split("/")[1] ?? "jpg"}`);
+    setFormState((currentState) => ({
+      ...currentState,
+      colors: currentState.colors.map((color) =>
+        color.id === colorId
+          ? {
+              ...color,
+              imageUrl: url,
+            }
+          : color
+      ),
+    }));
+  }
+
+  async function pasteColorImageFromClipboard(colorId: string) {
+    if (!navigator.clipboard?.read) {
+      setImageUploadError("Tu navegador no permite pegar imagenes desde el portapapeles aqui.");
+      return;
+    }
+
+    setImageUploadError("");
+
+    try {
+      const clipboardItems = await navigator.clipboard.read();
+      const imageType = clipboardItems
+        .flatMap((item) => item.types)
+        .find((type) => type.startsWith("image/"));
+
+      if (!imageType) {
+        setImageUploadError("No hay una imagen copiada en el portapapeles.");
+        return;
+      }
+
+      const clipboardItem = clipboardItems.find((item) => item.types.includes(imageType));
+
+      if (!clipboardItem) {
+        setImageUploadError("No se pudo leer la imagen del portapapeles.");
+        return;
+      }
+
+      const blob = await clipboardItem.getType(imageType);
+      const extension = imageType.split("/")[1] ?? "png";
+      const file = new File([blob], `color-paste-${createId()}.${extension}`, {
+        type: imageType,
+      });
+
+      await updateColorImage(colorId, file);
+    } catch {
+      setImageUploadError("No se pudo pegar la imagen del color desde el portapapeles.");
+    }
+  }
+
   function removeImage(index: number) {
     setFormState((currentState) => ({
       ...currentState,
@@ -690,14 +782,21 @@ export default function ProductEditorForm({ mode, productId }: ProductEditorForm
   function addColor() {
     setFormState((currentState) => ({
       ...currentState,
-      colors: [...currentState.colors, ""],
+      colors: [...currentState.colors, createColorDraft()],
     }));
   }
 
   function updateColor(index: number, value: string) {
     setFormState((currentState) => ({
       ...currentState,
-      colors: currentState.colors.map((color, colorIndex) => (colorIndex === index ? value : color)),
+      colors: currentState.colors.map((color, colorIndex) =>
+        colorIndex === index
+          ? {
+              ...color,
+              name: value,
+            }
+          : color
+      ),
     }));
   }
 
@@ -761,7 +860,7 @@ export default function ProductEditorForm({ mode, productId }: ProductEditorForm
         trimText(formState.accountingImageUrl) ||
         formState.isHeavy ||
         formState.images.length ||
-        formState.colors.some((color) => trimText(color)) ||
+        formState.colors.some((color) => trimText(color.name) || trimText(color.imageUrl)) ||
         formState.variants.some(
           (variant) =>
             trimText(variant.name) ||
@@ -780,7 +879,14 @@ export default function ProductEditorForm({ mode, productId }: ProductEditorForm
     const description = trimText(formState.description);
     const costPrice = toNumber(formState.costPrice);
     const stock = asDraft ? 0 : formState.isInStock ? 1 : 0;
-    const colors = formState.colors.map((color) => trimText(color)).filter(Boolean);
+    const colorOptions = formState.colors
+      .map((color) => ({
+        id: color.id,
+        name: trimText(color.name),
+        imageUrl: trimText(color.imageUrl),
+      }))
+      .filter((color) => color.name || color.imageUrl);
+    const colors = colorOptions.map((color) => color.name).filter(Boolean);
     const variants = formState.variants
       .map((variant) => ({
         id: variant.id,
@@ -832,6 +938,7 @@ export default function ProductEditorForm({ mode, productId }: ProductEditorForm
       })),
       attributes: {
         colors: JSON.stringify(colors),
+        colorOptions: JSON.stringify(colorOptions),
         variants: JSON.stringify(variants),
       },
       internal: {
@@ -1152,13 +1259,18 @@ export default function ProductEditorForm({ mode, productId }: ProductEditorForm
             </div>
           </section>
 
-          <section className="mx-auto w-[90%] rounded-[1.2rem] border border-slate-800 bg-[#060b16] p-2.5 xl:mx-0">
+          </div>
+
+          <section className="mx-auto w-full rounded-[1.2rem] border border-slate-800 bg-[#060b16] p-2.5 xl:col-start-1 xl:row-start-2 xl:mx-0 xl:max-w-none">
 
             <div className="space-y-2">
               <div className="rounded-[1.1rem] border border-slate-800 bg-[#0a1020] p-2.5">
                 <div className="flex items-center justify-between gap-4">
                   <div>
                     <p className="text-sm font-semibold text-white">Colores</p>
+                    <p className="mt-1 text-xs text-slate-400">
+                      Puedes pegar o subir una imagen para mostrar ese color dentro del anuncio.
+                    </p>
                   </div>
                   <button
                     type="button"
@@ -1172,25 +1284,104 @@ export default function ProductEditorForm({ mode, productId }: ProductEditorForm
                 <div className="mt-2 space-y-1.5">
                   {formState.colors.length > 0 ? (
                     formState.colors.map((color, index) => (
-                      <div key={`color-${index}`} className="flex gap-3">
-                        <input
-                          type="text"
-                          value={color}
-                          onChange={(event) => updateColor(index, event.target.value)}
-                          placeholder="Color"
-                          className="w-full rounded-2xl border border-slate-700 bg-[#050816] px-4 py-2 text-sm text-white outline-none transition focus:border-cyan-400"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => removeColor(index)}
-                          className="rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-2 text-sm font-semibold text-rose-200 transition hover:border-rose-400"
-                        >
-                          Quitar
-                        </button>
+                      <div
+                        key={color.id}
+                        className="flex flex-col gap-2 rounded-[1rem] border border-slate-800 bg-[#050816] p-2.5 md:flex-row md:items-center"
+                      >
+                        <div className="flex min-w-0 flex-1 gap-2">
+                          <input
+                            type="text"
+                            value={color.name}
+                            onChange={(event) => updateColor(index, event.target.value)}
+                            placeholder="Color"
+                            className="w-full rounded-2xl border border-slate-700 bg-[#0a1020] px-4 py-2 text-sm text-white outline-none transition focus:border-cyan-400"
+                          />
+                          {color.imageUrl ? (
+                            <div className="h-11 w-11 overflow-hidden rounded-xl border border-slate-700 bg-[#02040c]">
+                              <img
+                                src={color.imageUrl}
+                                alt={color.name || "Color"}
+                                className="h-full w-full object-cover"
+                              />
+                            </div>
+                          ) : (
+                            <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-dashed border-slate-700 bg-[#02040c] text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+                              IMG
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          <label className="inline-flex cursor-pointer items-center rounded-2xl border border-cyan-500/40 bg-cyan-400/10 px-3 py-2 text-xs font-semibold text-cyan-200 transition hover:border-cyan-400">
+                            Subir
+                            <input
+                              type="file"
+                              accept={ACCEPTED_IMAGE_TYPES}
+                              onChange={(event) => {
+                                const file = event.target.files?.[0];
+
+                                if (file) {
+                                  void updateColorImage(color.id, file);
+                                }
+
+                                event.target.value = "";
+                              }}
+                              className="hidden"
+                            />
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => void pasteColorImageFromClipboard(color.id)}
+                            className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-cyan-500/40 bg-cyan-400/10 text-cyan-200 transition hover:border-cyan-400"
+                            aria-label="Pegar imagen del color desde el portapapeles"
+                            title="Pegar imagen del color con Ctrl + V"
+                          >
+                            <svg
+                              viewBox="0 0 24 24"
+                              className="h-4.5 w-4.5"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            >
+                              <rect x="9" y="9" width="13" height="13" rx="2" />
+                              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                              <path d="M9 5h6" />
+                            </svg>
+                          </button>
+                          {color.imageUrl ? (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setFormState((currentState) => ({
+                                  ...currentState,
+                                  colors: currentState.colors.map((entry) =>
+                                    entry.id === color.id
+                                      ? {
+                                          ...entry,
+                                          imageUrl: "",
+                                        }
+                                      : entry
+                                  ),
+                                }))
+                              }
+                              className="rounded-2xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs font-semibold text-amber-100 transition hover:border-amber-400"
+                            >
+                              Quitar imagen
+                            </button>
+                          ) : null}
+                          <button
+                            type="button"
+                            onClick={() => removeColor(index)}
+                            className="rounded-2xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs font-semibold text-rose-200 transition hover:border-rose-400"
+                          >
+                            Quitar
+                          </button>
+                        </div>
                       </div>
                     ))
                   ) : (
-                    <p className="text-sm text-slate-500">Aun no hay colores agregados.</p>
+                    <p className="text-sm text-slate-400">Aun no hay colores agregados.</p>
                   )}
                 </div>
               </div>
@@ -1376,7 +1567,6 @@ export default function ProductEditorForm({ mode, productId }: ProductEditorForm
               </div>
             </div>
           </section>
-          </div>
         </div>
 
         <div className="space-y-2 xl:contents">

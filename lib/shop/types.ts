@@ -57,6 +57,12 @@ export interface StorefrontProductVariant {
   imageUrl: string;
 }
 
+export interface StorefrontProductColorOption {
+  id: string;
+  name: string;
+  imageUrl: string;
+}
+
 export interface ProductLocaleContent {
   name?: string;
   shortDescription?: string;
@@ -96,6 +102,8 @@ export interface StorefrontProduct {
   isFeatured: boolean;
   isTop: boolean;
   colors: string[];
+  colorOptions?: StorefrontProductColorOption[];
+  colorImageMap?: Record<string, string>;
   variants: StorefrontProductVariant[];
   createdAt?: string;
   updatedAt?: string;

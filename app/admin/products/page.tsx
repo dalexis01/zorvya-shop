@@ -148,7 +148,7 @@ export default function AdminProductsPage() {
           <div className="flex items-center gap-3 xl:justify-end">
             <div className="min-w-0 text-right">
               <h1
-                className="text-lg font-semibold tracking-tight text-white"
+                className="text-xl font-semibold tracking-tight text-white"
                 style={{ fontFamily: "var(--font-sora)" }}
               >
                 Catalogo de productos
@@ -176,7 +176,7 @@ export default function AdminProductsPage() {
                 {["Articulo", "Categoria", "Precio", "Stock", "Estado", "Contabilidad", "Acciones"].map((h) => (
                   <th
                     key={h}
-                    className="border-b border-r border-slate-700 bg-[#0a0f1e] px-3 py-2.5 text-left text-[10px] font-bold uppercase tracking-[0.18em] text-slate-300 whitespace-nowrap last:border-r-0"
+                    className="border-b border-r border-slate-700 bg-[#0a0f1e] px-3 py-3 text-left text-[11px] font-bold uppercase tracking-[0.18em] text-slate-200 whitespace-nowrap last:border-r-0"
                   >
                     {h}
                   </th>
@@ -205,7 +205,7 @@ export default function AdminProductsPage() {
                           )}
                         </div>
                         <div className="min-w-0">
-                          <p className="truncate text-[11px] font-semibold text-white max-w-[150px]">{product.name}</p>
+                          <p className="max-w-[190px] truncate text-[13px] font-semibold leading-snug text-white">{product.name}</p>
                           <p className="font-mono text-[10px] text-slate-500">{product.publicId} · {product.sku}</p>
                         </div>
                       </Link>
@@ -213,15 +213,15 @@ export default function AdminProductsPage() {
 
                     {/* ── Categoria ── */}
                     <td className="border-b border-r border-slate-800 px-3 py-2 align-middle whitespace-nowrap">
-                      <p className="text-[11px] font-semibold text-white">{product.category}</p>
-                      <p className="text-[10px] text-slate-400">{product.brand}</p>
+                      <p className="text-[13px] font-semibold text-white">{product.category}</p>
+                      <p className="text-[11px] text-slate-300">{product.brand}</p>
                     </td>
 
                     {/* ── Precio ── */}
                     <td className="border-b border-r border-slate-800 px-3 py-2 align-middle whitespace-nowrap">
-                      <p className="text-[11px] font-bold text-white">{formatCurrencyDollar(product.price)}</p>
+                      <p className="text-[13px] font-bold text-white">{formatCurrencyDollar(product.price)}</p>
                       {product.originalPrice ? (
-                        <p className="text-[10px] text-slate-500 line-through">{formatCurrencyDollar(product.originalPrice)}</p>
+                        <p className="text-[11px] text-slate-400 line-through">{formatCurrencyDollar(product.originalPrice)}</p>
                       ) : null}
                     </td>
 
@@ -233,13 +233,13 @@ export default function AdminProductsPage() {
                           min={0}
                           value={stockDrafts[product.id] ?? String(product.stock)}
                           onChange={(e) => setStockDrafts((d) => ({ ...d, [product.id]: e.target.value }))}
-                          className="w-12 rounded-md border border-slate-700 bg-[#0a1020] px-1.5 py-0.5 text-[11px] text-white outline-none focus:border-cyan-400"
+                          className="w-14 rounded-md border border-slate-700 bg-[#0a1020] px-2 py-1 text-[12px] text-white outline-none focus:border-cyan-400"
                         />
                         <button
                           type="button"
                           onClick={() => void updateProduct(product.id, { stock: Math.max(0, Number(stockDrafts[product.id] ?? product.stock)), showStock: true })}
                           disabled={busy}
-                          className="rounded-md border border-slate-700 bg-[#0a1020] px-1.5 py-0.5 text-[10px] font-semibold text-white hover:border-cyan-500 disabled:opacity-50"
+                          className="rounded-md border border-slate-700 bg-[#0a1020] px-2 py-1 text-[11px] font-semibold text-white hover:border-cyan-500 disabled:opacity-50"
                         >
                           OK
                         </button>
@@ -267,7 +267,7 @@ export default function AdminProductsPage() {
                               disabled={busy}
                               className="h-3 w-3 rounded border-slate-600 bg-[#0a1020]"
                             />
-                            <span className={`text-[10px] font-medium ${val ? "text-slate-200" : "text-slate-500"}`}>{label}</span>
+                            <span className={`text-[11px] font-medium ${val ? "text-slate-100" : "text-slate-400"}`}>{label}</span>
                           </label>
                         ))}
                       </div>
@@ -275,7 +275,7 @@ export default function AdminProductsPage() {
 
                     {/* ── Contabilidad ── */}
                     <td className="border-b border-r border-slate-800 px-3 py-2 align-middle whitespace-nowrap">
-                      <p className="text-[11px] font-bold text-white">{formatCurrencyDollar(product.internal.costPrice)}</p>
+                      <p className="text-[13px] font-bold text-white">{formatCurrencyDollar(product.internal.costPrice)}</p>
                       <p className="text-[10px] text-slate-400">{product.internal.supplier || "—"}</p>
                     </td>
 
@@ -284,31 +284,31 @@ export default function AdminProductsPage() {
                       <div className="flex flex-wrap items-center gap-1">
                         <Link
                           href={`/admin/products/${product.id}`}
-                          className="rounded border border-slate-700 bg-[#0a1020] px-2 py-0.5 text-[10px] font-semibold text-white hover:border-cyan-500"
+                          className="rounded border border-slate-700 bg-[#0a1020] px-2.5 py-1 text-[11px] font-semibold text-white hover:border-cyan-500"
                         >
                           Editar
                         </Link>
                         <button type="button" disabled={busy}
                           onClick={() => void updateProduct(product.id, { isVisible: !product.isVisible })}
-                          className="rounded border border-slate-700 bg-[#0a1020] px-2 py-0.5 text-[10px] font-semibold text-white hover:border-cyan-500 disabled:opacity-50"
+                          className="rounded border border-slate-700 bg-[#0a1020] px-2.5 py-1 text-[11px] font-semibold text-white hover:border-cyan-500 disabled:opacity-50"
                         >
                           {product.isVisible ? "Ocultar" : "Mostrar"}
                         </button>
                         <button type="button" disabled={busy}
                           onClick={() => void updateProduct(product.id, { isActive: !product.isActive })}
-                          className="rounded border border-slate-700 bg-[#0a1020] px-2 py-0.5 text-[10px] font-semibold text-white hover:border-emerald-500 disabled:opacity-50"
+                          className="rounded border border-slate-700 bg-[#0a1020] px-2.5 py-1 text-[11px] font-semibold text-white hover:border-emerald-500 disabled:opacity-50"
                         >
                           {product.isActive ? "Despublicar" : "Publicar"}
                         </button>
                         <button type="button" disabled={busy}
                           onClick={() => void updateProduct(product.id, { isFeatured: !product.isFeatured })}
-                          className="rounded border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold text-amber-200 hover:border-amber-400 disabled:opacity-50"
+                          className="rounded border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-[11px] font-semibold text-amber-100 hover:border-amber-400 disabled:opacity-50"
                         >
                           {product.isFeatured ? "Quitar" : "Destacar"}
                         </button>
                         <button type="button"
                           onClick={() => handleDelete(product.id)}
-                          className="rounded border border-rose-500/30 bg-rose-500/10 px-2 py-0.5 text-[10px] font-semibold text-rose-200 hover:border-rose-400"
+                          className="rounded border border-rose-500/30 bg-rose-500/10 px-2.5 py-1 text-[11px] font-semibold text-rose-100 hover:border-rose-400"
                         >
                           Eliminar
                         </button>

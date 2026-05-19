@@ -10,7 +10,11 @@ import {
   type ProductsDataSource,
 } from "@/lib/server/admin/products";
 import type { Product } from "@/lib/shop/admin-types";
-import type { StorefrontProduct, StorefrontProductVariant } from "@/lib/shop/types";
+import type {
+  StorefrontProduct,
+  StorefrontProductColorOption,
+  StorefrontProductVariant,
+} from "@/lib/shop/types";
 
 const STOREFRONT_PRODUCTS_TAG = "storefront-products";
 type StorefrontProductsResult = {
@@ -18,7 +22,12 @@ type StorefrontProductsResult = {
   source: ProductsDataSource;
 };
 
-function buildMediaProxyUrl(productId: string | number, kind: "gallery" | "variant", key: string, updatedAt?: string) {
+function buildMediaProxyUrl(
+  productId: string | number,
+  kind: "gallery" | "variant" | "color",
+  key: string,
+  updatedAt?: string
+) {
   const params = new URLSearchParams({
     kind,
     key,
@@ -34,7 +43,7 @@ function buildMediaProxyUrl(productId: string | number, kind: "gallery" | "varia
 function toStorefrontMediaUrl(
   productId: string | number,
   rawUrl: string | undefined,
-  kind: "gallery" | "variant",
+  kind: "gallery" | "variant" | "color",
   key: string,
   updatedAt?: string
 ) {
@@ -107,10 +116,53 @@ function normalizeVariants(productId: string | number, updatedAt: string | undef
     );
 }
 
-function normalizeColors(value: string | undefined) {
-  return parseStoredList<string[]>(value, [])
-    .map((color) => String(color).trim())
-    .filter(Boolean);
+function normalizeColorOptions(
+  productId: string | number,
+  updatedAt: string | undefined,
+  value: string | undefined
+) {
+  return parseStoredList<Array<Partial<StorefrontProductColorOption>>>(value, [])
+    .map((colorOption, index) => ({
+      id: String(colorOption.id ?? `color-${index + 1}`),
+      name: String(colorOption.name ?? "").trim(),
+      imageUrl: toStorefrontMediaUrl(
+        productId,
+        String(colorOption.imageUrl ?? "").trim(),
+        "color",
+        `color-${String(colorOption.id ?? `color-${index + 1}`)}`,
+        updatedAt
+      ),
+    }))
+    .filter((color) => color.name || color.imageUrl);
+}
+
+function normalizeColors(
+  productId: string | number,
+  updatedAt: string | undefined,
+  value: string | undefined,
+  colorOptionsValue: string | undefined
+) {
+  const colorOptions = normalizeColorOptions(productId, updatedAt, colorOptionsValue);
+
+  if (colorOptions.length > 0) {
+    return {
+      colors: colorOptions.map((color) => color.name).filter(Boolean),
+      colorOptions,
+      colorImageMap: Object.fromEntries(
+        colorOptions
+          .filter((color) => color.name && color.imageUrl)
+          .map((color) => [color.name, color.imageUrl])
+      ),
+    };
+  }
+
+  return {
+    colors: parseStoredList<string[]>(value, [])
+      .map((color) => String(color).trim())
+      .filter(Boolean),
+    colorOptions: [],
+    colorImageMap: {},
+  };
 }
 
 function hasFreeDelivery(product: Product) {
@@ -136,7 +188,12 @@ export function toStorefrontProduct(product: Product): StorefrontProduct {
     )
     .filter(Boolean);
   const variants = normalizeVariants(product.id, product.updatedAt, product.attributes?.variants);
-  const colors = normalizeColors(product.attributes?.colors);
+  const { colors, colorOptions, colorImageMap } = normalizeColors(
+    product.id,
+    product.updatedAt,
+    product.attributes?.colors,
+    product.attributes?.colorOptions
+  );
 
   return {
     id: product.id,
@@ -164,6 +221,8 @@ export function toStorefrontProduct(product: Product): StorefrontProduct {
     isFeatured: product.isFeatured,
     isTop: product.isTop,
     colors,
+    colorOptions,
+    colorImageMap,
     variants,
     createdAt: product.createdAt,
     updatedAt: product.updatedAt,
@@ -263,6 +322,19 @@ export async function getStorefrontProductMediaSource(
     const variants = parseStoredList<Array<Partial<StorefrontProductVariant>>>(product.attributes?.variants, []);
     const variant = variants.find((entry, index) => String(entry.id ?? `variant-${index + 1}`) === String(key));
     const imageUrl = typeof variant?.imageUrl === "string" ? variant.imageUrl.trim() : "";
+    return imageUrl || null;
+  }
+
+  if (kind === "color") {
+    const colorOptions = parseStoredList<Array<Partial<StorefrontProductColorOption>>>(
+      product.attributes?.colorOptions,
+      []
+    );
+    const colorOption = colorOptions.find(
+      (entry, index) => String(entry.id ?? `color-${index + 1}`) === String(key).replace(/^color-/, "")
+        || `color-${String(entry.id ?? `color-${index + 1}`)}` === String(key)
+    );
+    const imageUrl = typeof colorOption?.imageUrl === "string" ? colorOption.imageUrl.trim() : "";
     return imageUrl || null;
   }
 

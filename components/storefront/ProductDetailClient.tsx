@@ -480,20 +480,27 @@ function ProductDetailClient({
 
     return Array.from(colors);
   }, [modelOptions, product.colors]);
+  const colorImage = useMemo(() => {
+    if (!selectedColor) {
+      return "";
+    }
+
+    return product.colorImageMap?.[selectedColor] ?? "";
+  }, [product.colorImageMap, selectedColor]);
   const reviewCount = reviews.length > 0 ? reviews.length : product.reviewCount;
   const averageRating =
     reviews.length > 0
       ? Math.round((reviews.reduce((sum, review) => sum + review.rating, 0) / reviews.length) * 10) / 10
       : product.rating;
   const activePrice = selectedModel?.price ?? product.price;
-  const activeImage = selectedModel?.imageUrl || selectedImage || product.image;
+  const activeImage = selectedImage || colorImage || selectedModel?.imageUrl || product.image;
   const gallery = useMemo(() => {
-    const nextGallery = [selectedModel?.imageUrl, ...product.images].filter(
+    const nextGallery = [selectedImage, colorImage, selectedModel?.imageUrl, ...product.images].filter(
       (image): image is string => Boolean(image)
     );
 
     return Array.from(new Set(nextGallery));
-  }, [product.images, selectedModel?.imageUrl]);
+  }, [colorImage, product.images, selectedImage, selectedModel?.imageUrl]);
   const cartItemsCount = cart.reduce((sum, entry) => sum + entry.quantity, 0);
 
 
@@ -950,7 +957,12 @@ function ProductDetailClient({
                     <button
                       key={color}
                       type="button"
-                      onClick={() => setSelectedColor(color)}
+                      onClick={() => {
+                        setSelectedColor(color);
+                        setSelectedImage(
+                          product.colorImageMap?.[color] || selectedModel?.imageUrl || product.image
+                        );
+                      }}
                       className={`rounded-full border px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] transition ${
                         selectedColor === color
                           ? "border-cyan-400 bg-cyan-500 text-slate-950"

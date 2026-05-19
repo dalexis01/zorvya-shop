@@ -388,12 +388,21 @@ export default function ProductQuickViewPanel({
 
     return Array.from(colors);
   }, [modelOptions, product.colors]);
+  const colorImage = useMemo(() => {
+    if (!selectedColor) {
+      return "";
+    }
+
+    return product.colorImageMap?.[selectedColor] ?? "";
+  }, [product.colorImageMap, selectedColor]);
 
   const gallery = useMemo(() => {
-    return Array.from(new Set([selectedModel.imageUrl, ...product.images].filter(Boolean)));
-  }, [product.images, selectedModel.imageUrl]);
+    return Array.from(
+      new Set([selectedImage, colorImage, selectedModel.imageUrl, ...product.images].filter(Boolean))
+    );
+  }, [colorImage, product.images, selectedImage, selectedModel.imageUrl]);
 
-  const activeImage = selectedImage || selectedModel.imageUrl || product.image;
+  const activeImage = selectedImage || colorImage || selectedModel.imageUrl || product.image;
   const currentSelection = useMemo<QuickViewSelection>(
     () => ({
       selectedVariantId: selectedModel.isBase ? undefined : selectedModel.id,
@@ -846,7 +855,12 @@ export default function ProductQuickViewPanel({
                           <button
                             key={color}
                             type="button"
-                            onClick={() => setSelectedColor(color)}
+                            onClick={() => {
+                              setSelectedColor(color);
+                              setSelectedImage(
+                                product.colorImageMap?.[color] || selectedModel.imageUrl || product.image
+                              );
+                            }}
                             className={`rounded-full border px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] transition ${selectedColor === color ? "border-cyan-400 bg-cyan-500 text-slate-950" : "border-slate-700 bg-[#0a1020] text-slate-300 hover:border-cyan-500"}`}
                           >
                             {color}

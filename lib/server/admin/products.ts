@@ -127,6 +127,7 @@ type ProductSummaryRow = QueryResultRow & {
   is_featured: boolean;
   is_top: boolean;
   colors_value: string | null;
+  color_options_value: string | null;
   variants_value: string | null;
   supplier_value: string | null;
   supplier_phone_value: string | null;
@@ -686,6 +687,7 @@ function productSummaryRowToProduct(row: ProductSummaryRow): Product {
     isTop: Boolean(row.is_top),
     attributes: {
       colors: JSON.stringify(parseSummaryColors(row.colors_value)),
+      ...(row.color_options_value ? { colorOptions: row.color_options_value } : {}),
       variants: JSON.stringify(parseSummaryVariants(row.variants_value)),
     },
     internal,
@@ -754,6 +756,7 @@ async function readProductSummariesFromDatabase(options?: {
         is_featured,
         is_top,
         attributes_json ->> 'colors' AS colors_value,
+        attributes_json ->> 'colorOptions' AS color_options_value,
         attributes_json ->> 'variants' AS variants_value,
         internal_json ->> 'supplier' AS supplier_value,
         internal_json ->> 'supplierPhone' AS supplier_phone_value,
