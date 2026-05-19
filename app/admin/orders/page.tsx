@@ -1425,7 +1425,6 @@ export default function AdminOrdersPage() {
       {/* Create block modal */}
       {showCreateBlock && (
         <BlockCreateModal
-          availableOrders={activeTab === "blocks" ? ordersWithoutBlock : orders}
           assignedOrderIds={assignedOrderIds}
           onClose={() => setShowCreateBlock(false)}
           onCreate={handleCreateBlock}

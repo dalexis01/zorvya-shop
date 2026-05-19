@@ -1,37 +1,52 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { formatCurrencySrd } from "@/lib/shop/number-format";
 import type { AdminOrderRecord } from "@/lib/shop/admin-types";
 
 type Props = {
-  availableOrders: AdminOrderRecord[];
   assignedOrderIds: Set<string>;
   onClose: () => void;
   onCreate: (name: string, orderIds: string[]) => Promise<void>;
 };
 
-export default function BlockCreateModal({ availableOrders, assignedOrderIds, onClose, onCreate }: Props) {
+type OrdersResponse = { success?: boolean; orders?: AdminOrderRecord[] };
+
+export default function BlockCreateModal({ assignedOrderIds, onClose, onCreate }: Props) {
   const [name, setName] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [orders, setOrders] = useState<AdminOrderRecord[]>([]);
+  const [loadingOrders, setLoadingOrders] = useState(true);
 
-  const free = availableOrders.filter((o) => !assignedOrderIds.has(o.id));
+  // Fetch all pending delivery orders on mount — independent of tab state
+  useEffect(() => {
+    setLoadingOrders(true);
+    fetch(
+      "/api/admin/orders?status=pending&deliveryType=delivery&limit=120&noWindow=true",
+      { cache: "no-store" }
+    )
+      .then((r) => r.json() as Promise<OrdersResponse>)
+      .then((d) => { if (d.success) setOrders(d.orders ?? []); })
+      .catch(() => {})
+      .finally(() => setLoadingOrders(false));
+  }, []);
 
-  const filtered = free.filter((o) => {
+  const filtered = orders.filter((o) => {
     if (!search) return true;
     const q = search.toLowerCase();
     return (
       o.customerName.toLowerCase().includes(q) ||
       o.customerAddress.toLowerCase().includes(q) ||
-      o.idTail.toLowerCase().includes(q)
+      o.idTail.toLowerCase().includes(q) ||
+      o.customerPhone.includes(q)
     );
   });
 
-  const selectedOrders = free.filter((o) => selected.has(o.id));
+  const selectedOrders = orders.filter((o) => selected.has(o.id));
   const subtotal = selectedOrders.reduce((s, o) => s + o.subtotal, 0);
   const delivery = selectedOrders.reduce((s, o) => s + o.deliveryFee, 0);
   const total = selectedOrders.reduce((s, o) => s + o.total, 0);
@@ -90,26 +105,31 @@ export default function BlockCreateModal({ availableOrders, assignedOrderIds, on
             />
           </div>
 
-          {/* Order search */}
+          {/* Order list */}
           <div>
             <label className="mb-1.5 block text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
-              Pedidos disponibles para agregar ({free.length})
+              Pedidos pendientes de delivery ({orders.length})
             </label>
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Buscar por nombre, dirección o ID..."
+              placeholder="Buscar por nombre, dirección, teléfono o ID..."
               className="mb-3 w-full rounded-xl border border-slate-700 bg-[#0a1020] px-4 py-2 text-sm text-white outline-none transition focus:border-cyan-500 placeholder:text-slate-600"
             />
 
-            {free.length === 0 ? (
+            {loadingOrders ? (
               <p className="rounded-xl border border-dashed border-slate-700 py-8 text-center text-sm text-slate-500">
-                No hay pedidos de delivery pendientes disponibles.
+                Cargando pedidos...
+              </p>
+            ) : orders.length === 0 ? (
+              <p className="rounded-xl border border-dashed border-slate-700 py-8 text-center text-sm text-slate-500">
+                No hay pedidos de delivery pendientes.
               </p>
             ) : (
               <div className="space-y-2 rounded-xl border border-slate-800 bg-[#070d1c] p-3">
                 {filtered.map((order) => {
                   const isSelected = selected.has(order.id);
+                  const isAssigned = assignedOrderIds.has(order.id);
                   return (
                     <button
                       key={order.id}
@@ -123,12 +143,17 @@ export default function BlockCreateModal({ availableOrders, assignedOrderIds, on
                     >
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2">
-                            <span className={`text-[10px] font-bold ${isSelected ? "text-cyan-400" : "text-slate-600"}`}>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className={`text-sm font-bold ${isSelected ? "text-cyan-400" : "text-slate-500"}`}>
                               {isSelected ? "✓" : "○"}
                             </span>
                             <span className="font-semibold text-white text-sm">{order.customerName}</span>
                             <span className="font-mono text-xs text-cyan-400">···{order.idTail}</span>
+                            {isAssigned && (
+                              <span className="rounded border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-amber-300">
+                                ya en bloque
+                              </span>
+                            )}
                           </div>
                           <p className="mt-0.5 truncate text-xs text-slate-400">{order.customerAddress}</p>
                           <p className="text-xs text-slate-500">{order.customerPhone}</p>
@@ -141,9 +166,6 @@ export default function BlockCreateModal({ availableOrders, assignedOrderIds, on
                         <div className="shrink-0 text-right">
                           <p className="text-sm font-bold text-white">{formatCurrencySrd(order.total)}</p>
                           <p className="text-xs text-slate-400">Delivery {formatCurrencySrd(order.deliveryFee)}</p>
-                          <p className={`mt-1 text-[10px] font-semibold uppercase ${
-                            order.isCancelled ? "text-rose-400" : order.isCompleted ? "text-emerald-400" : "text-amber-300"
-                          }`}>{order.status}</p>
                         </div>
                       </div>
                     </button>
@@ -156,7 +178,6 @@ export default function BlockCreateModal({ availableOrders, assignedOrderIds, on
 
         {/* Footer */}
         <div className="shrink-0 border-t border-slate-800 px-6 py-4">
-          {/* Summary */}
           {selected.size > 0 && (
             <div className="mb-3 flex flex-wrap gap-4 text-sm text-slate-400">
               <span><strong className="text-white">{selected.size}</strong> ordenes</span>
