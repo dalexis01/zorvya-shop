@@ -2127,7 +2127,7 @@ export default function ShopPage({
       }
 
       const baseClass =
-        "storefront-header-pill-button relative inline-flex h-[2.45rem] w-full min-w-0 items-center justify-center overflow-hidden rounded-[10px] px-1.5 text-center text-[10px] font-semibold leading-none sm:h-[2.65rem] sm:px-2.5 sm:text-[11px] md:h-[2.9rem] md:w-[8.5rem] md:px-4 md:text-[11px]";
+        "storefront-cosmic-button relative inline-flex h-[2.55rem] w-full min-w-0 items-center justify-center overflow-hidden rounded-[12px] px-1.5 text-center text-[10px] font-semibold leading-none sm:h-[2.7rem] sm:px-2.5 sm:text-[11px] md:h-[2.95rem] md:w-[8.5rem] md:px-4 md:text-[11px]";
       const buttonText =
         target === "support"
           ? locale === "es"
@@ -2150,7 +2150,16 @@ export default function ShopPage({
             aria-label={buttonText}
             title={buttonText}
           >
-            <span className="storefront-header-pill-button__text whitespace-nowrap">{buttonText}</span>
+            <span className="storefront-cosmic-button__text whitespace-nowrap">
+              <strong>{buttonText}</strong>
+            </span>
+            <span className="storefront-cosmic-button__stars-container" aria-hidden="true">
+              <span className="storefront-cosmic-button__stars" />
+            </span>
+            <span className="storefront-cosmic-button__glow" aria-hidden="true">
+              <span className="storefront-cosmic-button__circle" />
+              <span className="storefront-cosmic-button__circle" />
+            </span>
           </button>
         );
       }
@@ -2164,9 +2173,18 @@ export default function ShopPage({
             aria-label={buttonText}
             title={buttonText}
           >
-            <span className="storefront-header-pill-button__text whitespace-nowrap">{buttonText}</span>
+            <span className="storefront-cosmic-button__text whitespace-nowrap">
+              <strong>{buttonText}</strong>
+            </span>
+            <span className="storefront-cosmic-button__stars-container" aria-hidden="true">
+              <span className="storefront-cosmic-button__stars" />
+            </span>
+            <span className="storefront-cosmic-button__glow" aria-hidden="true">
+              <span className="storefront-cosmic-button__circle" />
+              <span className="storefront-cosmic-button__circle" />
+            </span>
             {hasUnreadSupportReply ? (
-              <span className="absolute -right-1.5 -top-1.5 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-bold text-white shadow-[0_6px_16px_rgba(244,63,94,0.38)]">
+              <span className="storefront-cosmic-button__badge storefront-cosmic-button__badge--support">
                 1
               </span>
             ) : null}
@@ -2186,9 +2204,18 @@ export default function ShopPage({
           aria-label={buttonText}
           title={buttonText}
         >
-          <span className="storefront-header-pill-button__text whitespace-nowrap">{buttonText}</span>
+          <span className="storefront-cosmic-button__text whitespace-nowrap">
+            <strong>{buttonText}</strong>
+          </span>
+          <span className="storefront-cosmic-button__stars-container" aria-hidden="true">
+            <span className="storefront-cosmic-button__stars" />
+          </span>
+          <span className="storefront-cosmic-button__glow" aria-hidden="true">
+            <span className="storefront-cosmic-button__circle" />
+            <span className="storefront-cosmic-button__circle" />
+          </span>
           {cart.length > 0 ? (
-            <span className="absolute -right-1.5 -top-1.5 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-cyan-500 px-1 text-[10px] font-bold text-slate-950 shadow-[0_6px_16px_rgba(34,211,238,0.34)]">
+            <span className="storefront-cosmic-button__badge storefront-cosmic-button__badge--cart">
               {cart.length}
             </span>
           ) : null}

@@ -548,8 +548,8 @@ function computeBlockProfit(
 // ─── blocks table (Bloques de ordenes tab) ────────────────────────────────────
 function BlocksTable({
   routeBlocks, nonRouteOrders, statusDrafts, activeOrderId, pendingAction,
-  sentBlocks, sendingBlockId, bulkingBlockId, accountingMap,
-  onViewRoute, onSend, onBulkStatus, onDraftChange, onSaveStatus, onOpenCancel,
+  sentBlocks, sendingBlockId, accountingMap,
+  onViewRoute, onSend, onDraftChange, onSaveStatus, onOpenCancel,
 }: {
   routeBlocks: AdminOrderRouteBlock[];
   nonRouteOrders: AdminOrderRecord[];
@@ -558,11 +558,9 @@ function BlocksTable({
   pendingAction: "update-status" | "cancel-order" | null;
   sentBlocks: Set<string>;
   sendingBlockId: string | null;
-  bulkingBlockId: string | null;
   accountingMap: Map<string, ProductAccountingEntry>;
   onViewRoute: (b: AdminOrderRouteBlock) => void;
   onSend: (b: AdminOrderRouteBlock) => Promise<void>;
-  onBulkStatus: (b: AdminOrderRouteBlock, status: string) => Promise<void>;
   onDraftChange: (id: string, val: string) => void;
   onSaveStatus: (o: AdminOrderRecord) => Promise<void>;
   onOpenCancel: (o: AdminOrderRecord) => void;
@@ -608,7 +606,6 @@ function BlocksTable({
                 const isCollapsed = collapsed.has(block.id);
                 const isSent = sentBlocks.has(block.id) || block.isSent;
                 const sending = sendingBlockId === block.id;
-                const bulking = bulkingBlockId === block.id;
                 const profit = computeBlockProfit(block, accountingMap);
 
                 return (
@@ -681,11 +678,11 @@ function BlocksTable({
                             </button>
                             <button
                               type="button"
-                              disabled={sending || isSent || bulking}
+                              disabled={sending || isSent}
                               onClick={() => void onSend(block)}
                               className="rounded-lg border border-cyan-500/40 bg-cyan-500/10 px-3 py-1.5 text-xs font-semibold text-cyan-300 transition hover:bg-cyan-500/20 disabled:cursor-not-allowed disabled:opacity-40"
                             >
-                              {sending || bulking ? "..." : isSent ? "Enviado" : "Enviar bloque"}
+                              {sending ? "..." : isSent ? "Enviado" : "Enviar bloque"}
                             </button>
                           </div>
                         </div>
@@ -841,7 +838,6 @@ export default function AdminOrdersPage() {
   const [sentBlocks, setSentBlocks] = useState<Set<string>>(new Set());
   const [sendingBlockId, setSendingBlockId] = useState<string | null>(null);
   const [accountingMap, setAccountingMap] = useState<Map<string, ProductAccountingEntry>>(new Map());
-  const [bulkingBlockId, setBulkingBlockId] = useState<string | null>(null);
   const [noWindow, setNoWindow] = useState(false);
 
   // ── Persistent blocks ────────────────────────────────────────────────────────
@@ -911,39 +907,6 @@ export default function AdminOrdersPage() {
     setShowCreateBlock(false);
     setNotice({ tone: "success", message: `Bloque "${name}" creado con ${orderIds.length} ordenes.` });
     await loadPersistentBlocks();
-  }
-
-  async function handleBulkBlockStatus(block: AdminOrderRouteBlock, newStatus: string) {
-    setBulkingBlockId(block.id);
-    setNotice(null);
-    const ids = block.stops.map((s) => s.order.id);
-    const results = await Promise.allSettled(
-      ids.map((id) =>
-        fetch(`/api/admin/orders/${id}`, {
-          method: "PATCH", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "update-status", status: newStatus }),
-        }).then((r) => r.json() as Promise<{ success?: boolean }>)
-      )
-    );
-    const successIds = new Set(
-      ids.filter((_, i) => {
-        const r = results[i];
-        return r.status === "fulfilled" && r.value.success;
-      })
-    );
-    const fails = ids.length - successIds.size;
-    setBulkingBlockId(null);
-    // Update local state only — no page reload
-    setOrders((prev) => prev.map((o) => (successIds.has(o.id) ? { ...o, adminStatus: newStatus as AdminOrderRecord["adminStatus"] } : o)));
-    setStatusDrafts((prev) => {
-      const next = { ...prev };
-      for (const id of successIds) next[id] = newStatus;
-      return next;
-    });
-    setNotice(fails === 0
-      ? { tone: "success", message: `${block.label}: ${ids.length} ordenes → "${newStatus}"` }
-      : { tone: "warning", message: `${block.label}: ${fails} error(es) al actualizar.` }
-    );
   }
 
   useEffect(() => {
@@ -1357,10 +1320,8 @@ export default function AdminOrdersPage() {
               nonRouteOrders={ordersWithoutBlock}
               sentBlocks={sentBlocks}
               sendingBlockId={sendingBlockId}
-              bulkingBlockId={bulkingBlockId}
               onViewRoute={setActiveModalBlock}
               onSend={handleSendBlock}
-              onBulkStatus={handleBulkBlockStatus}
               {...commonTableProps}
             />
           )}
