@@ -526,13 +526,20 @@ export function validateOrderPayload(
     addFieldError(errors, "phone", "Debe indicar un telefono valido.");
   }
 
-  if (!customerAddress || customerAddress.length < 5) {
+  if (deliveryType === "delivery" && (!customerAddress || customerAddress.length < 5)) {
     addFieldError(errors, "address", "Debe indicar la direccion del pedido.");
   }
 
-  const deliveryAssessment = assessDeliveryAddress(customerAddress);
+  const deliveryAssessment = customerAddress
+    ? assessDeliveryAddress(customerAddress)
+    : { isValidSurinameAddress: false };
 
-  if (customerAddress && customerAddress.length >= 5 && !deliveryAssessment.isValidSurinameAddress) {
+  if (
+    deliveryType === "delivery" &&
+    customerAddress &&
+    customerAddress.length >= 5 &&
+    !deliveryAssessment.isValidSurinameAddress
+  ) {
     addFieldError(errors, "address", "Solo se permiten direcciones reales de Suriname.");
   }
 

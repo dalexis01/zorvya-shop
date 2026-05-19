@@ -442,25 +442,24 @@ export default function CheckoutModal({
     name.trim().length >= 2 &&
     phone.trim().length >= 7 &&
     isValidEmailAddress(email) &&
-    isValidSurinameAddress &&
     paypalSelectionIsValid &&
     (effectiveDeliveryType === "delivery"
-      ? !isResolvingDeliveryQuote && Boolean(serverDeliveryQuote)
+      ? isValidSurinameAddress && !isResolvingDeliveryQuote && Boolean(serverDeliveryQuote)
       : Boolean(pickupDate && pickupTime));
 
   const handleSubmit = () => {
-    if (!isValidSurinameAddress) {
+    if (effectiveDeliveryType === "delivery" && !isValidSurinameAddress) {
       setValidationMessage(t.addressInvalid);
       return;
     }
 
-    if (deliveryType === "delivery" && (isResolvingDeliveryQuote || !serverDeliveryQuote)) {
+    if (effectiveDeliveryType === "delivery" && (isResolvingDeliveryQuote || !serverDeliveryQuote)) {
       setValidationMessage(t.deliveryCalculating);
       return;
     }
 
     if (
-      deliveryType === "delivery" &&
+      effectiveDeliveryType === "delivery" &&
       serverDeliveryQuote &&
       !serverDeliveryQuote.requiresAgentReview &&
       !allowsDelivery
@@ -489,7 +488,7 @@ export default function CheckoutModal({
       name: name.trim(),
       phone: phone.trim(),
       email: email.trim(),
-      address: address.trim(),
+      address: effectiveDeliveryType === "delivery" ? address.trim() : "",
       deliveryType: effectiveDeliveryType,
       pickupDate: effectiveDeliveryType === "pickup" ? pickupDate ?? undefined : undefined,
       pickupTime: effectiveDeliveryType === "pickup" ? pickupTime : undefined,
