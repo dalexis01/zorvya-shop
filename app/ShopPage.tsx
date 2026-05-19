@@ -1,7 +1,6 @@
 "use client";
 
 import Image from "next/image";
-import { useRouter } from "next/navigation";
 import {
   Fragment,
   useCallback,
@@ -662,7 +661,6 @@ export default function ShopPage({
   initialClientTheme,
   paypalClientId,
 }: ShopPageProps) {
-  const router = useRouter();
   const [locale, setLocale] = useState<Locale>("es");
   const [clientTheme, setClientTheme] = useState<ClientTheme>(initialClientTheme);
   const [products, setProducts] = useState<StorefrontProduct[]>(() =>
@@ -714,12 +712,75 @@ export default function ShopPage({
   const supportAttachmentInputRef = useRef<HTMLInputElement | null>(null);
   const assistantStateRef = useRef<CustomerAssistantState>(assistantState);
   const bubbleTimeoutRef = useRef<number | null>(null);
+  const ambientBubbleTimeoutRef = useRef<number | null>(null);
   const cartSelectionInitializedRef = useRef(false);
   const previousCartKeysRef = useRef<string[]>([]);
   const lastTrackedSearchRef = useRef("");
   const lastNotifiedSupportEntryRef = useRef("");
+  const lastAmbientBubbleRef = useRef("");
 
   const t = texts[locale];
+  const assistantAmbientMessages = useMemo<Record<Locale, string[]>>(
+    () => ({
+      es: [
+        "Hola, soy ZorvyaBot. Vine a ayudarte, no a juzgar tu carrito... demasiado.",
+        "Si cambias color o modelo antes de cerrar, yo me acuerdo. Como los chismes finos.",
+        "Revisa bien la direccion y te ahorras una novela con el delivery.",
+        "Tu carrito se ve serio. Sospechosamente serio. Me cae bien.",
+        "Comparar dos modelos no es indecision, es estrategia con drama elegante.",
+        "Estoy aqui para ayudarte, contar un chiste malo y evitar carritos abandonados. Dia productivo.",
+        "Pequeno recordatorio: revisar el correo antes del checkout evita tragedias modernas.",
+        "Si necesitas soporte humano, te conecto. Soy brillante, no adivino.",
+        "Ese producto te esta mirando. Yo solo informo, no presiono... casi.",
+        "A veces me callo para no parecer intenso. Eso se llama crecimiento digital.",
+        "Si el envio sale caro, la distancia tuvo la culpa. Yo solo traje el reporte.",
+        "Tu gusto esta elegante, con un ligero peligro para el presupuesto. Respeto.",
+      ],
+      en: [
+        "Hi, I am ZorvyaBot. I came to help, not to judge your cart... too much.",
+        "If you change color or model before closing, I remember it. Premium gossip memory.",
+        "Double-check the address and save yourself a delivery soap opera.",
+        "Your cart looks serious. Suspiciously serious. I respect that.",
+        "Comparing two models is not indecision, it is strategy with style.",
+        "I am here to help, crack a questionable joke, and stop cart abandonment. Productive.",
+        "Tiny reminder: checking your email before checkout prevents very modern tragedies.",
+        "If you need a human, I can connect you. I am smart, not psychic.",
+        "That product is clearly flirting with you. I am merely reporting facts.",
+        "I stay quiet sometimes so I do not look clingy. Character development.",
+        "If delivery feels expensive, blame geography. I only deliver the drama.",
+        "Your taste is refined, with a slight budget-threatening edge.",
+      ],
+      nl: [
+        "Hoi, ik ben ZorvyaBot. Ik help graag en oordeel maar een heel klein beetje.",
+        "Als je kleur of model wijzigt, onthoud ik het. Zeer professionele roddelenergie.",
+        "Controleer het adres even en bespaar jezelf bezorgdrama.",
+        "Je winkelwagen ziet er serieus uit. Verdacht serieus zelfs. Netjes.",
+        "Twee modellen vergelijken is geen chaos, dat is stijl met strategie.",
+        "Ik ben hier om te helpen, een flauwe grap te maken en je winkelwagen te redden.",
+        "Even je e-mail checken voor checkout voorkomt moderne tragedie.",
+        "Als je een mens nodig hebt, regel ik dat. Ik ben slim, geen waarzegger.",
+        "Dat product kijkt duidelijk terug. Ik meld alleen wat ik zie.",
+        "Ik ben soms stil zodat ik niet te opdringerig lijk. Groei.",
+        "Als bezorging duur voelt, geef de kaart de schuld. Niet mij.",
+        "Je smaak is sterk. Elegant, met een tikje financieel gevaar.",
+      ],
+      pt: [
+        "Oi, eu sou o ZorvyaBot. Vim ajudar e julgar seu carrinho so um pouquinho.",
+        "Se mudar cor ou modelo, eu lembro. Memoria de fofoca premium.",
+        "Confere o endereco e evita drama desnecessario no delivery.",
+        "Seu carrinho esta serio. Serio demais. Eu respeito.",
+        "Comparar dois modelos nao e confusao, e estrategia com estilo.",
+        "Estou aqui para ajudar, fazer uma piada duvidosa e salvar carrinhos.",
+        "Conferir o e-mail antes do checkout evita tragedias tecnologicas.",
+        "Se precisar de uma pessoa real, eu conecto voce. Sou inteligente, nao magico.",
+        "Esse produto claramente quer ir com voce. Eu so relato os fatos.",
+        "Fico quieto as vezes para nao parecer carente. Evolucao digital.",
+        "Se o frete parece caro, culpe a distancia. Eu so trago a noticia.",
+        "Seu gosto e refinado, com um leve risco financeiro. Admiro.",
+      ],
+    }),
+    []
+  )[locale];
   const localizedSettings = settings.localizedContent[locale] ?? settings.localizedContent.es;
   const theme = settings.theme;
   const cartPanelWidth = isCompactViewport ? "calc(100vw - 1rem)" : "min(92vw, 24rem)";
@@ -1134,7 +1195,7 @@ export default function ShopPage({
 
     bubbleTimeoutRef.current = window.setTimeout(() => {
       setAssistantBubble(null);
-    }, 5200);
+    }, 8600);
   }, []);
 
   const appendAssistantMessage = useCallback(
@@ -1247,6 +1308,47 @@ export default function ShopPage({
       createAssistantEntry("bot", "ZorvYBOT", t.emptyAssistant),
     ]);
   }, [assistantEntries.length, t.emptyAssistant]);
+
+  useEffect(() => {
+    if (assistantOpen || assistantBubble || showingSupportChat) {
+      if (ambientBubbleTimeoutRef.current) {
+        window.clearTimeout(ambientBubbleTimeoutRef.current);
+      }
+      return;
+    }
+
+    const baseDelay = assistantEntries.length <= 1 ? 14000 : 46000;
+    const randomDelay = Math.floor(Math.random() * 32000);
+
+    ambientBubbleTimeoutRef.current = window.setTimeout(() => {
+      const candidates = assistantAmbientMessages.filter(
+        (message) => message !== lastAmbientBubbleRef.current
+      );
+      const nextMessage =
+        candidates[Math.floor(Math.random() * candidates.length)] ??
+        assistantAmbientMessages[0];
+
+      if (!nextMessage) {
+        return;
+      }
+
+      lastAmbientBubbleRef.current = nextMessage;
+      enqueueAssistantBubbleMessage(nextMessage);
+    }, baseDelay + randomDelay);
+
+    return () => {
+      if (ambientBubbleTimeoutRef.current) {
+        window.clearTimeout(ambientBubbleTimeoutRef.current);
+      }
+    };
+  }, [
+    assistantAmbientMessages,
+    assistantBubble,
+    assistantEntries.length,
+    assistantOpen,
+    enqueueAssistantBubbleMessage,
+    showingSupportChat,
+  ]);
 
   useEffect(() => {
     if (!searchContainerRef.current) {
@@ -1649,7 +1751,10 @@ export default function ShopPage({
         setAccountOpen(false);
         setAssistantOpen(false);
         setCartOpen(false);
-        router.push(`/products/${product.id}`);
+        setQuickViewState({
+          productId: String(product.id),
+          initialSelection: options?.initialSelection,
+        });
         return;
       }
 
@@ -1658,7 +1763,7 @@ export default function ShopPage({
         initialSelection: options?.initialSelection,
       });
     },
-    [enqueueAssistantBubbleMessage, isCompactViewport, locale, router]
+    [enqueueAssistantBubbleMessage, isCompactViewport, locale]
   );
 
   const closeProduct = useCallback(() => {
