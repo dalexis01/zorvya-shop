@@ -137,7 +137,7 @@ function TH({ children, right }: { children: React.ReactNode; right?: boolean })
 
 function TD({ children, right, muted, cls }: { children: React.ReactNode; right?: boolean; muted?: boolean; cls?: string }) {
   return (
-    <td className={`border-b border-r border-slate-800 px-3 py-3 text-sm align-top ${right ? "text-right" : ""} ${muted ? "text-slate-300" : "text-slate-100"} ${cls ?? ""}`}>
+    <td className={`border-b border-r border-slate-800 px-5 py-4 text-sm align-top ${right ? "text-right" : ""} ${muted ? "text-slate-300" : "text-slate-100"} ${cls ?? ""}`}>
       {children}
     </td>
   );
