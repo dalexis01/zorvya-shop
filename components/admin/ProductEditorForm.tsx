@@ -531,6 +531,44 @@ export default function ProductEditorForm({ mode, productId }: ProductEditorForm
     updateField("accountingImageUrl", url);
   }
 
+  async function pasteAccountingImageFromClipboard() {
+    if (!navigator.clipboard?.read) {
+      setImageUploadError("Tu navegador no permite pegar imagenes desde el portapapeles aqui.");
+      return;
+    }
+
+    setImageUploadError("");
+
+    try {
+      const clipboardItems = await navigator.clipboard.read();
+      const imageType = clipboardItems
+        .flatMap((item) => item.types)
+        .find((type) => type.startsWith("image/"));
+
+      if (!imageType) {
+        setImageUploadError("No hay una imagen copiada en el portapapeles.");
+        return;
+      }
+
+      const clipboardItem = clipboardItems.find((item) => item.types.includes(imageType));
+
+      if (!clipboardItem) {
+        setImageUploadError("No se pudo leer la imagen del portapapeles.");
+        return;
+      }
+
+      const blob = await clipboardItem.getType(imageType);
+      const extension = imageType.split("/")[1] ?? "png";
+      const file = new File([blob], `accounting-paste-${createId()}.${extension}`, {
+        type: imageType,
+      });
+
+      await updateAccountingImage(file);
+    } catch {
+      setImageUploadError("No se pudo pegar la imagen privada desde el portapapeles.");
+    }
+  }
+
   function removeAccountingImage() {
     updateField("accountingImageUrl", "");
   }
@@ -1446,6 +1484,27 @@ export default function ProductEditorForm({ mode, productId }: ProductEditorForm
                       className="hidden"
                     />
                   </label>
+                  <button
+                    type="button"
+                    onClick={() => void pasteAccountingImageFromClipboard()}
+                    className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-amber-500/30 bg-amber-500/10 text-amber-100 transition hover:border-amber-400"
+                    aria-label="Pegar foto privada desde el portapapeles"
+                    title="Pegar foto privada con Ctrl + V"
+                  >
+                    <svg
+                      viewBox="0 0 24 24"
+                      className="h-4.5 w-4.5"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <rect x="9" y="9" width="13" height="13" rx="2" />
+                      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                      <path d="M9 5h6" />
+                    </svg>
+                  </button>
                   {formState.accountingImageUrl ? (
                     <button
                       type="button"
