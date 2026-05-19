@@ -278,6 +278,10 @@ export default function CartPanel({
     [cart, effectiveSelectedCartKeys]
   );
   const totalSelectedEntryCount = sharedMode ? cart.length : selectedEntryCount;
+  const containsHeavyItems = useMemo(
+    () => selectedCart.some((entry) => entry.product.isHeavy),
+    [selectedCart]
+  );
 
   const subtotal = useMemo(() => {
     return selectedCart.reduce(
@@ -297,6 +301,7 @@ export default function CartPanel({
   const deliveryAmount =
     deliveryQuote?.allowsDelivery && !deliveryQuote.requiresAgentReview ? deliveryQuote.fee : 0;
   const total = subtotal + deliveryAmount;
+  const showFreeDeliveryCard = freeDeliveryProgress.available && !containsHeavyItems;
   const deliveryLabel = useMemo(() => {
     if (!customerAddress?.trim()) {
       return t.addressMissing;
@@ -687,40 +692,42 @@ export default function CartPanel({
 
           {cart.length > 0 ? (
             <div className="border-t border-slate-800 bg-[#03050f]/94 px-4 py-4 sm:px-5">
-              <div className="cart-free-delivery-card relative mb-4 overflow-hidden rounded-[1.35rem] border border-emerald-500/20 bg-emerald-500/10 px-3 py-3">
-                {freeDeliveryProgress.isUnlocked ? (
-                  <div className="cart-free-delivery-burst" aria-hidden="true">
-                    <span />
-                    <span />
-                    <span />
-                    <span />
-                    <span />
-                    <span />
+              {showFreeDeliveryCard ? (
+                <div className="cart-free-delivery-card relative mb-4 overflow-hidden rounded-[1.35rem] border border-emerald-500/20 bg-emerald-500/10 px-3 py-3">
+                  {freeDeliveryProgress.isUnlocked ? (
+                    <div className="cart-free-delivery-burst" aria-hidden="true">
+                      <span />
+                      <span />
+                      <span />
+                      <span />
+                      <span />
+                      <span />
+                    </div>
+                  ) : null}
+                  <div className="flex items-center justify-between gap-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-100">
+                    <span>{t.freeDeliveryGoal}</span>
+                    <span>
+                      {freeDeliveryProgress.minimum
+                        ? formatCurrency(freeDeliveryProgress.minimum)
+                        : "--"}
+                    </span>
                   </div>
-                ) : null}
-                <div className="flex items-center justify-between gap-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-100">
-                  <span>{t.freeDeliveryGoal}</span>
-                  <span>
-                    {freeDeliveryProgress.available && freeDeliveryProgress.minimum
-                      ? formatCurrency(freeDeliveryProgress.minimum)
-                      : "--"}
-                  </span>
+                  <div className="mt-3 h-2.5 overflow-hidden rounded-full bg-emerald-950/70">
+                    <div
+                      className={`h-full rounded-full bg-[linear-gradient(90deg,#22c55e,#4ade80,#86efac)] transition-[width] duration-500 ${
+                        freeDeliveryProgress.isUnlocked ? "cart-free-delivery-bar--celebrate" : ""
+                      }`}
+                      style={{
+                        width: `${Math.max(
+                          0,
+                          Math.min(100, (freeDeliveryProgress.progress || 0) * 100)
+                        )}%`,
+                      }}
+                    />
+                  </div>
+                  <p className="mt-3 text-xs text-emerald-100/90">{freeDeliveryMessage}</p>
                 </div>
-                <div className="mt-3 h-2.5 overflow-hidden rounded-full bg-emerald-950/70">
-                  <div
-                    className={`h-full rounded-full bg-[linear-gradient(90deg,#22c55e,#4ade80,#86efac)] transition-[width] duration-500 ${
-                      freeDeliveryProgress.isUnlocked ? "cart-free-delivery-bar--celebrate" : ""
-                    }`}
-                    style={{
-                      width: `${Math.max(
-                        0,
-                        Math.min(100, (freeDeliveryProgress.progress || 0) * 100)
-                      )}%`,
-                    }}
-                  />
-                </div>
-                <p className="mt-3 text-xs text-emerald-100/90">{freeDeliveryMessage}</p>
-              </div>
+              ) : null}
               {!sharedMode && totalSelectedEntryCount === 0 ? (
                 <div className="mb-4 rounded-[1.15rem] border border-amber-500/20 bg-amber-500/10 px-3 py-3 text-xs text-amber-100">
                   {t.selectToContinue}

@@ -1525,10 +1525,11 @@ export default function ShopPage({
     }
 
     const controller = new AbortController();
+    const containsHeavyItems = selectedCart.some((entry) => entry.product.isHeavy);
     const timeout = window.setTimeout(async () => {
       try {
         const response = await fetch(
-          `/api/delivery-quote?address=${encodeURIComponent(activeAddress)}&subtotal=${selectedSubtotal}&locale=${locale}`,
+          `/api/delivery-quote?address=${encodeURIComponent(activeAddress)}&subtotal=${selectedSubtotal}&locale=${locale}&hasHeavy=${containsHeavyItems ? "true" : "false"}`,
           {
             cache: "no-store",
             signal: controller.signal,
@@ -1547,7 +1548,7 @@ export default function ShopPage({
       controller.abort();
       window.clearTimeout(timeout);
     };
-  }, [activeAddress, locale, selectedCart.length, selectedSubtotal]);
+  }, [activeAddress, locale, selectedCart, selectedSubtotal]);
 
   const markSupportConversationSeen = useCallback(
     async (conversation: SupportMessage | null) => {
