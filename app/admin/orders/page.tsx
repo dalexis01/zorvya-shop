@@ -860,10 +860,17 @@ export default function AdminOrdersPage() {
     return () => window.removeEventListener("admin-orders-updated", fn);
   }, []);
 
-  async function loadPersistentBlocks() {
+  const syncCalledRef = React.useRef(false);
+
+  async function loadPersistentBlocks(triggerSync = false) {
     setPersistentBlocksLoading(true);
     try {
-      // Use two proper GET endpoints — the HEAD endpoint was broken (HTTP spec strips body).
+      // On first open, trigger auto-assign in background (non-blocking)
+      if (triggerSync && !syncCalledRef.current) {
+        syncCalledRef.current = true;
+        fetch("/api/admin/blocks/sync", { method: "POST", cache: "no-store" }).catch(() => {});
+      }
+
       const [blocksRes, assignedRes] = await Promise.all([
         fetch("/api/admin/blocks", { cache: "no-store" }),
         fetch("/api/admin/blocks/assigned", { cache: "no-store" }),
@@ -887,7 +894,10 @@ export default function AdminOrdersPage() {
   }
 
   useEffect(() => {
-    if (activeTab === "blocks" || activeTab === "enviadas") void loadPersistentBlocks();
+    if (activeTab === "blocks" || activeTab === "enviadas") {
+      // triggerSync=true only on the very first load of the blocks tab
+      void loadPersistentBlocks(!syncCalledRef.current);
+    }
   }, [activeTab, refreshKey]);
 
   async function handleCreateBlock(name: string, orderIds: string[]) {

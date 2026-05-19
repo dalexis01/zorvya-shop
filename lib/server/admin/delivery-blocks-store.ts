@@ -131,9 +131,22 @@ function toSlot(row: Record<string, unknown>): DeliveryBlockOrderSlot {
   };
 }
 
+// ─── Blocks list cache ────────────────────────────────────────────────────────
+
+let blocksListCache: { value: DeliveryBlock[]; expiresAt: number } | null = null;
+const BLOCKS_LIST_CACHE_TTL_MS = 10_000; // 10 s
+
+export function invalidateBlocksListCache() {
+  blocksListCache = null;
+}
+
 // ─── Blocks CRUD ──────────────────────────────────────────────────────────────
 
 export async function listDeliveryBlocks(): Promise<DeliveryBlock[]> {
+  if (blocksListCache && Date.now() < blocksListCache.expiresAt) {
+    return blocksListCache.value;
+  }
+
   const pool = await getBlocksPool();
   const res = await pool.query<Record<string, unknown>>(
     `SELECT * FROM delivery_blocks ORDER BY created_at DESC LIMIT 100`
@@ -163,6 +176,7 @@ export async function listDeliveryBlocks(): Promise<DeliveryBlock[]> {
     block.orders = slotsByBlock.get(block.id) ?? [];
   }
 
+  blocksListCache = { value: blocks, expiresAt: Date.now() + BLOCKS_LIST_CACHE_TTL_MS };
   return blocks;
 }
 
@@ -260,6 +274,7 @@ export async function createDeliveryBlock(input: {
     client.release();
   }
 
+  invalidateBlocksListCache();
   const block = await getDeliveryBlockById(id);
   if (!block) throw new Error("Failed to fetch created block");
   return block;
@@ -299,12 +314,14 @@ export async function updateDeliveryBlock(
     params
   );
 
+  invalidateBlocksListCache();
   return getDeliveryBlockById(id);
 }
 
 export async function deleteDeliveryBlock(id: string): Promise<void> {
   const pool = await getBlocksPool();
   await pool.query(`DELETE FROM delivery_blocks WHERE id = $1`, [id]);
+  invalidateBlocksListCache();
 }
 
 // ─── Block orders ─────────────────────────────────────────────────────────────
@@ -358,6 +375,7 @@ export async function addOrderToBlock(blockId: string, orderId: string): Promise
     }
 
     await client.query("COMMIT");
+    invalidateBlocksListCache();
   } catch (error) {
     await client.query("ROLLBACK");
     throw error;
@@ -390,6 +408,7 @@ export async function removeOrderFromBlock(blockId: string, orderId: string): Pr
     await recalculateBlockTotals(client, blockId, now);
 
     await client.query("COMMIT");
+    invalidateBlocksListCache();
   } catch (error) {
     await client.query("ROLLBACK");
     throw error;
@@ -416,6 +435,7 @@ export async function reorderBlockOrders(blockId: string, orderedIds: string[]):
       [now, blockId]
     );
     await client.query("COMMIT");
+    invalidateBlocksListCache();
   } catch (err) {
     await client.query("ROLLBACK");
     throw err;
@@ -475,35 +495,27 @@ export async function ensurePendingOrdersAssignedToBlocks(): Promise<{
       name: string;
       status: BlockStatus;
       order_count: number;
-      package_count: number;
     }>(
       `SELECT
          db.id,
          db.name,
          db.status,
-         COUNT(DISTINCT dbo.order_id)::int AS order_count,
-         COALESCE(SUM((item->>'quantity')::int), 0)::int AS package_count
+         COUNT(dbo.order_id)::int AS order_count
        FROM delivery_blocks db
        LEFT JOIN delivery_block_orders dbo ON dbo.block_id = db.id
-       LEFT JOIN orders o ON o.id = dbo.order_id
-       LEFT JOIN LATERAL jsonb_array_elements(COALESCE(o.items_json, '[]'::jsonb)) AS item ON true
        WHERE db.status IN ('draft', 'ready')
        GROUP BY db.id, db.name, db.status, db.created_at
        ORDER BY db.created_at ASC`
     );
 
-    const unassignedOrdersRes = await client.query<{ id: string; packages: number }>(
-      `SELECT
-         o.id,
-         GREATEST(1, COALESCE(SUM((item->>'quantity')::int), 1))::int AS packages
+    const unassignedOrdersRes = await client.query<{ id: string }>(
+      `SELECT o.id
        FROM orders o
        LEFT JOIN delivery_block_orders dbo ON dbo.order_id = o.id
-       LEFT JOIN LATERAL jsonb_array_elements(COALESCE(o.items_json, '[]'::jsonb)) AS item ON true
        WHERE dbo.order_id IS NULL
          AND o.delivery_type = 'delivery'
          AND o.cancelled_at IS NULL
          AND COALESCE(o.admin_status, '') <> 'Pedido completado'
-       GROUP BY o.id, o.created_at
        ORDER BY o.created_at DESC`
     );
 
@@ -515,17 +527,13 @@ export async function ensurePendingOrdersAssignedToBlocks(): Promise<{
     const availableBlocks = availableBlocksRes.rows.map((row) => ({
       id: row.id,
       count: Number(row.order_count ?? 0),
-      packages: Number(row.package_count ?? 0),
     }));
 
     let assignedCount = 0;
     let createdBlocks = 0;
 
     for (const order of unassignedOrdersRes.rows) {
-      const orderPackages = Number(order.packages ?? 1);
-      let target = availableBlocks.find(
-        (b) => b.count < MAX_ORDERS_PER_BLOCK && b.packages + orderPackages <= MAX_PACKAGES_PER_BLOCK
-      );
+      let target = availableBlocks.find((b) => b.count < MAX_ORDERS_PER_BLOCK);
 
       if (!target) {
         const blockId = generateBlockId();
@@ -541,7 +549,7 @@ export async function ensurePendingOrdersAssignedToBlocks(): Promise<{
             "system",
           ]
         );
-        target = { id: blockId, count: 0, packages: 0 };
+        target = { id: blockId, count: 0 };
         availableBlocks.push(target);
       }
 
@@ -553,7 +561,6 @@ export async function ensurePendingOrdersAssignedToBlocks(): Promise<{
       );
 
       target.count += 1;
-      target.packages += orderPackages;
       assignedCount += 1;
     }
 
