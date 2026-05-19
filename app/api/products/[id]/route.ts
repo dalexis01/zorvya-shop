@@ -6,7 +6,7 @@ import {
 } from "@/lib/server/catalog";
 import { getReviewsByProductId } from "@/lib/server/product-reviews";
 
-export const revalidate = 60;
+export const dynamic = "force-dynamic";
 
 export async function GET(request: Request, context: RouteContext<"/api/products/[id]">) {
   const { id } = await context.params;

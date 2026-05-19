@@ -1302,8 +1302,7 @@ export async function updateProduct(
   updates: Partial<Omit<Product, "id" | "createdAt" | "updatedAt" | "updatedBy" | "metrics">>,
   updatedBy: string
 ) {
-  const products = await readProducts();
-  const product = products.find((item) => item.id === id);
+  const product = await getProductById(id);
 
   if (!product) {
     throw new Error("PRODUCT_NOT_FOUND");

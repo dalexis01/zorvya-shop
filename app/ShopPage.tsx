@@ -1006,7 +1006,7 @@ export default function ShopPage({
     const controller = new AbortController();
     const productId = quickViewState.productId;
     void fetch(`/api/products/${encodeURIComponent(productId)}?includeExtras=false`, {
-      cache: "force-cache",
+      cache: "no-store",
       signal: controller.signal,
     })
       .then((response) => response.json() as Promise<ProductDetailResponse>)
@@ -1015,6 +1015,11 @@ export default function ShopPage({
           return;
         }
 
+        setProducts((currentProducts) =>
+          currentProducts.map((product) =>
+            String(product.id) === String(productId) ? payload.product! : product
+          )
+        );
         setProductDetailCache((currentCache) => ({
           ...currentCache,
           [productId]: payload.product!,
