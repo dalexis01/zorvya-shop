@@ -129,7 +129,7 @@ function countPackages(order: AdminOrderRecord) {
 // ─── shared table shell ───────────────────────────────────────────────────────
 function TH({ children, right }: { children: React.ReactNode; right?: boolean }) {
   return (
-    <th className={`border-b border-r border-slate-700 bg-[#0a0f1e] px-3 py-2.5 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-300 whitespace-nowrap ${right ? "text-right" : "text-left"}`}>
+    <th className={`border-b border-r border-slate-700 bg-[#0a0f1e] px-3 py-3 text-xs font-bold uppercase tracking-[0.15em] text-slate-200 whitespace-nowrap ${right ? "text-right" : "text-left"}`}>
       {children}
     </th>
   );
@@ -137,7 +137,7 @@ function TH({ children, right }: { children: React.ReactNode; right?: boolean })
 
 function TD({ children, right, muted, cls }: { children: React.ReactNode; right?: boolean; muted?: boolean; cls?: string }) {
   return (
-    <td className={`border-b border-r border-slate-800 px-3 py-2.5 text-sm align-top ${right ? "text-right" : ""} ${muted ? "text-slate-400" : "text-slate-100"} ${cls ?? ""}`}>
+    <td className={`border-b border-r border-slate-800 px-3 py-3 text-sm align-top ${right ? "text-right" : ""} ${muted ? "text-slate-300" : "text-slate-100"} ${cls ?? ""}`}>
       {children}
     </td>
   );
@@ -242,27 +242,27 @@ function OrderRow({
 
       {/* ── Estado + Fecha + ID + Parada (todo en una casilla) ── */}
       <TD cls="w-48">
-        <div className="space-y-3">
+        <div className="space-y-2.5">
           {stopInfo ? (
-            <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-cyan-500 text-xs font-bold text-slate-950">
+            <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-cyan-500 text-sm font-bold text-slate-950">
               {stopInfo.stopNumber}
             </span>
           ) : (
-            <span className="text-xs text-slate-500 font-mono">{rowIndex + 1}</span>
+            <span className="text-sm text-slate-400 font-mono font-semibold">{rowIndex + 1}</span>
           )}
-          <span className={`block w-fit rounded border px-2.5 py-1 text-xs font-bold uppercase tracking-[0.1em] ${stCls}`}>
+          <span className={`block w-fit rounded border px-2.5 py-1 text-xs font-bold uppercase tracking-[0.08em] ${stCls}`}>
             {stText}
           </span>
-          <p className="font-mono text-xs text-slate-300 leading-relaxed">
+          <p className="font-mono text-xs text-slate-200 leading-relaxed">
             {formatDate(order.createdAt)}{" "}
-            <span className="text-slate-500">
+            <span className="text-slate-400">
               {new Date(order.createdAt).toLocaleTimeString("es", { hour: "2-digit", minute: "2-digit" })}
             </span>
           </p>
           <Link
             href={`/admin/orders/${order.id}`}
             target="_blank"
-            className="block font-mono text-sm font-bold text-cyan-400 hover:text-cyan-200 hover:underline"
+            className="block font-mono text-base font-bold text-cyan-400 hover:text-cyan-200 hover:underline"
           >
             ···{order.idTail}
           </Link>
@@ -270,9 +270,9 @@ function OrderRow({
       </TD>
 
       {/* Cliente */}
-      <TD cls="min-w-[140px]">
-        <p className="font-semibold text-white leading-tight">{order.customerName}</p>
-        <p className="text-[11px] text-slate-400 mt-0.5">{order.customerPhone}</p>
+      <TD cls="min-w-[150px]">
+        <p className="font-bold text-white leading-tight text-[15px]">{order.customerName}</p>
+        <p className="text-sm text-slate-300 mt-1">{order.customerPhone}</p>
       </TD>
 
       {/* Dirección — clickable → Google Maps / Copiar */}
@@ -281,10 +281,10 @@ function OrderRow({
           <button
             type="button"
             onClick={(e) => { e.stopPropagation(); setAddrMenuOpen((v) => !v); }}
-            className="text-left text-xs leading-snug text-slate-200 hover:text-cyan-300 focus:outline-none"
+            className="text-left text-sm leading-snug text-slate-100 hover:text-cyan-300 focus:outline-none"
           >
             {order.customerAddress}
-            <span className="ml-1 text-[9px] text-slate-600">▼</span>
+            <span className="ml-1 text-xs text-slate-500">▼</span>
           </button>
           <ClickMenu
             open={addrMenuOpen}
@@ -313,24 +313,24 @@ function OrderRow({
             const acc = accountingMap.get(String(item.productId ?? ""));
             const phone = acc?.supplierPhone ?? "";
             return (
-              <div key={i} className="space-y-0.5">
-                <p className="text-xs font-semibold leading-tight text-white">
+              <div key={i} className="space-y-1">
+                <p className="text-sm font-semibold leading-tight text-white">
                   <span className="font-bold text-cyan-300">{item.quantity}×</span>{" "}
                   <Link href={item.href} className="hover:text-cyan-300">{item.name}</Link>
                 </p>
                 {acc ? (
                   <div className="ml-3 space-y-0.5 border-l border-amber-500/30 pl-2">
                     {acc.supplier && (
-                      <p className="text-[10px] text-amber-300">
-                        <span className="text-slate-500">Prov:</span> {acc.supplier}
+                      <p className="text-xs text-amber-300">
+                        <span className="text-slate-400">Prov:</span> {acc.supplier}
                       </p>
                     )}
                     {acc.costPrice > 0 && (
-                      <p className="text-[10px] font-mono text-rose-300">
-                        <span className="text-slate-500">Costo:</span>{" "}
+                      <p className="text-xs font-mono text-rose-300">
+                        <span className="text-slate-400">Costo:</span>{" "}
                         {formatCurrencySrd(acc.costPrice)}
                         {item.quantity > 1 && (
-                          <span className="text-slate-500 ml-1">
+                          <span className="text-slate-400 ml-1">
                             × {item.quantity} ={" "}
                             {formatCurrencySrd(acc.costPrice * item.quantity)}
                           </span>
@@ -346,7 +346,7 @@ function OrderRow({
                             e.stopPropagation();
                             setPhoneMenu((v) => (v === phone ? null : phone));
                           }}
-                          className="text-[10px] font-semibold text-emerald-300 hover:text-emerald-200"
+                          className="text-xs font-semibold text-emerald-300 hover:text-emerald-200"
                         >
                           📞 {phone}
                         </button>
@@ -369,11 +369,11 @@ function OrderRow({
                         />
                       </div>
                     ) : (
-                      <p className="text-[10px] text-slate-600 italic">Sin tel. proveedor</p>
+                      <p className="text-xs text-slate-500 italic">Sin tel. proveedor</p>
                     )}
                   </div>
                 ) : (
-                  <p className="ml-3 text-[10px] text-slate-700">Sin datos contables</p>
+                  <p className="ml-3 text-xs text-slate-600">Sin datos contables</p>
                 )}
               </div>
             );
@@ -392,26 +392,26 @@ function OrderRow({
 
       {/* Pago */}
       <TD cls="w-28">
-        <p className={`text-xs font-bold ${pay.cls}`}>{pay.label}</p>
-        {pay.sub && <p className="text-[10px] text-slate-400 mt-0.5">{pay.sub}</p>}
+        <p className={`text-sm font-bold ${pay.cls}`}>{pay.label}</p>
+        {pay.sub && <p className="text-xs text-slate-300 mt-0.5">{pay.sub}</p>}
       </TD>
 
       {/* Km tramo (solo en bloques) */}
       {stopInfo !== undefined && (
-        <TD right cls="w-16 font-mono text-xs font-semibold text-cyan-300">
+        <TD right cls="w-20 font-mono text-sm font-bold text-cyan-300">
           {formatKilometers(stopInfo.estimatedLegKm)}
         </TD>
       )}
 
       {/* Acciones */}
       <TD cls="w-52 !py-2">
-        <div className="flex flex-col gap-1.5">
+        <div className="flex flex-col gap-2">
           <div className="flex items-center gap-1.5">
             <select
               value={statusDraft}
               onChange={(e) => onDraftChange(order.id, e.target.value)}
               disabled={order.isCancelled}
-              className="flex-1 rounded border border-slate-600 bg-[#0c1220] px-2 py-1.5 text-[11px] text-white outline-none transition focus:border-cyan-500 disabled:cursor-not-allowed disabled:text-slate-500"
+              className="flex-1 rounded border border-slate-600 bg-[#0c1220] px-2 py-2 text-xs text-white outline-none transition focus:border-cyan-500 disabled:cursor-not-allowed disabled:text-slate-500"
             >
               <option value="">Automatico</option>
               {ADMIN_ORDER_STATUS_OPTIONS.map((opt) => (
@@ -422,7 +422,7 @@ function OrderRow({
               type="button"
               onClick={() => void onSaveStatus(order)}
               disabled={saving || order.isCancelled || !statusDraft || statusDraft === order.adminStatus}
-              className="rounded border border-cyan-500/50 bg-cyan-500/15 px-2 py-1.5 text-[11px] font-bold text-cyan-300 transition hover:bg-cyan-500/25 disabled:cursor-not-allowed disabled:opacity-30"
+              className="rounded border border-cyan-500/50 bg-cyan-500/15 px-2.5 py-2 text-sm font-bold text-cyan-300 transition hover:bg-cyan-500/25 disabled:cursor-not-allowed disabled:opacity-30"
             >
               {saving ? "…" : "✓"}
             </button>
@@ -434,18 +434,18 @@ function OrderRow({
                 type="button"
                 onClick={() => onOpenCancel(order)}
                 disabled={canceling}
-                className="flex-1 rounded border border-rose-500/40 bg-rose-500/10 px-2 py-1.5 text-[11px] font-semibold text-rose-300 transition hover:bg-rose-500/20 disabled:cursor-not-allowed"
+                className="flex-1 rounded border border-rose-500/40 bg-rose-500/10 px-2 py-2 text-xs font-semibold text-rose-300 transition hover:bg-rose-500/20 disabled:cursor-not-allowed"
               >
                 {canceling ? "…" : "Cancelar"}
               </button>
             ) : (
-              <span className="flex-1 rounded border border-slate-700 px-2 py-1.5 text-center text-[11px] font-medium text-slate-500">
+              <span className="flex-1 rounded border border-slate-700 px-2 py-2 text-center text-xs font-medium text-slate-500">
                 Cancelada
               </span>
             )}
             <Link
               href={`/admin/orders/${order.id}`}
-              className="rounded border border-slate-600 bg-[#0c1220] px-2 py-1.5 text-[11px] font-semibold text-slate-300 transition hover:border-cyan-500 hover:text-white"
+              className="rounded border border-slate-600 bg-[#0c1220] px-2.5 py-2 text-xs font-semibold text-slate-300 transition hover:border-cyan-500 hover:text-white"
             >
               Ver
             </Link>
@@ -628,20 +628,20 @@ function BlocksTable({
                           </button>
 
                           {/* Block ID — last 4 chars only */}
-                          <span className="rounded border border-slate-600 bg-[#050816] px-2 py-0.5 font-mono text-[10px] font-bold text-slate-300">
+                          <span className="rounded-lg border border-slate-500 bg-[#0c1530] px-3 py-1 font-mono text-sm font-bold text-white tracking-widest">
                             {block.id.slice(-4).toUpperCase()}
                           </span>
 
                           {/* Block label */}
-                          <span className="text-xs font-bold uppercase tracking-[0.25em] text-cyan-300">
+                          <span className="text-sm font-bold uppercase tracking-[0.2em] text-cyan-300">
                             Bloque {blockIndex + 1}
                           </span>
-                          <span className="rounded border border-slate-700 bg-[#050816] px-2 py-0.5 text-[10px] font-semibold text-slate-400">
+                          <span className="rounded border border-slate-600 bg-[#050816] px-2.5 py-1 text-xs font-semibold text-slate-300">
                             {block.stopsCount}/{TARGET_ROUTE_BLOCK_SIZE} pedidos
                           </span>
 
                           {/* Route metrics */}
-                          <div className="flex flex-wrap gap-3 text-xs text-slate-400">
+                          <div className="flex flex-wrap gap-4 text-sm text-slate-300">
                             <span><strong className="text-white">{block.stopsCount}</strong> paradas</span>
                             <span><strong className="text-white">{formatKilometers(block.estimatedTotalKm)}</strong> ruta</span>
                             <span><strong className="text-white">{formatTime(block.estimatedTimeMinutes)}</strong></span>
@@ -650,12 +650,12 @@ function BlocksTable({
 
                           {/* Badges */}
                           {block.isPartial && !isSent && (
-                            <span className="rounded border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold text-amber-300">
+                            <span className="rounded border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-xs font-semibold text-amber-300">
                               Parcial
                             </span>
                           )}
                           {isSent && (
-                            <span className="rounded border border-emerald-400/60 bg-emerald-500/20 px-3 py-0.5 text-[11px] font-bold text-emerald-300">
+                            <span className="rounded-lg border border-emerald-400/60 bg-emerald-500/20 px-3 py-1 text-sm font-bold text-emerald-300">
                               ✓ ENVIADO
                             </span>
                           )}
@@ -667,7 +667,7 @@ function BlocksTable({
                                 href={buildMapsUrl(block.stops.map((s) => s.order.customerAddress))}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="rounded border border-emerald-500/40 bg-emerald-500/10 px-3 py-1 text-[11px] font-semibold text-emerald-300 transition hover:bg-emerald-500/20"
+                                className="rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 text-xs font-semibold text-emerald-300 transition hover:bg-emerald-500/20"
                               >
                                 🗺 Maps
                               </a>
@@ -675,7 +675,7 @@ function BlocksTable({
                             <button
                               type="button"
                               onClick={() => onViewRoute(block)}
-                              className="rounded border border-slate-600 bg-[#050816] px-3 py-1 text-[11px] font-semibold text-slate-300 transition hover:border-cyan-500 hover:text-white"
+                              className="rounded-lg border border-slate-600 bg-[#050816] px-3 py-1.5 text-xs font-semibold text-slate-200 transition hover:border-cyan-500 hover:text-white"
                             >
                               Ver ruta
                             </button>
@@ -683,7 +683,7 @@ function BlocksTable({
                               type="button"
                               disabled={sending || isSent || bulking}
                               onClick={() => void onSend(block)}
-                              className="rounded border border-cyan-500/40 bg-cyan-500/10 px-3 py-1 text-[11px] font-semibold text-cyan-300 transition hover:bg-cyan-500/20 disabled:cursor-not-allowed disabled:opacity-40"
+                              className="rounded-lg border border-cyan-500/40 bg-cyan-500/10 px-3 py-1.5 text-xs font-semibold text-cyan-300 transition hover:bg-cyan-500/20 disabled:cursor-not-allowed disabled:opacity-40"
                             >
                               {sending || bulking ? "..." : isSent ? "Enviado" : "Enviar bloque"}
                             </button>
@@ -691,15 +691,15 @@ function BlocksTable({
                         </div>
 
                         {/* ── Row 2: Contabilidad del bloque ── */}
-                        <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-slate-700/40 pt-2 text-xs">
-                          <span className="text-slate-500">Cobro:</span>
+                        <div className="mt-2.5 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-slate-700/40 pt-2.5 text-sm">
+                          <span className="text-slate-400">Cobro:</span>
                           <span className="font-mono font-bold text-cyan-300">{formatCurrencySrd(block.totalAmount)}</span>
                           <span className="text-slate-600">·</span>
-                          <span className="text-slate-500">Delivery:</span>
+                          <span className="text-slate-400">Delivery:</span>
                           <span className="font-mono font-bold text-emerald-300">{formatCurrencySrd(block.deliveryFees)}</span>
                           <span className="text-slate-600">·</span>
-                          <span className="text-slate-500">Ganancia:</span>
-                          <span className={`font-mono font-bold ${profit.profit >= 0 ? "text-emerald-300" : "text-rose-400"}`}>
+                          <span className="text-slate-400">Ganancia:</span>
+                          <span className={`font-mono font-bold text-base ${profit.profit >= 0 ? "text-emerald-300" : "text-rose-400"}`}>
                             {formatCurrencySrd(profit.profit)}
                           </span>
                           {profit.cost > 0 && (
@@ -708,10 +708,10 @@ function BlocksTable({
                               <button
                                 type="button"
                                 onClick={() => setSupplierPanel((p) => (p === block.id ? null : block.id))}
-                                className="flex items-center gap-1.5 rounded border border-amber-500/30 bg-amber-500/10 px-2.5 py-0.5 font-semibold text-amber-300 transition hover:bg-amber-500/20"
+                                className="flex items-center gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-1 text-sm font-semibold text-amber-300 transition hover:bg-amber-500/20"
                               >
-                                Pago a proveedores: <span className="font-mono">{formatCurrencySrd(profit.cost)}</span>
-                                <span className="text-[9px]">{supplierPanel === block.id ? "▲" : "▼"}</span>
+                                Pago a proveedores: <span className="font-mono font-bold">{formatCurrencySrd(profit.cost)}</span>
+                                <span className="text-xs">{supplierPanel === block.id ? "▲" : "▼"}</span>
                               </button>
                             </>
                           )}
@@ -719,18 +719,18 @@ function BlocksTable({
 
                         {/* ── Supplier breakdown panel ── */}
                         {supplierPanel === block.id && profit.suppliers.length > 0 && (
-                          <div className="mt-2 space-y-2 rounded-xl border border-amber-500/20 bg-[#0a0e1c] p-3">
+                          <div className="mt-2 space-y-3 rounded-xl border border-amber-500/20 bg-[#0a0e1c] p-4">
                             {profit.suppliers.map((s) => (
                               <div key={s.name}>
-                                <div className="flex items-center gap-2">
-                                  <span className="font-semibold text-amber-200 text-xs">{s.name}</span>
-                                  {s.phone && <span className="text-[10px] text-slate-500">{s.phone}</span>}
-                                  <span className="ml-auto font-mono text-xs font-bold text-amber-300">{formatCurrencySrd(s.cost)}</span>
+                                <div className="flex items-center gap-3">
+                                  <span className="font-bold text-amber-200 text-sm">{s.name}</span>
+                                  {s.phone && <span className="text-xs text-slate-400">{s.phone}</span>}
+                                  <span className="ml-auto font-mono text-sm font-bold text-amber-300">{formatCurrencySrd(s.cost)}</span>
                                 </div>
-                                <div className="mt-1 space-y-0.5 border-l border-amber-500/20 pl-3">
+                                <div className="mt-1.5 space-y-1 border-l-2 border-amber-500/20 pl-3">
                                   {s.items.map((item, ii) => (
-                                    <div key={ii} className="flex items-center gap-2 text-[10px] text-slate-400">
-                                      <span className="font-semibold text-slate-300">{item.quantity}× {item.productName}</span>
+                                    <div key={ii} className="flex flex-wrap items-center gap-2 text-xs text-slate-300">
+                                      <span className="font-semibold text-white">{item.quantity}× {item.productName}</span>
                                       <span className="text-slate-600">—</span>
                                       <span>Costo: <strong className="font-mono text-rose-300">{formatCurrencySrd(item.costPrice)}</strong></span>
                                       <span className="text-slate-600">·</span>
