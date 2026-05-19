@@ -1221,21 +1221,12 @@ export default function AdminOrdersPage() {
     <div className="space-y-3">
 
       {/* ── Header bar ── */}
-      <div className="flex flex-wrap items-center gap-3 rounded-[1.75rem] border border-slate-800 bg-[#050816] px-5 py-4 shadow-[0_12px_40px_rgba(0,0,0,0.3)]">
-        <h1 className="text-xl font-semibold text-white">Ordenes</h1>
-        {meta?.pendingOrdersCount ? (
-          <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 text-xs font-semibold text-amber-300">
-            {meta.pendingOrdersCount} pendientes
-          </span>
-        ) : null}
-        {meta?.totalOrdersCount ? (
-          <span className="text-xs text-slate-600">{meta.totalOrdersCount} total</span>
-        ) : null}
+      <div className="flex flex-wrap items-center gap-2 rounded-[1.75rem] border border-slate-800 bg-[#050816] px-5 py-3 shadow-[0_12px_40px_rgba(0,0,0,0.3)]">
 
-        {/* ── Single unified search ── */}
+        {/* Search */}
         <form
           onSubmit={(e) => { e.preventDefault(); setSearch(searchInput.trim()); }}
-          className={`ml-auto flex items-center gap-2 rounded-full border px-3 py-1.5 transition ${search ? "border-cyan-500/50 bg-cyan-500/10" : "border-slate-700 bg-[#0a1020]"}`}
+          className={`flex items-center gap-2 rounded-full border px-3 py-1.5 transition ${search ? "border-cyan-500/50 bg-cyan-500/10" : "border-slate-700 bg-[#0a1020]"}`}
         >
           <svg className="h-3.5 w-3.5 shrink-0 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35m1.85-5.15a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -1245,14 +1236,26 @@ export default function AdminOrdersPage() {
             value={searchInput}
             onChange={(e) => { setSearchInput(e.target.value); if (!e.target.value.trim()) setSearch(""); }}
             placeholder="Buscar ID, nombre, teléfono, email…"
-            className="w-56 bg-transparent text-xs font-medium text-white outline-none placeholder:text-slate-600"
+            className="w-52 bg-transparent text-xs font-medium text-white outline-none placeholder:text-slate-600"
           />
           {(searchInput || search) && (
             <button type="button" onClick={() => { setSearchInput(""); setSearch(""); }} className="text-[10px] text-slate-500 hover:text-white">✕</button>
           )}
         </form>
 
-        {/* ── Crear bloque ── */}
+        {/* Badges */}
+        {meta?.pendingOrdersCount ? (
+          <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-xs font-semibold text-amber-300">
+            {meta.pendingOrdersCount} pendientes
+          </span>
+        ) : null}
+        {meta?.totalOrdersCount ? (
+          <span className="rounded-full border border-slate-700 bg-[#0a1020] px-3 py-1.5 text-xs text-slate-400">
+            {meta.totalOrdersCount} total
+          </span>
+        ) : null}
+
+        {/* Crear bloque */}
         <button
           type="button"
           onClick={() => setShowCreateBlock(true)}
@@ -1261,7 +1264,7 @@ export default function AdminOrdersPage() {
           + Crear bloque
         </button>
 
-        {/* ── Actualizar ── */}
+        {/* Actualizar */}
         <button
           type="button"
           onClick={() => setRefreshKey((k) => k + 1)}
@@ -1361,6 +1364,17 @@ export default function AdminOrdersPage() {
               {...commonTableProps}
             />
           )}
+
+          {/* Ver todos los bloques */}
+          <div className="flex justify-center pt-1">
+            <button
+              type="button"
+              onClick={() => setActiveTab("enviadas")}
+              className="rounded-xl border border-slate-700 bg-[#050816] px-6 py-2.5 text-sm font-semibold text-slate-300 transition hover:border-sky-500 hover:text-sky-300"
+            >
+              Ver todos los bloques enviados →
+            </button>
+          </div>
         </>
       ) : activeTab === "enviadas" ? (
         <SentBlocksView
