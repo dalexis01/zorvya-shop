@@ -1134,10 +1134,8 @@ export default function AccountModal({
               <button
                 type="button"
                 onClick={() => setActiveTab("orders")}
-                className={`inline-flex w-full items-center justify-center rounded-full px-4 py-2 text-sm font-semibold sm:w-auto ${
-                  activeTab === "orders"
-                    ? "bg-[#2563EB] text-white"
-                    : "bg-[#1a2844] text-slate-300"
+                className={`account-option-button w-full sm:w-auto ${
+                  activeTab === "orders" ? "account-option-button--active" : ""
                 }`}
               >
                 {t.orders}
@@ -1148,7 +1146,7 @@ export default function AccountModal({
                   onClick={() => setLanguageMenuOpen((current) => !current)}
                   aria-expanded={languageMenuOpen}
                   aria-haspopup="menu"
-                  className="inline-flex w-full items-center justify-center rounded-full border border-slate-700 bg-[#0f1b2e] px-3 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-300 transition hover:bg-slate-800 hover:text-white sm:w-auto"
+                  className="account-option-button w-full sm:w-auto"
                 >
                   {t.languages}
                 </button>
@@ -1159,10 +1157,8 @@ export default function AccountModal({
                         key={language}
                         type="button"
                         onClick={() => handleLocaleSelect(language)}
-                        className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-left text-xs font-semibold uppercase tracking-[0.18em] transition ${
-                          accountLocale === language
-                            ? "bg-cyan-500 text-slate-950"
-                            : "text-slate-300 hover:bg-slate-800 hover:text-white"
+                        className={`account-option-button flex w-full items-center justify-between px-3 ${
+                          accountLocale === language ? "account-option-button--active" : ""
                         }`}
                         aria-label={`${t.languages}: ${language}`}
                       >
@@ -1176,10 +1172,8 @@ export default function AccountModal({
               <button
                 type="button"
                 onClick={() => setActiveTab("profile")}
-                className={`inline-flex w-full items-center justify-center rounded-full px-4 py-2 text-sm font-semibold sm:w-auto ${
-                  activeTab === "profile"
-                    ? "bg-[#2563EB] text-white"
-                    : "bg-[#1a2844] text-slate-300"
+                className={`account-option-button w-full sm:w-auto ${
+                  activeTab === "profile" ? "account-option-button--active" : ""
                 }`}
               >
                 {t.editInfo}
@@ -1188,7 +1182,7 @@ export default function AccountModal({
                 href="/terms"
                 target="_blank"
                 rel="noreferrer"
-                className="inline-flex w-full items-center justify-center rounded-full bg-[#1a2844] px-4 py-2 text-center text-sm font-semibold text-slate-300 transition hover:bg-[#223556] hover:text-white sm:w-auto"
+                className="account-option-button w-full text-center sm:w-auto"
               >
                 {t.termsButton}
               </Link>
@@ -1196,7 +1190,7 @@ export default function AccountModal({
                 type="button"
                 onClick={() => void handleLogout()}
                 disabled={submitting}
-                className="inline-flex w-full items-center justify-center rounded-full bg-slate-800 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60 sm:w-auto"
+                className="account-option-button account-option-button--danger w-full sm:w-auto"
               >
                 {t.logout}
               </button>
@@ -1315,7 +1309,7 @@ export default function AccountModal({
                           type="button"
                           onClick={() => void handleEmailCodeRequest()}
                           disabled={profileSubmitting || profileEmail.trim() === user.email}
-                          className="rounded-full border border-cyan-500/40 bg-[#050816] px-4 py-3 text-sm font-semibold text-cyan-300 transition hover:border-cyan-400 hover:text-cyan-200 disabled:opacity-50"
+                          className="account-option-button account-option-button--full"
                         >
                           {t.changeEmailCode}
                         </button>
@@ -1340,7 +1334,7 @@ export default function AccountModal({
                               type="button"
                               onClick={() => void handleEmailCodeConfirm()}
                               disabled={profileSubmitting || emailCode.trim().length === 0}
-                              className="rounded-full bg-cyan-500 px-4 py-3 text-sm font-semibold text-slate-950 transition hover:bg-cyan-400 disabled:opacity-60"
+                              className="account-option-button account-option-button--primary account-option-button--full"
                             >
                               {t.confirmEmailCode}
                             </button>
@@ -1373,7 +1367,7 @@ export default function AccountModal({
                           type="button"
                           onClick={() => void handleProfileSave()}
                           disabled={profileSubmitting}
-                          className="rounded-full bg-cyan-500 px-4 py-3 text-sm font-semibold text-slate-950 transition hover:bg-cyan-400 disabled:opacity-60"
+                          className="account-option-button account-option-button--primary account-option-button--full"
                         >
                           {profileSubmitting ? t.saving : t.saveInfo}
                         </button>
@@ -1427,8 +1421,8 @@ export default function AccountModal({
                   setMode("login");
                   setAuthErrors({});
                 }}
-                className={`flex-1 rounded-xl py-2 text-sm font-semibold ${
-                  mode === "login" ? "bg-[#2563EB] text-white" : "bg-[#1a2844] text-slate-300"
+                className={`account-option-button account-option-button--full flex-1 ${
+                  mode === "login" ? "account-option-button--active" : ""
                 }`}
               >
                 {t.login}
@@ -1439,10 +1433,8 @@ export default function AccountModal({
                   setMode("register");
                   setAuthErrors({});
                 }}
-                className={`flex-1 rounded-xl py-2 text-sm font-semibold ${
-                  mode === "register"
-                    ? "bg-[#2563EB] text-white"
-                    : "bg-[#1a2844] text-slate-300"
+                className={`account-option-button account-option-button--full flex-1 ${
+                  mode === "register" ? "account-option-button--active" : ""
                 }`}
               >
                 {t.register}
@@ -1505,7 +1497,7 @@ export default function AccountModal({
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="w-full rounded-xl bg-[#2563EB] py-3 text-sm font-bold text-white disabled:opacity-60"
+                  className="account-option-button account-option-button--primary account-option-button--full"
                 >
                   {t.login}
                 </button>
@@ -1518,7 +1510,7 @@ export default function AccountModal({
                     setAuthErrors({});
                     setAuthInfo("");
                   }}
-                  className="w-full text-center text-sm font-medium text-cyan-300 hover:text-cyan-200"
+                  className="account-option-button account-option-button--full"
                 >
                   {t.forgotPassword}
                 </button>
@@ -1636,7 +1628,7 @@ export default function AccountModal({
                 <button
                   type="submit"
                   disabled={submitting || !registerAcceptedTerms}
-                  className="w-full rounded-xl bg-[#2563EB] py-3 text-sm font-bold text-white disabled:opacity-60"
+                  className="account-option-button account-option-button--primary account-option-button--full"
                 >
                   {t.register}
                 </button>
@@ -1674,7 +1666,7 @@ export default function AccountModal({
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="w-full rounded-xl bg-[#2563EB] py-3 text-sm font-bold text-white disabled:opacity-60"
+                  className="account-option-button account-option-button--primary account-option-button--full"
                 >
                   {t.verifyCode}
                 </button>
@@ -1682,7 +1674,7 @@ export default function AccountModal({
                   type="button"
                   onClick={() => void handleResendVerification()}
                   disabled={submitting}
-                  className="w-full rounded-xl border border-slate-600 py-3 text-sm font-semibold text-slate-200 disabled:opacity-60"
+                  className="account-option-button account-option-button--full"
                 >
                   {t.sendCode}
                 </button>
@@ -1693,7 +1685,7 @@ export default function AccountModal({
                     setAuthErrors({});
                     setAuthInfo("");
                   }}
-                  className="w-full text-center text-sm font-medium text-cyan-300 hover:text-cyan-200"
+                  className="account-option-button account-option-button--full"
                 >
                   {t.backToLogin}
                 </button>
@@ -1722,7 +1714,7 @@ export default function AccountModal({
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="w-full rounded-xl bg-[#2563EB] py-3 text-sm font-bold text-white disabled:opacity-60"
+                  className="account-option-button account-option-button--primary account-option-button--full"
                 >
                   {t.sendCode}
                 </button>
@@ -1733,7 +1725,7 @@ export default function AccountModal({
                     setAuthErrors({});
                     setAuthInfo("");
                   }}
-                  className="w-full text-center text-sm font-medium text-cyan-300 hover:text-cyan-200"
+                  className="account-option-button account-option-button--full"
                 >
                   {t.backToLogin}
                 </button>
@@ -1796,7 +1788,7 @@ export default function AccountModal({
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="w-full rounded-xl bg-[#2563EB] py-3 text-sm font-bold text-white disabled:opacity-60"
+                  className="account-option-button account-option-button--primary account-option-button--full"
                 >
                   {t.resetPassword}
                 </button>
@@ -1807,7 +1799,7 @@ export default function AccountModal({
                     setAuthErrors({});
                     setAuthInfo("");
                   }}
-                  className="w-full text-center text-sm font-medium text-cyan-300 hover:text-cyan-200"
+                  className="account-option-button account-option-button--full"
                 >
                   {t.backToLogin}
                 </button>

@@ -905,6 +905,95 @@ html[data-client-theme="light"] .storefront-cosmic-button {
   box-shadow: 0 0 0 4px rgb(56 189 248 / 0.12);
 }
 
+.account-option-button {
+  width: fit-content;
+  position: relative;
+  overflow: hidden;
+  cursor: pointer;
+  user-select: none;
+  padding: 2px 12px;
+  background-color: rgb(0 0 0 / 0.16);
+  border: 0;
+  border-radius: 0;
+  color: rgb(255 255 255 / 0.72);
+  transition-property: color, background-color, box-shadow, transform;
+  transition-duration: 300ms;
+  transition-timing-function: cubic-bezier(0.25, 0.8, 0.25, 1);
+  display: inline-flex;
+  min-height: 32px;
+  align-items: center;
+  justify-content: center;
+  box-shadow:
+    rgb(0 0 0 / 0.15) 0 2px 1px 0 inset,
+    rgb(255 255 255 / 0.17) 0 1px 1px 0;
+  outline: none;
+  text-decoration: none;
+  font-size: 0.78rem;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  line-height: 1;
+  text-transform: none;
+}
+
+.account-option-button:hover {
+  background-color: #2c2c2c;
+  color: #fff;
+  box-shadow:
+    rgb(0 0 0 / 0.23) 0 -4px 1px 0 inset,
+    rgb(255 255 255 / 0.17) 0 -1px 1px 0,
+    rgb(0 0 0 / 0.17) 0 2px 4px 1px;
+}
+
+.account-option-button:focus-visible {
+  box-shadow:
+    0 0 0 2px rgb(34 211 238 / 0.24),
+    rgb(0 0 0 / 0.23) 0 -4px 1px 0 inset,
+    rgb(255 255 255 / 0.17) 0 -1px 1px 0,
+    rgb(0 0 0 / 0.17) 0 2px 4px 1px;
+}
+
+.account-option-button:active {
+  transform: translateY(1px);
+}
+
+.account-option-button--active,
+.account-option-button--primary {
+  background-color: #2d6737;
+  color: #fff;
+  box-shadow:
+    rgb(0 0 0 / 0.23) 0 -4px 1px 0 inset,
+    rgb(255 255 255 / 0.17) 0 -1px 1px 0,
+    rgb(0 0 0 / 0.17) 0 2px 4px 1px;
+}
+
+.account-option-button--active:hover,
+.account-option-button--primary:hover {
+  background-color: #34723f;
+  box-shadow:
+    rgb(0 0 0 / 0.26) 0 -4px 1px 0 inset,
+    rgb(255 255 255 / 0.17) 0 -1px 1px 0,
+    rgb(0 0 0 / 0.15) 0 3px 6px 2px;
+}
+
+.account-option-button--danger {
+  background-color: #5f1d24;
+  color: #fff;
+}
+
+.account-option-button--danger:hover {
+  background-color: #7f1d1d;
+}
+
+.account-option-button--full {
+  width: 100%;
+}
+
+.account-option-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+  transform: none;
+}
+
 .account-auth-submit {
   width: 100%;
   border: none;
