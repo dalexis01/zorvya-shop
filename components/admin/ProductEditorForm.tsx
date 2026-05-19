@@ -43,6 +43,7 @@ interface ProductFormState {
   tags: string;
   category: string;
   price: string;
+  stockQuantity: string;
   originalPrice: string;
   description: string;
   isVisible: boolean;
@@ -106,6 +107,7 @@ function createEmptyFormState(): ProductFormState {
     tags: "",
     category: "",
     price: "",
+    stockQuantity: "0",
     originalPrice: "",
     description: "",
     isVisible: true,
@@ -328,6 +330,7 @@ function createFormStateFromProduct(product: Product): ProductFormState {
     tags: joinTags(product.tags),
     category: product.category,
     price: String(product.price),
+    stockQuantity: String(product.stock ?? 0),
     originalPrice: product.originalPrice ? String(product.originalPrice) : "",
     description: product.longDescription || product.shortDescription,
     isVisible: product.isVisible,
@@ -853,6 +856,7 @@ export default function ProductEditorForm({ mode, productId }: ProductEditorForm
         trimText(formState.tags) ||
         trimText(formState.category) ||
         trimText(formState.price) ||
+        trimText(formState.stockQuantity) ||
         trimText(formState.originalPrice) ||
         trimText(formState.description) ||
         trimText(formState.supplier) ||
@@ -878,7 +882,7 @@ export default function ProductEditorForm({ mode, productId }: ProductEditorForm
   function buildPayload(asDraft: boolean) {
     const description = trimText(formState.description);
     const costPrice = toNumber(formState.costPrice);
-    const stock = asDraft ? 0 : formState.isInStock ? 1 : 0;
+    const stock = asDraft ? 0 : Math.max(0, Math.trunc(toNumber(formState.stockQuantity)));
     const colorOptions = formState.colors
       .map((color) => ({
         id: color.id,
@@ -924,7 +928,7 @@ export default function ProductEditorForm({ mode, productId }: ProductEditorForm
       shortDescription: toShortDescription(longDescription),
       longDescription,
       stock,
-      showStock: asDraft ? false : formState.isInStock,
+      showStock: asDraft ? false : stock > 0,
       isVisible: asDraft ? false : formState.isVisible,
       isFeatured: asDraft ? false : formState.isFeatured,
       isActive: asDraft ? false : formState.isActive,
@@ -1230,6 +1234,19 @@ export default function ProductEditorForm({ mode, productId }: ProductEditorForm
                   onChange={(event) => updateField("price", event.target.value)}
                   className="mt-1.5 w-full max-w-[12rem] rounded-2xl border border-slate-700 bg-[#0a1020] px-4 py-2.5 text-sm text-white outline-none transition focus:border-cyan-400"
                   required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-300">
+                  Stock disponible
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={formState.stockQuantity}
+                  onChange={(event) => updateField("stockQuantity", event.target.value)}
+                  className="mt-1.5 w-full max-w-[12rem] rounded-2xl border border-slate-700 bg-[#0a1020] px-4 py-2.5 text-sm text-white outline-none transition focus:border-cyan-400"
                 />
               </div>
               <div className="md:col-span-2">
@@ -1738,9 +1755,13 @@ export default function ProductEditorForm({ mode, productId }: ProductEditorForm
                   </p>
                 </div>
                 <div className="rounded-[1rem] border border-slate-800 bg-[#0a1020] p-3">
-                  <p className="text-xs uppercase tracking-[0.25em] text-slate-500">
-                    Ganancia
+                  <p className="text-xs uppercase tracking-[0.25em] text-slate-500">Stock</p>
+                  <p className="mt-2 text-base font-semibold text-cyan-100">
+                    {Math.max(0, Math.trunc(toNumber(formState.stockQuantity)))}
                   </p>
+                </div>
+                <div className="rounded-[1rem] border border-slate-800 bg-[#0a1020] p-3 sm:col-span-2">
+                  <p className="text-xs uppercase tracking-[0.25em] text-slate-500">Ganancia</p>
                   <p className="mt-2 text-base font-semibold text-emerald-300">
                     {formatCurrency(unitMargin)}
                   </p>

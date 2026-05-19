@@ -1493,14 +1493,27 @@ export async function registerProductSalesFromOrder(input: {
   soldAt: string;
   items: Array<{
     productId?: string | number;
+    quantity?: number;
   }>;
 }) {
   if (!isProductsDatabaseConfigured()) return;
 
   const soldAt = trimText(input.soldAt);
-  const productIds = input.items
-    .map((item) => String(item.productId ?? "").trim())
-    .filter(Boolean);
+  const quantitiesByProduct = new Map<string, number>();
+
+  for (const item of input.items) {
+    const productId = String(item.productId ?? "").trim();
+
+    if (!productId) {
+      continue;
+    }
+
+    const quantity = Math.max(1, Math.trunc(Number(item.quantity ?? 1)));
+    quantitiesByProduct.set(productId, (quantitiesByProduct.get(productId) ?? 0) + quantity);
+  }
+
+  const productIds = [...quantitiesByProduct.keys()];
+  const quantities = productIds.map((productId) => quantitiesByProduct.get(productId) ?? 1);
 
   if (productIds.length === 0 || !soldAt) return;
 
@@ -1509,11 +1522,13 @@ export async function registerProductSalesFromOrder(input: {
     // Targeted UPDATE — no full table scan needed
     await pool.query(
       `UPDATE products
-       SET last_sold_at = $1,
-           sale_dates_json = COALESCE(sale_dates_json, '[]'::jsonb) || to_jsonb($1::text),
+       SET stock = GREATEST(products.stock - sold.quantity, 0),
+           last_sold_at = $1,
+           sale_dates_json = COALESCE(products.sale_dates_json, '[]'::jsonb) || to_jsonb($1::text),
            updated_at = $1
-       WHERE id = ANY($2)`,
-      [soldAt, productIds]
+       FROM unnest($2::text[], $3::int[]) AS sold(id, quantity)
+       WHERE products.id = sold.id`,
+      [soldAt, productIds, quantities]
     );
     clearProductsListCache();
   } catch (err) {
