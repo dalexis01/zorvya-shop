@@ -3,13 +3,9 @@ const STORE_COORDINATES = {
   latitude: 5.8339999,
   longitude: -55.1319794,
 } as const;
-const MAX_DELIVERY_DISTANCE_KM = 60;
-const DELIVERY_FEE_PER_KM = 15;
-const MIN_DELIVERY_FEE_SRD = 100;
-const MIN_DELIVERY_FEE_DISTANCE_KM = 6;
-const FREE_DELIVERY_UNDER_TEN_KM_MINIMUM_SRD = 3000;
-const FREE_DELIVERY_AT_TEN_KM_MINIMUM_SRD = 5000;
-const FREE_DELIVERY_TEN_TO_THIRTY_KM_MINIMUM_SRD = 10000;
+const MAX_DELIVERY_DISTANCE_KM = 30;
+const DELIVERY_FEE_PER_8KM_SRD = 150;
+const DELIVERY_DISTANCE_STEP_KM = 8;
 
 const SURINAME_DISTRICTS = [
   "paramaribo",
@@ -403,51 +399,15 @@ export function estimateDeliveryDistance(customerAddress: string) {
   return assessDeliveryAddress(customerAddress).distanceKm;
 }
 
-function getFreeDeliveryMinimum(distance: number | null | undefined) {
-  if (!Number.isFinite(distance) || !distance || distance <= 0) {
-    return null;
-  }
-
-  const roundedDistance = Math.ceil(distance);
-
-  if (roundedDistance < 10) {
-    return FREE_DELIVERY_UNDER_TEN_KM_MINIMUM_SRD;
-  }
-
-  if (roundedDistance === 10) {
-    return FREE_DELIVERY_AT_TEN_KM_MINIMUM_SRD;
-  }
-
-  if (roundedDistance > 10 && roundedDistance <= 30) {
-    return FREE_DELIVERY_TEN_TO_THIRTY_KM_MINIMUM_SRD;
-  }
-
-  return null;
-}
-
 export function getFreeDeliveryProgress(distance: number | null | undefined, subtotal: number) {
-  const minimum = getFreeDeliveryMinimum(distance);
-
-  if (!minimum || !Number.isFinite(subtotal) || subtotal < 0) {
-    return {
-      available: false,
-      minimum: null,
-      progress: 0,
-      remaining: null,
-      isUnlocked: false,
-    };
-  }
-
-  const normalizedSubtotal = Math.max(0, Math.round(subtotal * 100) / 100);
-  const progress = Math.max(0, Math.min(1, normalizedSubtotal / minimum));
-  const remaining = Math.max(0, Math.round((minimum - normalizedSubtotal) * 100) / 100);
-
+  void distance;
+  void subtotal;
   return {
-    available: true,
-    minimum,
-    progress,
-    remaining,
-    isUnlocked: remaining <= 0,
+    available: false,
+    minimum: null,
+    progress: 0,
+    remaining: null,
+    isUnlocked: false,
   };
 }
 
@@ -466,36 +426,23 @@ export function calculateDeliveryFee(distance: number, subtotal?: number): {
     };
   }
 
-  const freeDeliveryProgress = getFreeDeliveryProgress(distance, subtotal ?? 0);
-
-  if (freeDeliveryProgress.isUnlocked) {
-    return {
-      fee: 0,
-      isFree: true,
-      isAvailable: true,
-      freeDeliveryMinimum: freeDeliveryProgress.minimum,
-    };
-  }
-
-  const fee =
-    distance <= MIN_DELIVERY_FEE_DISTANCE_KM
-      ? MIN_DELIVERY_FEE_SRD
-      : Math.ceil(distance) * DELIVERY_FEE_PER_KM;
+  const _subtotal = subtotal;
+  void _subtotal;
+  const fee = Math.max(
+    DELIVERY_FEE_PER_8KM_SRD,
+    Math.ceil(distance / DELIVERY_DISTANCE_STEP_KM) * DELIVERY_FEE_PER_8KM_SRD
+  );
   return {
     fee,
     isFree: false,
     isAvailable: true,
-    freeDeliveryMinimum: freeDeliveryProgress.minimum,
+    freeDeliveryMinimum: null,
   };
 }
 
 export {
-  DELIVERY_FEE_PER_KM,
-  FREE_DELIVERY_AT_TEN_KM_MINIMUM_SRD,
-  FREE_DELIVERY_TEN_TO_THIRTY_KM_MINIMUM_SRD,
-  FREE_DELIVERY_UNDER_TEN_KM_MINIMUM_SRD,
-  MIN_DELIVERY_FEE_DISTANCE_KM,
-  MIN_DELIVERY_FEE_SRD,
+  DELIVERY_DISTANCE_STEP_KM,
+  DELIVERY_FEE_PER_8KM_SRD,
   MAX_DELIVERY_DISTANCE_KM,
   REAL_SURINAME_ADDRESS_SUGGESTIONS,
   STORE_ADDRESS,

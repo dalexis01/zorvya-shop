@@ -15,7 +15,6 @@ import {
 import {
   formatCurrencySrd as formatSrd,
   formatCurrencyUsd as formatUsd,
-  formatKilometers,
 } from "@/lib/shop/number-format";
 import { calculateOrderPayment } from "@/lib/shop/payments";
 import type {
@@ -129,7 +128,7 @@ const texts: Texts = {
     validation: "Complete todos los campos obligatorios.",
     addressInvalid: "Solo permitimos direcciones reales de Suriname.",
     deliveryCalculating: "Calculando la distancia real del delivery...",
-    deliveryEstimate: (fee) => `Total de delivery: ${formatSrd(fee)}.`,
+    deliveryEstimate: (fee) => `${formatSrd(fee)}`,
     deliveryFree: "Tu carrito ya desbloqueo delivery gratis para esta direccion.",
     deliveryReview:
       "Su direccion no se pudo calcular con exito. Antes del envio un agente se pondra en contacto con usted.",
@@ -169,7 +168,7 @@ const texts: Texts = {
     validation: "Vul alle verplichte velden in.",
     addressInvalid: "Alleen echte adressen in Suriname zijn toegestaan.",
     deliveryCalculating: "De echte leveringsafstand wordt berekend...",
-    deliveryEstimate: (fee) => `Totale levering: ${formatSrd(fee)}.`,
+    deliveryEstimate: (fee) => `${formatSrd(fee)}`,
     deliveryFree: "Je winkelwagen heeft gratis levering voor dit adres vrijgespeeld.",
     deliveryReview:
       "Uw adres kon niet exact worden berekend. Voor de levering neemt een agent eerst contact met u op.",
@@ -209,7 +208,7 @@ const texts: Texts = {
     validation: "Complete all required fields.",
     addressInvalid: "We only allow real addresses in Suriname.",
     deliveryCalculating: "Calculating the real delivery distance...",
-    deliveryEstimate: (fee) => `Delivery total: ${formatSrd(fee)}.`,
+    deliveryEstimate: (fee) => `${formatSrd(fee)}`,
     deliveryFree: "Your cart already unlocked free delivery for this address.",
     deliveryReview:
       "Your address could not be calculated exactly. An agent will contact you before delivery.",
@@ -249,7 +248,7 @@ const texts: Texts = {
     validation: "Preencha todos os campos obrigatorios.",
     addressInvalid: "So permitimos enderecos reais no Suriname.",
     deliveryCalculating: "Calculando a distancia real da entrega...",
-    deliveryEstimate: (fee) => `Total da entrega: ${formatSrd(fee)}.`,
+    deliveryEstimate: (fee) => `${formatSrd(fee)}`,
     deliveryFree: "Seu carrinho ja desbloqueou entrega gratis para este endereco.",
     deliveryReview:
       "Nao foi possivel calcular seu endereco com exatidao. Um agente entrara em contato antes da entrega.",
@@ -576,9 +575,6 @@ export default function CheckoutModal({
               serverDeliveryQuote.distanceKm > 0 ? (
                 <p className="truncate px-1 text-xs text-cyan-100 sm:text-sm">
                   {t.deliveryEstimate(serverDeliveryQuote.fee)}
-                  <span className="ml-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-cyan-200/80 sm:text-[11px]">
-                    {formatKilometers(serverDeliveryQuote.distanceKm)}
-                  </span>
                 </p>
               ) : null
             }
