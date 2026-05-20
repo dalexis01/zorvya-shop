@@ -933,14 +933,6 @@ export default function AdminOrdersPage() {
     return () => window.removeEventListener("admin-orders-updated", fn);
   }, []);
 
-  useEffect(() => {
-    const intervalId = window.setInterval(() => {
-      setRefreshKey((current) => current + 1);
-    }, 15000);
-
-    return () => window.clearInterval(intervalId);
-  }, []);
-
   const syncCalledRef = React.useRef(false);
 
   async function loadPersistentBlocks(triggerSync = false) {
@@ -993,6 +985,57 @@ export default function AdminOrdersPage() {
     setNotice({ tone: "success", message: `Bloque "${name}" creado con ${orderIds.length} ordenes.` });
     await loadPersistentBlocks();
   }
+
+  useEffect(() => {
+    let alive = true;
+
+    async function loadMetaOnly() {
+      if (document.visibilityState !== "visible") {
+        return;
+      }
+
+      try {
+        const response = await fetch("/api/admin/orders/meta", {
+          cache: "no-store",
+        });
+        const data = (await response.json()) as {
+          success?: boolean;
+          meta?: AdminOrdersMeta;
+        };
+
+        if (!alive || !data.success || !data.meta) {
+          return;
+        }
+
+        setMeta((currentMeta) => {
+          if (
+            currentMeta &&
+            currentMeta.newOrdersCount === data.meta!.newOrdersCount &&
+            currentMeta.totalOrdersCount === data.meta!.totalOrdersCount &&
+            currentMeta.pendingOrdersCount === data.meta!.pendingOrdersCount &&
+            currentMeta.pickupOrdersCount === data.meta!.pickupOrdersCount &&
+            currentMeta.completedOrdersCount === data.meta!.completedOrdersCount &&
+            currentMeta.cancelledOrdersCount === data.meta!.cancelledOrdersCount
+          ) {
+            return currentMeta;
+          }
+
+          return data.meta!;
+        });
+      } catch {
+        return;
+      }
+    }
+
+    const intervalId = window.setInterval(() => {
+      void loadMetaOnly();
+    }, 20000);
+
+    return () => {
+      alive = false;
+      window.clearInterval(intervalId);
+    };
+  }, []);
 
   useEffect(() => {
     let alive = true;
