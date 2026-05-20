@@ -283,6 +283,8 @@ export interface CustomerNotificationOrderSummary {
   pickupTime: string | null;
   lastMessage: string | null;
   statusHistory: OrderStatusHistoryEntry[];
+  itemImages: string[];
+  estimatedDateText: string | null;
 }
 
 export interface NormalizedOrderInput {

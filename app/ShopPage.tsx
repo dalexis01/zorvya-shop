@@ -2498,21 +2498,30 @@ export default function ShopPage({
             </div>
 
             <div className="flex flex-wrap gap-1.5 md:flex md:flex-wrap md:items-center md:justify-self-end md:justify-end md:gap-2">
-                <CustomerNotificationsBell
-                  locale={locale}
-                  user={sessionUser}
-                  buttonClassName="storefront-cosmic-button relative inline-flex h-[2.08rem] w-full min-w-0 items-center justify-center overflow-hidden rounded-[12px] px-1 text-center text-[10px] font-semibold leading-none sm:h-[2.2rem] sm:px-1.5 sm:text-[11px] md:h-[2.4rem] md:w-[4.4rem] md:px-2 md:text-[11px]"
-                />
                 {mobileHeaderButtons.map((button) => (
                   <div key={button.id} className="min-w-0 flex-1 basis-0 md:hidden">
                     {renderHeaderButton(button.target)}
                   </div>
                 ))}
+                <div className="min-w-0 flex-1 basis-0 md:hidden">
+                  <CustomerNotificationsBell
+                    locale={locale}
+                    user={sessionUser}
+                    buttonClassName="storefront-cosmic-button relative inline-flex h-[2.55rem] w-full min-w-0 items-center justify-center overflow-hidden rounded-[12px] px-1 text-center text-[10px] font-semibold leading-none sm:h-[2.7rem] sm:px-1.5 sm:text-[11px] md:h-[2.95rem] md:w-[4.4rem] md:px-2 md:text-[11px]"
+                  />
+                </div>
                 {headerButtons.map((button) => (
                   <div key={`desktop-${button.id}`} className="hidden min-w-0 md:block">
                     {renderHeaderButton(button.target)}
                   </div>
                 ))}
+                <div className="hidden min-w-0 md:block">
+                  <CustomerNotificationsBell
+                    locale={locale}
+                    user={sessionUser}
+                    buttonClassName="storefront-cosmic-button relative inline-flex h-[2.55rem] w-full min-w-0 items-center justify-center overflow-hidden rounded-[12px] px-1 text-center text-[10px] font-semibold leading-none sm:h-[2.7rem] sm:px-1.5 sm:text-[11px] md:h-[2.95rem] md:w-[4.4rem] md:px-2 md:text-[11px]"
+                  />
+                </div>
               </div>
             </div>
         </div>

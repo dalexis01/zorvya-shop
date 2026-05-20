@@ -9,10 +9,12 @@ import type {
   CustomerNotification,
   CustomerNotificationOrderSummary,
   DeliveryType,
+  OrderLineItem,
   OrderStatusHistoryEntry,
   StoredOrder,
 } from "@/lib/shop/types";
 import { formatPickupLabel, PICKUP_ADDRESS } from "@/lib/shop/checkout";
+import { getDeliveryEstimateDetails } from "@/lib/shop/delivery-estimates";
 import { getOrderStatus, getOrderStatusDetail } from "@/lib/shop/order-status";
 import { getCustomerPool } from "@/lib/server/customer-db";
 
@@ -42,6 +44,7 @@ type PendingOrderRow = {
   pickup_date: string | null;
   pickup_time: string | null;
   total: number | string;
+  delivery_distance_km: number | string | null;
   created_at: Date | string;
   updated_at: Date | string;
   cancelled_at: Date | string | null;
@@ -49,6 +52,7 @@ type PendingOrderRow = {
   cancelled_by: "customer" | "admin" | null;
   admin_status: string | null;
   status_history_json: OrderStatusHistoryEntry[] | null;
+  items_json: OrderLineItem[] | null;
 };
 
 let customerNotificationsSchemaReadyPromise: Promise<void> | null = null;
@@ -101,7 +105,8 @@ async function getNotificationsPool() {
 
 function buildPendingOrderSummary(
   row: PendingOrderRow,
-  latestMessage: string | null
+  latestMessage: string | null,
+  locale: "es" | "nl" | "en" | "pt"
 ): CustomerNotificationOrderSummary {
   const normalizedOrder: Pick<
     StoredOrder,
@@ -126,6 +131,19 @@ function buildPendingOrderSummary(
     createdAt: toIsoString(row.created_at) ?? new Date().toISOString(),
   };
 
+  const deliveryEstimate =
+    row.delivery_type === "pickup"
+      ? formatCustomerNotificationPickupLabel({
+          pickupDate: row.pickup_date,
+          pickupTime: row.pickup_time,
+        })
+      : getDeliveryEstimateDetails({
+          distanceKm:
+            row.delivery_distance_km === null ? null : toNumber(row.delivery_distance_km),
+          locale,
+          baseDate: normalizedOrder.createdAt,
+        })?.dateText ?? null;
+
   return {
     id: row.id,
     status: getOrderStatus(normalizedOrder),
@@ -141,6 +159,13 @@ function buildPendingOrderSummary(
     pickupTime: row.pickup_time,
     lastMessage: latestMessage,
     statusHistory: Array.isArray(row.status_history_json) ? row.status_history_json : [],
+    itemImages: Array.isArray(row.items_json)
+      ? row.items_json
+          .map((item) => (typeof item.image === "string" ? item.image.trim() : ""))
+          .filter(Boolean)
+          .slice(0, 4)
+      : [],
+    estimatedDateText: deliveryEstimate,
   };
 }
 
@@ -300,7 +325,10 @@ export async function markCustomerNotificationsRead(input: {
   );
 }
 
-export async function getCustomerNotificationsPanelData(userId: string) {
+export async function getCustomerNotificationsPanelData(
+  userId: string,
+  locale: "es" | "nl" | "en" | "pt"
+) {
   const pool = await getNotificationsPool();
   const [notificationsResult, pendingOrdersResult] = await Promise.all([
     pool.query<CustomerNotificationRow>(
@@ -332,13 +360,15 @@ export async function getCustomerNotificationsPanelData(userId: string) {
           pickup_date,
           pickup_time,
           total,
+          delivery_distance_km,
           created_at,
           updated_at,
           cancelled_at,
           cancellation_reason,
           cancelled_by,
           admin_status,
-          status_history_json
+          status_history_json,
+          items_json
         FROM orders
         WHERE user_id = $1
           AND cancelled_at IS NULL
@@ -362,7 +392,7 @@ export async function getCustomerNotificationsPanelData(userId: string) {
   }
 
   const pendingOrders = pendingOrdersResult.rows
-    .map((row) => buildPendingOrderSummary(row, latestMessageByOrderId.get(row.id) ?? null))
+    .map((row) => buildPendingOrderSummary(row, latestMessageByOrderId.get(row.id) ?? null, locale))
     .filter((order) => isCustomerNotificationPendingStatus(order.status));
 
   return {

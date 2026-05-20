@@ -1,9 +1,9 @@
 "use client";
 
+import Image from "next/image";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { formatPickupLabel } from "@/lib/shop/checkout";
-import { formatCurrencySrd } from "@/lib/shop/number-format";
 import type {
   CustomerNotification,
   CustomerNotificationOrderSummary,
@@ -22,7 +22,6 @@ const texts = {
   es: {
     title: "Notificaciones",
     subtitle: "Pedidos y mensajes importantes",
-    pendingOrders: "Pedidos pendientes",
     importantMessages: "Mensajes importantes",
     empty: "No hay novedades activas ahora mismo.",
     confirmed: "Confirmado",
@@ -32,7 +31,6 @@ const texts = {
     lastMessage: "Ultimo mensaje",
     address: "Direccion",
     date: "Fecha",
-    total: "Total",
     order: "Pedido",
     pickupFor: "Recogida programada",
     close: "Cerrar",
@@ -44,7 +42,6 @@ const texts = {
   nl: {
     title: "Meldingen",
     subtitle: "Bestellingen en belangrijke berichten",
-    pendingOrders: "Openstaande bestellingen",
     importantMessages: "Belangrijke berichten",
     empty: "Er zijn nu geen actieve updates.",
     confirmed: "Bevestigd",
@@ -54,7 +51,6 @@ const texts = {
     lastMessage: "Laatste bericht",
     address: "Adres",
     date: "Datum",
-    total: "Totaal",
     order: "Bestelling",
     pickupFor: "Afhaling gepland",
     close: "Sluiten",
@@ -66,7 +62,6 @@ const texts = {
   en: {
     title: "Notifications",
     subtitle: "Orders and important messages",
-    pendingOrders: "Pending orders",
     importantMessages: "Important messages",
     empty: "There are no active updates right now.",
     confirmed: "Confirmed",
@@ -76,7 +71,6 @@ const texts = {
     lastMessage: "Latest message",
     address: "Address",
     date: "Date",
-    total: "Total",
     order: "Order",
     pickupFor: "Pickup scheduled",
     close: "Close",
@@ -88,7 +82,6 @@ const texts = {
   pt: {
     title: "Notificacoes",
     subtitle: "Pedidos e mensagens importantes",
-    pendingOrders: "Pedidos pendentes",
     importantMessages: "Mensagens importantes",
     empty: "Nao ha novidades ativas agora.",
     confirmed: "Confirmado",
@@ -98,7 +91,6 @@ const texts = {
     lastMessage: "Ultima mensagem",
     address: "Endereco",
     date: "Data",
-    total: "Total",
     order: "Pedido",
     pickupFor: "Retirada agendada",
     close: "Fechar",
@@ -195,7 +187,7 @@ export default function CustomerNotificationsBell({
       }
 
       try {
-        const response = await fetch("/api/account/notifications", {
+        const response = await fetch(`/api/account/notifications?locale=${locale}`, {
           cache: "no-store",
         });
         const payload = (await response.json()) as NotificationsResponse;
@@ -215,7 +207,7 @@ export default function CustomerNotificationsBell({
         }
       }
     },
-    [user]
+    [locale, user]
   );
 
   const markRead = useCallback(async () => {
@@ -367,7 +359,7 @@ export default function CustomerNotificationsBell({
       </button>
 
       {panelOpen ? (
-        <div className="customer-notification-panel absolute left-0 top-[calc(100%+0.7rem)] z-[85] w-[min(92vw,24rem)] overflow-hidden rounded-[1.45rem] border border-cyan-400/20 bg-[#061120]/96 text-white shadow-[0_24px_80px_rgba(0,0,0,0.46)] backdrop-blur-xl md:left-auto md:right-0">
+        <div className="customer-notification-panel customer-notification-panel--bot absolute left-0 top-[calc(100%+0.7rem)] z-[85] w-[min(92vw,24rem)] overflow-hidden rounded-[1.45rem] border border-cyan-400/20 text-white shadow-[0_24px_80px_rgba(0,0,0,0.46)] backdrop-blur-xl md:left-auto md:right-0">
           <div className="flex items-center justify-between gap-3 border-b border-white/10 px-4 py-3">
             <div>
               <p className="text-[0.68rem] font-semibold uppercase tracking-[0.24em] text-cyan-300/80">
@@ -436,9 +428,6 @@ export default function CustomerNotificationsBell({
 
                 {pendingOrders.length > 0 ? (
                   <section className="space-y-2">
-                    <h3 className="text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-cyan-300/85">
-                      {t.pendingOrders}
-                    </h3>
                     <div className="space-y-2">
                       {pendingOrders.map((order) => (
                         <article
@@ -447,26 +436,37 @@ export default function CustomerNotificationsBell({
                         >
                           <div className="flex items-start justify-between gap-3">
                             <div className="min-w-0">
-                              <p className="text-lg font-semibold text-white">
-                                {getCustomerTimelineStep(order.status) >= 2
-                                  ? t.routeMessage
-                                  : getCustomerTimelineStep(order.status) >= 1
-                                    ? t.processingMessage
-                                    : order.status === "Pedido completado"
-                                      ? t.deliveredMessage
-                                      : t.confirmedMessage}
+                              <p className="text-sm font-semibold text-white">
+                                {t.order} {order.id}
                               </p>
-                              <p className="mt-1 text-sm text-slate-300">
-                                {t.order} {order.id}{" "}
-                                {order.deliveryType === "pickup"
-                                  ? formatCustomerNotificationPickupLabel(order)
-                                  : t.routeMessage}
+                              <p className="mt-1 text-[11px] text-slate-300">
+                                {order.estimatedDateText ??
+                                  (order.deliveryType === "pickup"
+                                    ? formatCustomerNotificationPickupLabel(order)
+                                    : t.routeMessage)}
                               </p>
                             </div>
-                            <span className="text-sm font-semibold text-white">
-                              {formatCurrencySrd(order.total)}
-                            </span>
+                            <span className="text-[11px] font-semibold text-cyan-100">{order.status}</span>
                           </div>
+
+                          {order.itemImages.length > 0 ? (
+                            <div className="flex items-center gap-2 overflow-x-auto pb-1">
+                              {order.itemImages.map((imageUrl, index) => (
+                                <div
+                                  key={`${order.id}-image-${index}`}
+                                  className="h-14 w-14 shrink-0 overflow-hidden rounded-[0.85rem] border border-white/10 bg-white/5"
+                                >
+                                  <Image
+                                    src={imageUrl}
+                                    alt={`${order.id} item ${index + 1}`}
+                                    width={56}
+                                    height={56}
+                                    className="h-full w-full object-cover"
+                                  />
+                                </div>
+                              ))}
+                            </div>
+                          ) : null}
 
                           <div className="rounded-[1rem] border border-[#d8e4ef] bg-[#f8fbff] px-3 py-3 text-slate-900">
                             <div className="grid grid-cols-4 gap-2">
@@ -525,9 +525,7 @@ export default function CustomerNotificationsBell({
                               {formatDate(order.createdAt, locale)}
                             </span>
                             <span className="text-[11px] text-slate-300">
-                              {order.deliveryType === "pickup"
-                                ? t.pickupFor
-                                : order.status}
+                              {order.estimatedDateText ?? (order.deliveryType === "pickup" ? t.pickupFor : order.status)}
                             </span>
                           </div>
                         </article>

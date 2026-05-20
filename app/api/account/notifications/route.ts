@@ -5,10 +5,11 @@ import {
   markCustomerNotificationsRead,
 } from "@/lib/server/customer-notifications";
 import { getCurrentUser } from "@/lib/server/session";
+import type { Locale } from "@/lib/shop/types";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const user = await getCurrentUser();
 
@@ -22,7 +23,11 @@ export async function GET() {
       );
     }
 
-    const payload = await getCustomerNotificationsPanelData(user.id);
+    const requestLocale = new URL(request.url).searchParams.get("locale");
+    const locale = (
+      requestLocale && ["es", "nl", "en", "pt"].includes(requestLocale) ? requestLocale : "es"
+    ) as Locale;
+    const payload = await getCustomerNotificationsPanelData(user.id, locale);
 
     return NextResponse.json({
       success: true,
