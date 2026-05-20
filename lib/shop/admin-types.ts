@@ -66,11 +66,62 @@ export interface ProductInternalDetails {
   purchasePrice: number;
   shippingFee: number;
   isHeavy: boolean;
+  supplierId: string;
   supplier: string;
   supplierPhone: string;
   internalCode: string;
   internalNotes: string;
   accountingImageUrl: string;
+}
+
+export interface SupplierChoice {
+  id: string;
+  name: string;
+  contactName: string;
+  phone: string;
+  email: string;
+  isActive: boolean;
+}
+
+export interface SupplierSummary {
+  dayAmount: number;
+  weekAmount: number;
+  totalByBlocks: number;
+  totalPending: number;
+  totalPaid: number;
+  totalAccrued: number;
+  blockCount: number;
+}
+
+export interface SupplierBlockSummary {
+  blockId: string;
+  blockName: string;
+  blockStatus: string;
+  ordersCount: number;
+  amount: number;
+}
+
+export interface SupplierPaymentRecord {
+  id: string;
+  supplierId: string;
+  amount: number;
+  paymentDate: string;
+  blockId: string | null;
+  notes: string;
+  createdAt: string;
+  createdBy: string;
+}
+
+export interface SupplierListEntry extends SupplierChoice {
+  notes: string;
+  createdAt: string;
+  updatedAt: string;
+  summary: SupplierSummary;
+}
+
+export interface SupplierProfile extends SupplierListEntry {
+  blockBalances: SupplierBlockSummary[];
+  payments: SupplierPaymentRecord[];
 }
 
 export interface ProductAiImageCandidate {

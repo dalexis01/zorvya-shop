@@ -319,6 +319,7 @@ function normalizeInternalDetails(
     purchasePrice: Number(internal?.purchasePrice ?? 0),
     shippingFee: Number(internal?.shippingFee ?? 0),
     isHeavy: Boolean(internal?.isHeavy),
+    supplierId: trimText(internal?.supplierId),
     supplier: trimText(internal?.supplier),
     supplierPhone: trimText(internal?.supplierPhone),
     internalCode: trimText(internal?.internalCode),

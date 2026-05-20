@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { ACCEPTED_IMAGE_TYPES, imageFileToDataUrl } from "@/lib/shop/image-upload";
-import type { Product } from "@/lib/shop/admin-types";
+import type { Product, SupplierChoice } from "@/lib/shop/admin-types";
 import { formatCurrencyDollar as formatCurrency } from "@/lib/shop/number-format";
 
 interface ProductEditorFormProps {
@@ -52,6 +52,7 @@ interface ProductFormState {
   isActive: boolean;
   images: ProductImageDraft[];
   costPrice: string;
+  supplierId: string;
   supplier: string;
   supplierPhone: string;
   internalNotes: string;
@@ -116,6 +117,7 @@ function createEmptyFormState(): ProductFormState {
     isActive: true,
     images: [],
     costPrice: "",
+    supplierId: "",
     supplier: "",
     supplierPhone: "",
     internalNotes: "",
@@ -344,6 +346,7 @@ function createFormStateFromProduct(product: Product): ProductFormState {
         }))
       : [],
     costPrice: product.internal.costPrice ? String(product.internal.costPrice) : "",
+    supplierId: product.internal.supplierId ?? "",
     supplier: product.internal.supplier,
     supplierPhone: product.internal.supplierPhone ?? "",
     internalNotes: product.internal.internalNotes,
@@ -428,6 +431,10 @@ function ImageActionTextLabel({
 export default function ProductEditorForm({ mode, productId }: ProductEditorFormProps) {
   const router = useRouter();
   const [formState, setFormState] = useState<ProductFormState>(createEmptyFormState);
+  const [supplierOptions, setSupplierOptions] = useState<SupplierChoice[]>([]);
+  const [supplierSearch, setSupplierSearch] = useState("");
+  const [supplierSearchOpen, setSupplierSearchOpen] = useState(false);
+  const [supplierLoading, setSupplierLoading] = useState(false);
   const [loading, setLoading] = useState(mode === "edit");
   const [saving, setSaving] = useState(false);
   const [savingDraft, setSavingDraft] = useState(false);
@@ -467,11 +474,112 @@ export default function ProductEditorForm({ mode, productId }: ProductEditorForm
     void loadProduct();
   }, [mode, productId]);
 
+  useEffect(() => {
+    const timeoutId = window.setTimeout(async () => {
+      setSupplierLoading(true);
+
+      try {
+        const response = await fetch(
+          `/api/admin/providers?lite=1&search=${encodeURIComponent(supplierSearch)}`,
+          {
+            cache: "no-store",
+          }
+        );
+        const data = await response.json();
+
+        if (data.success) {
+          setSupplierOptions((data.providers ?? []) as SupplierChoice[]);
+        }
+      } finally {
+        setSupplierLoading(false);
+      }
+    }, 180);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [supplierSearch]);
+
+  useEffect(() => {
+    function handlePointerDown(event: MouseEvent) {
+      const target = event.target as HTMLElement | null;
+
+      if (target?.closest("[data-supplier-search]")) {
+        return;
+      }
+
+      setSupplierSearchOpen(false);
+    }
+
+    window.addEventListener("mousedown", handlePointerDown);
+    return () => {
+      window.removeEventListener("mousedown", handlePointerDown);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (formState.supplierId) {
+      const selected = supplierOptions.find((supplier) => supplier.id === formState.supplierId);
+
+      if (selected && formState.supplier !== selected.name) {
+        setFormState((currentState) => ({
+          ...currentState,
+          supplierId: selected.id,
+          supplier: selected.name,
+          supplierPhone: selected.phone,
+        }));
+      }
+
+      return;
+    }
+
+    if (!formState.supplier) {
+      return;
+    }
+
+    const matched = supplierOptions.find(
+      (supplier) => trimText(supplier.name).toLowerCase() === trimText(formState.supplier).toLowerCase()
+    );
+
+    if (!matched) {
+      return;
+    }
+
+    setFormState((currentState) => ({
+      ...currentState,
+      supplierId: matched.id,
+      supplier: matched.name,
+      supplierPhone: matched.phone,
+    }));
+  }, [formState.supplier, formState.supplierId, supplierOptions]);
+
   function updateField<K extends keyof ProductFormState>(key: K, value: ProductFormState[K]) {
     setFormState((currentState) => ({
       ...currentState,
       [key]: value,
     }));
+  }
+
+  function selectSupplier(supplier: SupplierChoice) {
+    setFormState((currentState) => ({
+      ...currentState,
+      supplierId: supplier.id,
+      supplier: supplier.name,
+      supplierPhone: supplier.phone,
+    }));
+    setSupplierSearch(supplier.name);
+    setSupplierSearchOpen(false);
+  }
+
+  function clearSupplierSelection() {
+    setFormState((currentState) => ({
+      ...currentState,
+      supplierId: "",
+      supplier: "",
+      supplierPhone: "",
+    }));
+    setSupplierSearch("");
+    setSupplierSearchOpen(false);
   }
 
   // Converts a canvas data URL to a binary Blob for direct upload.
@@ -859,6 +967,7 @@ export default function ProductEditorForm({ mode, productId }: ProductEditorForm
         trimText(formState.stockQuantity) ||
         trimText(formState.originalPrice) ||
         trimText(formState.description) ||
+        trimText(formState.supplierId) ||
         trimText(formState.supplier) ||
         trimText(formState.internalNotes) ||
         trimText(formState.accountingImageUrl) ||
@@ -949,8 +1058,9 @@ export default function ProductEditorForm({ mode, productId }: ProductEditorForm
         costPrice,
         purchasePrice: costPrice,
         isHeavy: formState.isHeavy,
-        supplier: trimText(formState.supplier),
-        supplierPhone: trimText(formState.supplierPhone),
+        supplierId: trimText(formState.supplierId),
+        supplier: trimText(formState.supplierId) ? trimText(formState.supplier) : "",
+        supplierPhone: trimText(formState.supplierId) ? trimText(formState.supplierPhone) : "",
         internalNotes: trimText(formState.internalNotes),
         accountingImageUrl: trimText(formState.accountingImageUrl),
         shippingFee: 0,
@@ -1031,6 +1141,10 @@ export default function ProductEditorForm({ mode, productId }: ProductEditorForm
   const salePrice = toNumber(formState.price);
   const costPrice = toNumber(formState.costPrice);
   const unitMargin = salePrice - costPrice;
+  const selectedSupplier = useMemo(
+    () => supplierOptions.find((supplier) => supplier.id === formState.supplierId) ?? null,
+    [formState.supplierId, supplierOptions]
+  );
   const activeEditorImage = imageEditor ? formState.images[imageEditor.index] : null;
 
   const imageEditorPreviewStyle = useMemo(() => {
@@ -1042,6 +1156,12 @@ export default function ProductEditorForm({ mode, productId }: ProductEditorForm
       transform: `translate(${imageEditor.offsetX * 36}px, ${imageEditor.offsetY * 36}px) scale(${imageEditor.zoom})`,
     };
   }, [imageEditor]);
+
+  useEffect(() => {
+    if (!supplierSearch && formState.supplier) {
+      setSupplierSearch(formState.supplier);
+    }
+  }, [formState.supplier, supplierSearch]);
 
   if (loading) {
     return <div className="min-h-[40vh] rounded-[1.4rem] border border-slate-800 bg-[#060b16]" />;
@@ -1627,24 +1747,89 @@ export default function ProductEditorForm({ mode, productId }: ProductEditorForm
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-200">Proveedor / Almacen</label>
-                <input
-                  type="text"
-                  value={formState.supplier}
-                  onChange={(event) => updateField("supplier", event.target.value)}
-                  placeholder="Nombre del proveedor o almacen"
-                  className="mt-1.5 w-full max-w-[11rem] rounded-2xl border border-amber-500/20 bg-[#0a1020] px-4 py-2.5 text-sm text-white outline-none transition focus:border-amber-400"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-200">Tel. Proveedor</label>
-                <input
-                  type="text"
-                  value={formState.supplierPhone}
-                  onChange={(event) => updateField("supplierPhone", event.target.value)}
-                  placeholder="Telefono del proveedor"
-                  className="mt-1.5 w-full max-w-[11rem] rounded-2xl border border-amber-500/20 bg-[#0a1020] px-4 py-2.5 text-sm text-white outline-none transition focus:border-amber-400"
-                />
+                <label className="block text-sm font-medium text-slate-200">Proveedor</label>
+                <div className="relative mt-1.5 max-w-[15rem]" data-supplier-search>
+                  <input
+                    type="text"
+                    value={supplierSearch}
+                    onChange={(event) => {
+                      if (formState.supplierId) {
+                        setFormState((currentState) => ({
+                          ...currentState,
+                          supplierId: "",
+                          supplier: "",
+                          supplierPhone: "",
+                        }));
+                      }
+                      setSupplierSearch(event.target.value);
+                      setSupplierSearchOpen(true);
+                    }}
+                    onFocus={() => setSupplierSearchOpen(true)}
+                    placeholder="Buscar proveedor"
+                    className="w-full rounded-2xl border border-amber-500/20 bg-[#0a1020] px-4 py-2.5 pr-10 text-sm text-white outline-none transition focus:border-amber-400"
+                  />
+                  {formState.supplierId ? (
+                    <button
+                      type="button"
+                      onClick={clearSupplierSelection}
+                      className="absolute right-2 top-1/2 inline-flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full border border-amber-500/25 bg-amber-500/10 text-xs text-amber-100 transition hover:border-amber-400"
+                      aria-label="Quitar proveedor"
+                    >
+                      ×
+                    </button>
+                  ) : null}
+                  {supplierSearchOpen ? (
+                    <div className="absolute left-0 top-[calc(100%+0.35rem)] z-20 w-full overflow-hidden rounded-[1rem] border border-amber-500/20 bg-[#090d18] shadow-[0_18px_50px_rgba(0,0,0,0.35)]">
+                      {supplierLoading ? (
+                        <div className="px-3 py-3 text-xs uppercase tracking-[0.18em] text-slate-500">
+                          Cargando
+                        </div>
+                      ) : supplierOptions.length > 0 ? (
+                        supplierOptions.map((supplier) => (
+                          <button
+                            key={supplier.id}
+                            type="button"
+                            onClick={() => selectSupplier(supplier)}
+                            className="flex w-full items-start justify-between gap-3 border-b border-slate-800 px-3 py-3 text-left transition last:border-b-0 hover:bg-slate-900/80"
+                          >
+                            <span>
+                              <span className="block text-sm font-semibold text-white">
+                                {supplier.name}
+                              </span>
+                              <span className="block text-xs text-slate-400">
+                                {supplier.contactName || supplier.phone || supplier.email || "Sin contacto"}
+                              </span>
+                            </span>
+                            {!supplier.isActive ? (
+                              <span className="rounded-full border border-rose-500/30 bg-rose-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-rose-200">
+                                Inactivo
+                              </span>
+                            ) : null}
+                          </button>
+                        ))
+                      ) : (
+                        <div className="px-3 py-3 text-sm text-slate-500">
+                          No hay proveedores registrados.
+                        </div>
+                      )}
+                    </div>
+                  ) : null}
+                </div>
+                {selectedSupplier ? (
+                  <div className="mt-2 rounded-[1rem] border border-amber-500/20 bg-[#161008] p-3">
+                    <p className="text-sm font-semibold text-white">{selectedSupplier.name}</p>
+                    <p className="mt-1 text-xs text-amber-100/80">
+                      {selectedSupplier.contactName || "Sin contacto"} {selectedSupplier.phone ? `· ${selectedSupplier.phone}` : ""}
+                    </p>
+                    {selectedSupplier.email ? (
+                      <p className="mt-1 text-xs text-slate-400">{selectedSupplier.email}</p>
+                    ) : null}
+                  </div>
+                ) : formState.supplier ? (
+                  <div className="mt-2 rounded-[1rem] border border-amber-500/20 bg-[#161008] p-3 text-xs text-amber-100/80">
+                    Proveedor antiguo: {formState.supplier}
+                  </div>
+                ) : null}
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-200">Nota informativa</label>

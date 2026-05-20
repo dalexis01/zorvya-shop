@@ -159,6 +159,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     { href: "/admin/products", label: "Productos", badge: "PR" },
     { href: "/admin/orders", label: "Ordenes", badge: "OR" },
     { href: "/admin/support", label: "Soporte", badge: "SP" },
+    { href: "/admin/providers", label: "Proveedores", badge: "PV" },
     { href: "/admin/users", label: "Usuarios", badge: "US" },
     { href: "/admin/settings", label: "Ajustes", badge: "ST" },
   ];
