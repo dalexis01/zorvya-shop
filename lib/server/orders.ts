@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 
 import { calculateDeliveryFee } from "@/helpers/delivery";
 import { registerProductSalesFromOrder } from "@/lib/server/admin/products";
+import { createCustomerNotification } from "@/lib/server/customer-notifications";
 import { resolveDeliveryQuote } from "@/lib/server/delivery-quote";
 import { getProductById } from "@/lib/server/admin/products";
 import { buildOrderItemMediaProxyUrl } from "@/lib/server/order-media";
@@ -385,6 +386,94 @@ function buildStatusHistoryEntry(input: {
   };
 }
 
+async function createOrderLifecycleNotification(input: {
+  order: Pick<StoredOrder, "id" | "userId" | "deliveryType" | "pickupDate" | "pickupTime">;
+  type:
+    | "order_confirmed"
+    | "order_processed"
+    | "order_in_transit"
+    | "order_delivered"
+    | "order_cancelled"
+    | "order_issue";
+  title: string;
+  message: string;
+}) {
+  if (!input.order.userId) {
+    return;
+  }
+
+  await createCustomerNotification({
+    userId: input.order.userId,
+    orderId: input.order.id,
+    type: input.type,
+    title: input.title,
+    message: input.message,
+  });
+}
+
+function getOrderLifecycleNotificationPayload(order: StoredOrder, status: OrderStatusLabel) {
+  if (status === "Pedido cancelado") {
+    return {
+      type: "order_cancelled" as const,
+      title: "Pedido cancelado",
+      message: `Tu pedido ${order.id} fue cancelado. Si necesitas ayuda, soporte ya puede revisar tu caso.`,
+    };
+  }
+
+  if (status === "Pedido completado") {
+    return {
+      type: "order_delivered" as const,
+      title: "Pedido entregado",
+      message: `Tu pedido ${order.id} ya fue marcado como entregado. Gracias por comprar en ZorvyA Shop.`,
+    };
+  }
+
+  if (status === "En delivery") {
+    return {
+      type: "order_in_transit" as const,
+      title: "Pedido en camino",
+      message: `Tu pedido ${order.id} ya va en camino. Prepara la recepcion para evitar retrasos.`,
+    };
+  }
+
+  if (
+    [
+      "Confirmando stock",
+      "Preparando pedido",
+      "Pagada / Preparando",
+      "Pedido listo para delivery",
+      "Procesandose para delivery",
+    ].includes(status)
+  ) {
+    return {
+      type: "order_processed" as const,
+      title: "Pedido procesado",
+      message: `Tu pedido ${order.id} avanzo al estado "${status}". Ya lo estamos moviendo en logistica.`,
+    };
+  }
+
+  if (
+    [
+      "Pendiente de confirmacion",
+      "Pedido confirmado",
+      "Pedido confirmado para recogida",
+      "Pedido aceptado",
+      "Orden confirmada y procesandose",
+    ].includes(status)
+  ) {
+    return {
+      type: "order_confirmed" as const,
+      title: "Pedido confirmado",
+      message:
+        order.deliveryType === "pickup" && order.pickupDate && order.pickupTime
+          ? `Tu pedido ${order.id} fue confirmado para recogida el ${order.pickupDate} a las ${order.pickupTime}.`
+          : `Tu pedido ${order.id} fue confirmado y ya entro al flujo de preparacion.`,
+    };
+  }
+
+  return null;
+}
+
 export async function getAllOrders(options?: { windowDays?: number }) {
   return readOrders(options);
 }
@@ -464,6 +553,15 @@ export async function createOrder(
   await registerProductSalesFromOrder({
     soldAt: now,
     items: newOrder.items,
+  });
+  await createOrderLifecycleNotification({
+    order: newOrder,
+    type: "order_confirmed",
+    title: "Pedido recibido",
+    message:
+      newOrder.deliveryType === "pickup"
+        ? `Recibimos tu pedido ${newOrder.id}. Te avisaremos cuando la recogida quede lista.`
+        : `Recibimos tu pedido ${newOrder.id}. Te iremos avisando cada cambio importante.`,
   });
 
   return newOrder;
@@ -562,6 +660,22 @@ export async function setAdminOrderStatus(input: {
 
   await updateOrderInStore(updatedOrder);
 
+  if (previousOrder.adminStatus !== updatedOrder.adminStatus) {
+    const notification = getOrderLifecycleNotificationPayload(
+      updatedOrder,
+      updatedOrder.adminStatus ?? "Pendiente de confirmacion"
+    );
+
+    if (notification) {
+      await createOrderLifecycleNotification({
+        order: updatedOrder,
+        type: notification.type,
+        title: notification.title,
+        message: notification.message,
+      });
+    }
+  }
+
   return {
     previousOrder,
     updatedOrder,
@@ -601,6 +715,12 @@ export async function cancelOrderForUser(orderId: string, userId: string) {
   };
 
   await updateOrderInStore(updatedOrder);
+  await createOrderLifecycleNotification({
+    order: updatedOrder,
+    type: "order_cancelled",
+    title: "Pedido cancelado",
+    message: `Tu pedido ${updatedOrder.id} fue cancelado. Si necesitas ayuda, puedes escribirnos desde soporte.`,
+  });
 
   return {
     previousOrder,
@@ -699,6 +819,12 @@ export async function cancelOrderFromAdmin(input: {
   };
 
   await updateOrderInStore(updatedOrder);
+  await createOrderLifecycleNotification({
+    order: updatedOrder,
+    type: "order_issue",
+    title: "Problema con el pedido",
+    message: `Recibimos tu reporte para el pedido ${updatedOrder.id}. Soporte revisara el caso y te respondera pronto.`,
+  });
 
   return {
     previousOrder,

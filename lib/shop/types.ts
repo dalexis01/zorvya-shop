@@ -250,6 +250,41 @@ export interface OrderSummary extends StoredOrder {
   pickupAddress: string | null;
 }
 
+export type CustomerNotificationType =
+  | "order_confirmed"
+  | "order_processed"
+  | "order_in_transit"
+  | "order_delivered"
+  | "order_cancelled"
+  | "order_issue"
+  | "support_reply";
+
+export interface CustomerNotification {
+  id: string;
+  userId: string;
+  orderId: string | null;
+  type: CustomerNotificationType;
+  title: string;
+  message: string;
+  status: "active" | "archived";
+  readAt: string | null;
+  createdAt: string;
+}
+
+export interface CustomerNotificationOrderSummary {
+  id: string;
+  status: OrderStatusLabel;
+  statusDetail: string | null;
+  createdAt: string;
+  total: number;
+  address: string;
+  deliveryType: DeliveryType;
+  pickupDate: string | null;
+  pickupTime: string | null;
+  lastMessage: string | null;
+  statusHistory: OrderStatusHistoryEntry[];
+}
+
 export interface NormalizedOrderInput {
   customerName: string;
   customerPhone: string;

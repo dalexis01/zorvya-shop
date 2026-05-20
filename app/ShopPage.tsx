@@ -12,6 +12,7 @@ import {
 } from "react";
 
 import AccountModal from "@/components/account/AccountModal";
+import CustomerNotificationsBell from "@/components/account/CustomerNotificationsBell";
 import CartPanel from "@/components/CartPanel";
 import CheckoutModal from "@/components/CheckoutModal";
 import OrderConfirmationModal from "@/components/OrderConfirmationModal";
@@ -2496,9 +2497,15 @@ export default function ShopPage({
               </div>
             </div>
 
-            <div className="grid grid-cols-3 gap-1.5 md:flex md:flex-wrap md:items-center md:justify-self-end md:justify-end md:gap-2">
+            <div className="flex flex-wrap gap-1.5 md:flex md:flex-wrap md:items-center md:justify-self-end md:justify-end md:gap-2">
+                <CustomerNotificationsBell
+                  locale={locale}
+                  user={sessionUser}
+                  buttonClassName="storefront-cosmic-button relative inline-flex h-[2.55rem] w-full min-w-0 items-center justify-center overflow-hidden rounded-[12px] px-1.5 text-center text-[10px] font-semibold leading-none sm:h-[2.7rem] sm:px-2.5 sm:text-[11px] md:h-[2.95rem] md:w-[8.5rem] md:px-4 md:text-[11px]"
+                  onOpenAccount={openAccountPanel}
+                />
                 {mobileHeaderButtons.map((button) => (
-                  <div key={button.id} className="min-w-0 md:hidden">
+                  <div key={button.id} className="min-w-0 flex-1 basis-0 md:hidden">
                     {renderHeaderButton(button.target)}
                   </div>
                 ))}

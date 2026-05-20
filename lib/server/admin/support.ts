@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { stat } from "node:fs/promises";
 import path from "node:path";
 
+import { createCustomerNotification } from "@/lib/server/customer-notifications";
 import { readDataFile, writeDataFile } from "../storage";
 
 import type {
@@ -420,6 +421,18 @@ export async function addSupportResponse(
   await writeSupportMessages(
     messages.map((item) => (item.id === messageId ? updatedMessage : item))
   );
+
+  if (updatedMessage.customerId && !updatedMessage.customerId.startsWith("support-")) {
+    await createCustomerNotification({
+      userId: updatedMessage.customerId,
+      orderId: updatedMessage.orderId ?? null,
+      type: "support_reply",
+      title: "Soporte respondio",
+      message: trimText(input.message) || "Soporte agrego una nueva respuesta en tu conversacion.",
+    }).catch((error) => {
+      console.error("[support] no se pudo crear la notificacion para el cliente:", error);
+    });
+  }
 
   return updatedMessage;
 }
