@@ -25,8 +25,6 @@ const texts = {
     pendingOrders: "Pedidos pendientes",
     importantMessages: "Mensajes importantes",
     empty: "No hay novedades activas ahora mismo.",
-    viewDetail: "Ver detalle",
-    back: "Volver",
     confirmed: "Confirmado",
     processed: "Procesado",
     inTransit: "En camino",
@@ -37,8 +35,11 @@ const texts = {
     total: "Total",
     order: "Pedido",
     pickupFor: "Recogida programada",
-    account: "Abrir cuenta",
     close: "Cerrar",
+    routeMessage: "Tu pedido va rumbo a tu direccion.",
+    processingMessage: "Tu pedido ya esta siendo preparado.",
+    confirmedMessage: "Tu pedido fue confirmado y entro a la fila.",
+    deliveredMessage: "Tu pedido ya fue completado.",
   },
   nl: {
     title: "Meldingen",
@@ -46,8 +47,6 @@ const texts = {
     pendingOrders: "Openstaande bestellingen",
     importantMessages: "Belangrijke berichten",
     empty: "Er zijn nu geen actieve updates.",
-    viewDetail: "Details bekijken",
-    back: "Terug",
     confirmed: "Bevestigd",
     processed: "Verwerkt",
     inTransit: "Onderweg",
@@ -58,8 +57,11 @@ const texts = {
     total: "Totaal",
     order: "Bestelling",
     pickupFor: "Afhaling gepland",
-    account: "Account openen",
     close: "Sluiten",
+    routeMessage: "Je bestelling is onderweg naar je adres.",
+    processingMessage: "Je bestelling wordt nu klaargemaakt.",
+    confirmedMessage: "Je bestelling is bevestigd en staat in de rij.",
+    deliveredMessage: "Je bestelling is voltooid.",
   },
   en: {
     title: "Notifications",
@@ -67,8 +69,6 @@ const texts = {
     pendingOrders: "Pending orders",
     importantMessages: "Important messages",
     empty: "There are no active updates right now.",
-    viewDetail: "View detail",
-    back: "Back",
     confirmed: "Confirmed",
     processed: "Processed",
     inTransit: "On the way",
@@ -79,8 +79,11 @@ const texts = {
     total: "Total",
     order: "Order",
     pickupFor: "Pickup scheduled",
-    account: "Open account",
     close: "Close",
+    routeMessage: "Your order is on the way to your address.",
+    processingMessage: "Your order is already being prepared.",
+    confirmedMessage: "Your order was confirmed and entered the queue.",
+    deliveredMessage: "Your order has been completed.",
   },
   pt: {
     title: "Notificacoes",
@@ -88,8 +91,6 @@ const texts = {
     pendingOrders: "Pedidos pendentes",
     importantMessages: "Mensagens importantes",
     empty: "Nao ha novidades ativas agora.",
-    viewDetail: "Ver detalhe",
-    back: "Voltar",
     confirmed: "Confirmado",
     processed: "Processado",
     inTransit: "A caminho",
@@ -100,8 +101,11 @@ const texts = {
     total: "Total",
     order: "Pedido",
     pickupFor: "Retirada agendada",
-    account: "Abrir conta",
     close: "Fechar",
+    routeMessage: "Seu pedido esta a caminho do seu endereco.",
+    processingMessage: "Seu pedido ja esta sendo preparado.",
+    confirmedMessage: "Seu pedido foi confirmado e entrou na fila.",
+    deliveredMessage: "Seu pedido foi concluido.",
   },
 } as const;
 
@@ -109,7 +113,6 @@ interface CustomerNotificationsBellProps {
   locale: Locale;
   user: SessionUser | null;
   buttonClassName: string;
-  onOpenAccount: () => void;
 }
 
 function formatDate(value: string, locale: Locale) {
@@ -164,7 +167,6 @@ export default function CustomerNotificationsBell({
   locale,
   user,
   buttonClassName,
-  onOpenAccount,
 }: CustomerNotificationsBellProps) {
   const t = texts[locale];
   const wrapperRef = useRef<HTMLDivElement | null>(null);
@@ -173,12 +175,6 @@ export default function CustomerNotificationsBell({
   const [notifications, setNotifications] = useState<CustomerNotification[]>([]);
   const [pendingOrders, setPendingOrders] = useState<CustomerNotificationOrderSummary[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
-  const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
-
-  const selectedOrder = useMemo(
-    () => pendingOrders.find((order) => order.id === selectedOrderId) ?? null,
-    [pendingOrders, selectedOrderId]
-  );
   const hasVisibleBell = Boolean(user && (notifications.length > 0 || pendingOrders.length > 0));
   const unreadIds = useMemo(
     () => notifications.filter((notification) => !notification.readAt).map((notification) => notification.id),
@@ -254,7 +250,6 @@ export default function CustomerNotificationsBell({
 
   useEffect(() => {
     setPanelOpen(false);
-    setSelectedOrderId(null);
     void loadNotifications(true);
   }, [loadNotifications]);
 
@@ -289,14 +284,12 @@ export default function CustomerNotificationsBell({
     function handlePointerDown(event: MouseEvent) {
       if (!wrapperRef.current?.contains(event.target as Node)) {
         setPanelOpen(false);
-        setSelectedOrderId(null);
       }
     }
 
     function handleEscape(event: KeyboardEvent) {
       if (event.key === "Escape") {
         setPanelOpen(false);
-        setSelectedOrderId(null);
       }
     }
 
@@ -333,12 +326,11 @@ export default function CustomerNotificationsBell({
   const timelineLabels = [t.confirmed, t.processed, t.inTransit, t.delivered];
 
   return (
-    <div ref={wrapperRef} className="relative min-w-0 flex-1 basis-0 md:flex-none md:basis-auto">
+    <div ref={wrapperRef} className="relative min-w-0 shrink-0 basis-[3.55rem] md:basis-auto">
       <button
         type="button"
         onClick={() => {
           setPanelOpen((current) => !current);
-          setSelectedOrderId(null);
         }}
         className={buttonClassName}
         aria-label={t.title}
@@ -348,7 +340,7 @@ export default function CustomerNotificationsBell({
           <svg
             aria-hidden="true"
             viewBox="0 0 24 24"
-            className="mx-auto h-[1.05rem] w-[1.05rem]"
+            className="mx-auto h-[1.28rem] w-[1.28rem]"
             fill="none"
             stroke="currentColor"
             strokeWidth="1.8"
@@ -387,7 +379,6 @@ export default function CustomerNotificationsBell({
               type="button"
               onClick={() => {
                 setPanelOpen(false);
-                setSelectedOrderId(null);
               }}
               className="text-lg leading-none text-slate-300 transition hover:text-white"
               aria-label={t.close}
@@ -400,85 +391,6 @@ export default function CustomerNotificationsBell({
             {loading ? (
               <div className="rounded-[1rem] border border-white/10 bg-white/5 px-4 py-5 text-center text-sm text-slate-300">
                 {t.subtitle}
-              </div>
-            ) : selectedOrder ? (
-              <div className="space-y-4">
-                <div className="flex items-center justify-between gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setSelectedOrderId(null)}
-                    className="text-xs font-semibold uppercase tracking-[0.16em] text-cyan-300 transition hover:text-cyan-200"
-                  >
-                    {t.back}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setPanelOpen(false);
-                      setSelectedOrderId(null);
-                      onOpenAccount();
-                    }}
-                    className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-semibold text-slate-100 transition hover:bg-white/10"
-                  >
-                    {t.account}
-                  </button>
-                </div>
-
-                <div className="space-y-2 rounded-[1.1rem] border border-white/10 bg-white/5 px-3.5 py-3">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="text-[0.68rem] font-semibold uppercase tracking-[0.2em] text-slate-400">
-                        {t.order}
-                      </p>
-                      <p className="text-sm font-semibold text-white">{selectedOrder.id}</p>
-                    </div>
-                    <span className="rounded-full border border-cyan-400/25 bg-cyan-400/10 px-2.5 py-1 text-[11px] font-semibold text-cyan-200">
-                      {selectedOrder.status}
-                    </span>
-                  </div>
-                  <p className="text-xs text-slate-300">
-                    {selectedOrder.deliveryType === "pickup"
-                      ? `${t.pickupFor}: ${formatCustomerNotificationPickupLabel(selectedOrder) ?? selectedOrder.address}`
-                      : `${t.address}: ${selectedOrder.address}`}
-                  </p>
-                  <p className="text-xs text-slate-400">
-                    {t.date}: {formatDate(selectedOrder.createdAt, locale)}
-                  </p>
-                  <p className="text-sm font-semibold text-white">
-                    {t.total}: {formatCurrencySrd(selectedOrder.total)}
-                  </p>
-                  {selectedOrder.lastMessage ? (
-                    <p className="rounded-[0.95rem] border border-cyan-400/15 bg-cyan-500/10 px-3 py-2 text-xs text-cyan-100">
-                      <span className="mr-1 font-semibold text-cyan-300">{t.lastMessage}:</span>
-                      {selectedOrder.lastMessage}
-                    </p>
-                  ) : null}
-                </div>
-
-                <div className="rounded-[1.1rem] border border-white/10 bg-white/5 px-3.5 py-3">
-                  <div className="grid grid-cols-4 gap-2">
-                    {timelineLabels.map((label, index) => {
-                      const step = getCustomerTimelineStep(selectedOrder.status);
-                      const isCompleted = index <= step;
-                      return (
-                        <div key={label} className="text-center">
-                          <span
-                            className={`mx-auto flex h-7 w-7 items-center justify-center rounded-full border text-[11px] font-semibold transition ${
-                              isCompleted
-                                ? "border-cyan-300 bg-cyan-400/15 text-cyan-100"
-                                : "border-white/10 bg-white/5 text-slate-400"
-                            }`}
-                          >
-                            {index + 1}
-                          </span>
-                          <p className="mt-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-300">
-                            {label}
-                          </p>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
               </div>
             ) : notifications.length > 0 || pendingOrders.length > 0 ? (
               <div className="space-y-4">
@@ -531,39 +443,92 @@ export default function CustomerNotificationsBell({
                       {pendingOrders.map((order) => (
                         <article
                           key={order.id}
-                          className="rounded-[1rem] border border-white/10 bg-white/5 px-3 py-3"
+                          className="space-y-3 rounded-[1rem] border border-white/10 bg-white/5 px-3 py-3"
                         >
                           <div className="flex items-start justify-between gap-3">
                             <div className="min-w-0">
-                              <p className="text-sm font-semibold text-white">{order.id}</p>
-                              <p className="mt-1 text-xs text-cyan-200">{order.status}</p>
+                              <p className="text-lg font-semibold text-white">
+                                {getCustomerTimelineStep(order.status) >= 2
+                                  ? t.routeMessage
+                                  : getCustomerTimelineStep(order.status) >= 1
+                                    ? t.processingMessage
+                                    : order.status === "Pedido completado"
+                                      ? t.deliveredMessage
+                                      : t.confirmedMessage}
+                              </p>
+                              <p className="mt-1 text-sm text-slate-300">
+                                {t.order} {order.id}{" "}
+                                {order.deliveryType === "pickup"
+                                  ? formatCustomerNotificationPickupLabel(order)
+                                  : t.routeMessage}
+                              </p>
                             </div>
-                            <span className="text-xs font-semibold text-white">
+                            <span className="text-sm font-semibold text-white">
                               {formatCurrencySrd(order.total)}
                             </span>
                           </div>
-                          <p className="mt-2 line-clamp-2 text-xs leading-5 text-slate-300">
-                            {order.deliveryType === "pickup"
-                              ? formatCustomerNotificationPickupLabel(order) ?? order.address
-                              : order.address}
-                          </p>
+
+                          <div className="rounded-[1rem] border border-[#d8e4ef] bg-[#f8fbff] px-3 py-3 text-slate-900">
+                            <div className="grid grid-cols-4 gap-2">
+                              {timelineLabels.map((label, index) => {
+                                const step = getCustomerTimelineStep(order.status);
+                                const isCompleted = index <= step;
+                                const isCurrent = index === step;
+
+                                return (
+                                  <div key={`${order.id}-${label}`} className="text-center">
+                                    <div className="relative flex items-center justify-center">
+                                      {index > 0 ? (
+                                        <span
+                                          className={`absolute right-1/2 top-1/2 h-[2px] w-full -translate-y-1/2 ${
+                                            index - 1 < step ? "bg-[#15803d]" : "bg-[#d7dee7]"
+                                          }`}
+                                        />
+                                      ) : null}
+                                      <span
+                                        className={`relative z-10 flex h-8 w-8 items-center justify-center rounded-full border text-[12px] font-semibold ${
+                                          isCompleted
+                                            ? isCurrent && step === 2
+                                              ? "border-[#1d4ed8] bg-[#1d4ed8] text-white"
+                                              : "border-[#15803d] bg-[#15803d] text-white"
+                                            : "border-[#d7dee7] bg-white text-[#94a3b8]"
+                                        }`}
+                                      >
+                                        {index + 1}
+                                      </span>
+                                    </div>
+                                    <p
+                                      className={`mt-2 text-[10px] font-semibold ${
+                                        isCompleted
+                                          ? isCurrent && step === 2
+                                            ? "text-[#1d4ed8]"
+                                            : "text-[#0f766e]"
+                                          : "text-[#94a3b8]"
+                                      }`}
+                                    >
+                                      {label}
+                                    </p>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+
                           {order.lastMessage ?? latestMessageByOrderId.get(order.id) ? (
-                            <p className="mt-2 line-clamp-2 text-[11px] text-slate-400">
+                            <p className="line-clamp-2 text-[11px] text-slate-400">
                               <span className="font-semibold text-slate-300">{t.lastMessage}:</span>{" "}
                               {order.lastMessage ?? latestMessageByOrderId.get(order.id)}
                             </p>
                           ) : null}
-                          <div className="mt-3 flex items-center justify-between gap-3">
+                          <div className="flex items-center justify-between gap-3">
                             <span className="text-[11px] text-slate-400">
                               {formatDate(order.createdAt, locale)}
                             </span>
-                            <button
-                              type="button"
-                              onClick={() => setSelectedOrderId(order.id)}
-                              className="rounded-full border border-cyan-400/25 bg-cyan-400/10 px-3 py-1 text-[11px] font-semibold text-cyan-100 transition hover:bg-cyan-400/15"
-                            >
-                              {t.viewDetail}
-                            </button>
+                            <span className="text-[11px] text-slate-300">
+                              {order.deliveryType === "pickup"
+                                ? t.pickupFor
+                                : order.status}
+                            </span>
                           </div>
                         </article>
                       ))}

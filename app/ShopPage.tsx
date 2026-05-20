@@ -2501,8 +2501,7 @@ export default function ShopPage({
                 <CustomerNotificationsBell
                   locale={locale}
                   user={sessionUser}
-                  buttonClassName="storefront-cosmic-button relative inline-flex h-[2.55rem] w-full min-w-0 items-center justify-center overflow-hidden rounded-[12px] px-1.5 text-center text-[10px] font-semibold leading-none sm:h-[2.7rem] sm:px-2.5 sm:text-[11px] md:h-[2.95rem] md:w-[8.5rem] md:px-4 md:text-[11px]"
-                  onOpenAccount={openAccountPanel}
+                  buttonClassName="storefront-cosmic-button relative inline-flex h-[2.08rem] w-full min-w-0 items-center justify-center overflow-hidden rounded-[12px] px-1 text-center text-[10px] font-semibold leading-none sm:h-[2.2rem] sm:px-1.5 sm:text-[11px] md:h-[2.4rem] md:w-[4.4rem] md:px-2 md:text-[11px]"
                 />
                 {mobileHeaderButtons.map((button) => (
                   <div key={button.id} className="min-w-0 flex-1 basis-0 md:hidden">
