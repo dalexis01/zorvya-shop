@@ -38,12 +38,12 @@ async function getEmailRecommendations(
       return bScore - aScore;
     });
 
-    return sorted.slice(0, 9).map((p) => ({
-      id: p.id,
-      name: p.name,
-      price: p.price,
-      image: p.image ?? "",
-    }));
+    return sorted.slice(0, 6).map((p) => {
+      // Make image URL absolute so it renders in email clients
+      const raw = p.image ?? "";
+      const image = raw.startsWith("/") ? `https://zorvyashop.com${raw}` : raw;
+      return { id: p.id, name: p.name, price: p.price, image };
+    });
   } catch {
     return [];
   }
