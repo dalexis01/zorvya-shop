@@ -680,6 +680,7 @@ export default function ShopPage({
   const [selectedCartKeys, setSelectedCartKeys] = useState<string[]>([]);
   const [cartOpen, setCartOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
+  const [accountReceiptOrderId, setAccountReceiptOrderId] = useState<string | null>(null);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [confirmationOpen, setConfirmationOpen] = useState(false);
   const [assistantOpen, setAssistantOpen] = useState(false);
@@ -1949,6 +1950,7 @@ export default function ShopPage({
   }, []);
 
   const openAccountPanel = useCallback(() => {
+    setAccountReceiptOrderId(null);
     if (isCompactViewport) {
       setQuickViewState(null);
       setCartOpen(false);
@@ -1957,6 +1959,20 @@ export default function ShopPage({
 
     setAccountOpen(true);
   }, [isCompactViewport]);
+
+  const openAccountReceipt = useCallback(
+    (orderId: string) => {
+      setAccountReceiptOrderId(orderId);
+      if (isCompactViewport) {
+        setQuickViewState(null);
+        setCartOpen(false);
+        setAssistantOpen(false);
+      }
+
+      setAccountOpen(true);
+    },
+    [isCompactViewport]
+  );
 
   const openCartPanel = useCallback(() => {
     if (isCompactViewport) {
@@ -2508,6 +2524,7 @@ export default function ShopPage({
                     locale={locale}
                     user={sessionUser}
                     buttonClassName="storefront-cosmic-button relative inline-flex h-[2.55rem] w-full min-w-0 items-center justify-center overflow-hidden rounded-[12px] px-1 text-center text-[10px] font-semibold leading-none sm:h-[2.7rem] sm:px-1.5 sm:text-[11px] md:h-[2.95rem] md:w-[4.4rem] md:px-2 md:text-[11px]"
+                    onOpenReceipt={openAccountReceipt}
                   />
                 </div>
                 {headerButtons.map((button) => (
@@ -2520,6 +2537,7 @@ export default function ShopPage({
                     locale={locale}
                     user={sessionUser}
                     buttonClassName="storefront-cosmic-button relative inline-flex h-[2.55rem] w-full min-w-0 items-center justify-center overflow-hidden rounded-[12px] px-1 text-center text-[10px] font-semibold leading-none sm:h-[2.7rem] sm:px-1.5 sm:text-[11px] md:h-[2.95rem] md:w-[4.4rem] md:px-2 md:text-[11px]"
+                    onOpenReceipt={openAccountReceipt}
                   />
                 </div>
               </div>
@@ -2657,6 +2675,7 @@ export default function ShopPage({
           sessionReady={sessionReady}
           user={sessionUser}
           products={accountProducts}
+          initialReceiptOrderId={accountReceiptOrderId}
           onOpenProduct={(input) => {
             const product =
               localizedProducts.find(
@@ -2676,7 +2695,10 @@ export default function ShopPage({
               },
             });
           }}
-          onClose={() => setAccountOpen(false)}
+          onClose={() => {
+            setAccountOpen(false);
+            setAccountReceiptOrderId(null);
+          }}
           onSessionChange={(user) => {
             setSessionUser(user);
             if (user?.email) {

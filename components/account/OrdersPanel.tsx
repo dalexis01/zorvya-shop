@@ -918,6 +918,7 @@ interface OrdersPanelProps {
     payload: { address?: string; phone?: string }
   ) => Promise<OrderActionResult>;
   onReportIssue: (orderId: string, message: string) => Promise<OrderActionResult>;
+  initialReceiptOrderId?: string | null;
 }
 
 export default function OrdersPanel({
@@ -939,6 +940,7 @@ export default function OrdersPanel({
   onAddItems,
   onUpdateContact,
   onReportIssue,
+  initialReceiptOrderId = null,
 }: OrdersPanelProps) {
   const router = useRouter();
   const t = texts[locale];
@@ -955,7 +957,7 @@ export default function OrdersPanel({
     ? "border-slate-200 bg-slate-50 text-slate-600"
     : "border-slate-800 bg-[#0a1020] text-slate-400";
   const [selectedOrder, setSelectedOrder] = useState<OrderSummary | null>(null);
-  const [receiptOrderId, setReceiptOrderId] = useState<string | null>(null);
+  const [receiptOrderId, setReceiptOrderId] = useState<string | null>(initialReceiptOrderId);
   const [contactTarget, setContactTarget] = useState<{
     order: OrderSummary;
     mode: "address" | "phone";

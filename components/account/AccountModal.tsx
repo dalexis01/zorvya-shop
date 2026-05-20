@@ -342,6 +342,7 @@ interface AccountModalProps {
   sessionReady: boolean;
   user: SessionUser | null;
   products: CatalogProductOption[];
+  initialReceiptOrderId?: string | null;
   onOpenProduct?: (input: {
     productId: string | number;
     selectedVariantId?: string;
@@ -358,6 +359,7 @@ export default function AccountModal({
   sessionReady,
   user,
   products,
+  initialReceiptOrderId = null,
   onOpenProduct,
   onClose,
   onSessionChange,
@@ -435,6 +437,12 @@ export default function AccountModal({
 
     previousUserIdRef.current = currentUserId;
   }, [user?.id]);
+
+  useEffect(() => {
+    if (initialReceiptOrderId && user) {
+      setActiveTab("orders");
+    }
+  }, [initialReceiptOrderId, user]);
 
   useEffect(() => {
     if (!languageMenuOpen) {
@@ -1389,6 +1397,7 @@ export default function AccountModal({
               </div>
             ) : (
               <OrdersPanel
+                key={initialReceiptOrderId ?? user?.id ?? "orders-panel"}
                 clientTheme={accountTheme}
                 locale={accountLocale}
                 latestOrder={latestOrder}
@@ -1409,6 +1418,7 @@ export default function AccountModal({
                 onAddItems={handleAddItems}
                 onUpdateContact={handleUpdateContact}
                 onReportIssue={handleReportIssue}
+                initialReceiptOrderId={initialReceiptOrderId}
               />
             )}
           </div>

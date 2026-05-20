@@ -85,6 +85,7 @@ interface CustomerNotificationsBellProps {
   locale: Locale;
   user: SessionUser | null;
   buttonClassName: string;
+  onOpenReceipt: (orderId: string) => void;
 }
 
 function getCustomerTimelineStep(status: string) {
@@ -125,6 +126,7 @@ export default function CustomerNotificationsBell({
   locale,
   user,
   buttonClassName,
+  onOpenReceipt,
 }: CustomerNotificationsBellProps) {
   const t = texts[locale];
   const wrapperRef = useRef<HTMLDivElement | null>(null);
@@ -333,10 +335,12 @@ export default function CustomerNotificationsBell({
               </div>
             ) : notifications.length > 0 || pendingOrders.length > 0 ? (
               <div className="space-y-4">
-                {notifications.length > 0 ? (
+                {notifications.filter((notification) => !notification.readAt).length > 0 ? (
                   <section className="space-y-2">
                     <div className="space-y-2">
-                      {notifications.map((notification) => (
+                      {notifications
+                        .filter((notification) => !notification.readAt)
+                        .map((notification) => (
                         <article
                           key={notification.id}
                           className={`px-1 py-2 ${
@@ -362,37 +366,54 @@ export default function CustomerNotificationsBell({
                   <section className="space-y-2">
                     <div className="space-y-2">
                       {pendingOrders.map((order) => (
-                        <article key={order.id} className="space-y-3 px-1 py-2">
+                        <article
+                          key={order.id}
+                          role="button"
+                          tabIndex={0}
+                          onClick={() => onOpenReceipt(order.id)}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter" || event.key === " ") {
+                              event.preventDefault();
+                              onOpenReceipt(order.id);
+                            }
+                          }}
+                          className="space-y-3 px-1 py-2 cursor-pointer"
+                        >
                           <div className="flex items-start justify-between gap-3">
-                            <div className="min-w-0">
+                            <div className="min-w-0 flex-1">
                               <p className="mt-1 text-[11px] text-slate-300">
+                                Entrega estimada:{" "}
                                 {order.estimatedDateText ??
                                   (order.deliveryType === "pickup"
                                     ? formatCustomerNotificationPickupLabel(order)
                                     : t.routeMessage)}
                               </p>
                             </div>
-                            <span className="text-[11px] font-semibold text-cyan-100">{order.status}</span>
+                            <span className="shrink-0 text-[11px] font-semibold text-cyan-100">{order.status}</span>
                           </div>
 
-                          {order.itemImages.length > 0 ? (
-                            <div className="flex items-center gap-2 overflow-x-auto pb-1">
-                              {order.itemImages.map((imageUrl, index) => (
-                                <div
-                                  key={`${order.id}-image-${index}`}
-                                  className="h-14 w-14 shrink-0 overflow-hidden rounded-[0.85rem] border border-white/10 bg-white/5"
-                                >
-                                  <Image
-                                    src={imageUrl}
-                                    alt={`${order.id} item ${index + 1}`}
-                                    width={56}
-                                    height={56}
-                                    className="h-full w-full object-cover"
-                                  />
-                                </div>
-                              ))}
-                            </div>
-                          ) : null}
+                          <div className="flex items-start justify-between gap-3">
+                            {order.itemImages.length > 0 ? (
+                              <div className="flex items-center gap-2 overflow-x-auto pb-1">
+                                {order.itemImages.map((imageUrl, index) => (
+                                  <div
+                                    key={`${order.id}-image-${index}`}
+                                    className="h-14 w-14 shrink-0 overflow-hidden rounded-[0.85rem] border border-white/10 bg-white/5"
+                                  >
+                                    <Image
+                                      src={imageUrl}
+                                      alt={`${order.id} item ${index + 1}`}
+                                      width={56}
+                                      height={56}
+                                      className="h-full w-full object-cover"
+                                    />
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <div />
+                            )}
+                          </div>
 
                           <div className="rounded-[1rem] border border-[#d8e4ef] bg-[#f8fbff] px-3 py-3 text-slate-900">
                             <div className="grid grid-cols-4 gap-2">

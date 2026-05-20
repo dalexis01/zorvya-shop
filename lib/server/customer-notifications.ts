@@ -130,6 +130,26 @@ function buildPendingOrderSummary(
     adminStatus: row.admin_status as AdminManualOrderStatus | null,
     createdAt: toIsoString(row.created_at) ?? new Date().toISOString(),
   };
+  const currentStatus = getOrderStatus(normalizedOrder);
+  const sameDayDeliveryWindow =
+    currentStatus === "En delivery"
+      ? (() => {
+          const baseDate = new Date(toIsoString(row.updated_at) ?? normalizedOrder.createdAt);
+          const dateText = new Intl.DateTimeFormat(
+            locale === "nl" ? "nl-NL" : locale === "pt" ? "pt-BR" : locale === "en" ? "en-US" : "es-SR",
+            {
+              day: "numeric",
+              month: "short",
+            }
+          ).format(baseDate);
+
+          if (locale === "en") {
+            return `${dateText}, 10:00 AM - 5:00 PM`;
+          }
+
+          return `${dateText}, 10:00 - 17:00`;
+        })()
+      : null;
 
   const deliveryEstimate =
     row.delivery_type === "pickup"
@@ -137,6 +157,8 @@ function buildPendingOrderSummary(
           pickupDate: row.pickup_date,
           pickupTime: row.pickup_time,
         })
+      : sameDayDeliveryWindow
+        ? sameDayDeliveryWindow
       : getDeliveryEstimateDetails({
           distanceKm:
             row.delivery_distance_km === null ? null : toNumber(row.delivery_distance_km),
@@ -146,7 +168,7 @@ function buildPendingOrderSummary(
 
   return {
     id: row.id,
-    status: getOrderStatus(normalizedOrder),
+    status: currentStatus,
     statusDetail: getOrderStatusDetail(normalizedOrder),
     createdAt: normalizedOrder.createdAt,
     total: normalizedOrder.total,
