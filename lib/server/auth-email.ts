@@ -3,6 +3,7 @@ import "server-only";
 import { Resend } from "resend";
 
 import type { Locale } from "@/lib/shop/types";
+import { buildAuthCodeEmail, buildSecurityNoticeEmail, buildWelcomeEmail } from "@/lib/server/email-templates";
 
 const copyByLocale: Record<
   Locale,
@@ -156,17 +157,13 @@ async function sendAuthEmail(input: {
     from: fromEmail,
     to: input.to,
     subject: input.subject,
-    html: `
-      <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #0f172a;">
-        <h2>${escapeHtml(input.heading)}</h2>
-        <p>Hola ${escapeHtml(input.name || "cliente")},</p>
-        <p>${escapeHtml(input.body)}</p>
-        <div style="margin: 18px 0; display: inline-block; padding: 14px 20px; border-radius: 14px; background: #eff6ff; border: 1px solid #bfdbfe; font-size: 28px; font-weight: 800; letter-spacing: 0.18em;">
-          ${escapeHtml(input.code)}
-        </div>
-        <p>${escapeHtml(input.expiry)}</p>
-      </div>
-    `,
+    html: buildAuthCodeEmail({
+      heading: input.heading,
+      body: input.body,
+      code: input.code,
+      name: input.name || "cliente",
+      expiry: input.expiry,
+    }),
   });
 
   if (result.error) {
@@ -206,14 +203,12 @@ async function sendSecurityEmail(input: {
     from: fromEmail,
     to: input.to,
     subject: input.subject,
-    html: `
-      <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #0f172a;">
-        <h2>${escapeHtml(input.heading)}</h2>
-        <p>Hola ${escapeHtml(input.name || "cliente")},</p>
-        <p>${escapeHtml(input.body)}</p>
-        ${input.extra ? `<p>${escapeHtml(input.extra)}</p>` : ""}
-      </div>
-    `,
+    html: buildSecurityNoticeEmail({
+      heading: input.heading,
+      body: input.body,
+      name: input.name || "cliente",
+      extra: input.extra,
+    }),
   });
 
   if (result.error) {
@@ -299,14 +294,21 @@ export async function sendWelcomeSecurityEmail(input: {
   name: string;
   locale: Locale;
 }) {
-  const copy = copyByLocale[input.locale] ?? copyByLocale.es;
-  await sendSecurityEmail({
+  const { apiKey, fromEmail } = getEmailConfig();
+  if (!apiKey) throw new AuthEmailSendError("RESEND_API_KEY_MISSING", "RESEND_API_KEY_MISSING");
+  if (!fromEmail) throw new AuthEmailSendError("RESEND_FROM_EMAIL_MISSING", "RESEND_FROM_EMAIL_MISSING");
+
+  const resend = new Resend(apiKey);
+  const result = await resend.emails.send({
+    from: fromEmail,
     to: input.email,
-    subject: copy.welcomeSubject,
-    heading: copy.welcomeHeading,
-    body: copy.welcomeBody,
-    name: input.name,
+    subject: "¡Bienvenido a ZorvyA Shop!",
+    html: buildWelcomeEmail({ name: input.name }),
   });
+
+  if (result.error) {
+    throw new AuthEmailSendError(`RESEND_SEND_FAILED: ${result.error.message}`, "RESEND_SEND_FAILED");
+  }
 }
 
 export async function sendPasswordChangedEmail(input: {

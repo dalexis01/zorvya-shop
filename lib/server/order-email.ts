@@ -5,6 +5,12 @@ import { Resend } from "resend";
 import { formatPickupLabel, PICKUP_ADDRESS } from "@/lib/shop/checkout";
 import { formatCurrencySrd as formatCurrency } from "@/lib/shop/number-format";
 import type { OrderIssueReport, OrderLineItem, StoredOrder } from "@/lib/shop/types";
+import {
+  buildCancellationEmail,
+  buildDeliveryEmail,
+  buildOrderConfirmationEmail,
+  buildPickupConfirmationEmail,
+} from "@/lib/server/email-templates";
 
 function escapeHtml(value: string) {
   return value
@@ -135,32 +141,28 @@ async function sendAdminEmail(subject: string, html: string) {
   }
 }
 
-function buildClientHtml(order: StoredOrder) {
-  const deliveryLabel =
-    order.deliveryType === "delivery" ? "Delivery a domicilio" : "Recogida programada";
+function buildClientHtml(order: StoredOrder): string {
+  if (order.deliveryType === "pickup" && order.pickupDate && order.pickupTime) {
+    return buildPickupConfirmationEmail({
+      name: order.customerName,
+      orderId: order.id,
+      items: order.items.map((i) => ({ name: i.name, quantity: i.quantity, price: i.price })),
+      total: order.total,
+      pickupDate: formatPickupLabel(order.pickupDate, order.pickupTime).split(" a ")[0] ?? order.pickupDate,
+      pickupTime: order.pickupTime,
+    });
+  }
 
-  return `
-    <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #0f172a;">
-      <h2>${order.payment.method === "paypal" ? "Pedido recibido" : "Orden confirmada"}</h2>
-      <p>Hola ${escapeHtml(order.customerName)},</p>
-      <p>Su pedido ${escapeHtml(order.id)} fue registrado correctamente.</p>
-      <p>Gracias por confiar en nosotros.</p>
-      ${renderPayPalBlock(order)}
-      ${renderAgentCallBlock(order)}
-      <p><strong>Tipo de entrega:</strong> ${deliveryLabel}</p>
-      ${renderPickupBlock(order)}
-      <p><strong>Direccion del cliente:</strong> ${escapeHtml(order.customerAddress)}</p>
-      <ul>${renderItems(order)}</ul>
-      <p><strong>Subtotal:</strong> ${formatCurrency(order.subtotal)}</p>
-      ${
-        order.deliveryType === "delivery"
-          ? `<p><strong>Costo delivery:</strong> ${formatCurrency(order.deliveryFee)}</p>`
-          : ""
-      }
-      <p><strong>Total:</strong> ${formatCurrency(order.total)}</p>
-      <p>Los detalles de tu pedido fueron enviados a tu correo electronico.</p>
-    </div>
-  `;
+  return buildOrderConfirmationEmail({
+    name: order.customerName,
+    orderId: order.id,
+    items: order.items.map((i) => ({ name: i.name, quantity: i.quantity, price: i.price })),
+    subtotal: order.subtotal,
+    deliveryFee: order.deliveryFee,
+    total: order.total,
+    address: order.customerAddress,
+    paymentMethod: order.payment.method,
+  });
 }
 
 function buildAdminOrderHtml(order: StoredOrder) {
@@ -245,29 +247,12 @@ function buildAdminIssueHtml(order: StoredOrder, issue: OrderIssueReport) {
   `;
 }
 
-function buildOrderCancellationClientHtml(order: StoredOrder, reason: string) {
-  const deliveryLabel =
-    order.deliveryType === "delivery" ? "Delivery a domicilio" : "Recogida programada";
-
-  return `
-    <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #0f172a;">
-      <h2>Pedido cancelado</h2>
-      <p>Hola ${escapeHtml(order.customerName)},</p>
-      <p>Su pedido ${escapeHtml(order.id)} fue cancelado.</p>
-      <p><strong>Motivo:</strong> ${escapeHtml(reason)}</p>
-      <p><strong>Tipo de entrega:</strong> ${escapeHtml(deliveryLabel)}</p>
-      ${renderPickupBlock(order)}
-      <p><strong>Direccion del pedido:</strong> ${escapeHtml(order.customerAddress)}</p>
-      <ul>${renderItems(order)}</ul>
-      <p><strong>Subtotal:</strong> ${formatCurrency(order.subtotal)}</p>
-      ${
-        order.deliveryType === "delivery"
-          ? `<p><strong>Costo delivery:</strong> ${formatCurrency(order.deliveryFee)}</p>`
-          : ""
-      }
-      <p><strong>Total:</strong> ${formatCurrency(order.total)}</p>
-    </div>
-  `;
+function buildOrderCancellationClientHtml(order: StoredOrder, reason: string): string {
+  return buildCancellationEmail({
+    name: order.customerName,
+    orderId: order.id,
+    reason: reason || undefined,
+  });
 }
 
 export async function sendOrderEmails(order: StoredOrder) {
@@ -292,7 +277,7 @@ export async function sendOrderEmails(order: StoredOrder) {
       await resend.emails.send({
         from: fromEmail,
         to: order.customerEmail,
-        subject: `Orden confirmada ${order.id}`,
+        subject: `✓ Pedido confirmado · ZorvyA #${order.id.slice(-8).toUpperCase()}`,
         html: buildClientHtml(order),
       });
       clientEmailSent = true;
@@ -378,7 +363,7 @@ export async function sendOrderCancellationEmail(order: StoredOrder, reason: str
     await resend.emails.send({
       from: fromEmail,
       to: order.customerEmail,
-      subject: `Pedido cancelado ${order.id}`,
+      subject: `Pedido cancelado · ZorvyA #${order.id.slice(-8).toUpperCase()}`,
       html: buildOrderCancellationClientHtml(order, reason),
     });
 
@@ -392,5 +377,42 @@ export async function sendOrderCancellationEmail(order: StoredOrder, reason: str
       warnings,
       clientEmailSent: false,
     };
+  }
+}
+
+export async function sendOrderDeliveryEmail(
+  order: StoredOrder,
+  estimatedTime?: string
+) {
+  const warnings: string[] = [];
+  const { apiKey, fromEmail } = getEmailConfig();
+
+  if (!apiKey) {
+    warnings.push("RESEND_API_KEY no esta configurada.");
+    return { warnings, clientEmailSent: false };
+  }
+
+  if (!order.customerEmail) {
+    warnings.push("El pedido no tiene correo de cliente.");
+    return { warnings, clientEmailSent: false };
+  }
+
+  try {
+    const resend = new Resend(apiKey);
+    await resend.emails.send({
+      from: fromEmail,
+      to: order.customerEmail,
+      subject: `🚚 Tu pedido está en camino · ZorvyA #${order.id.slice(-8).toUpperCase()}`,
+      html: buildDeliveryEmail({
+        name: order.customerName,
+        orderId: order.id,
+        address: order.customerAddress,
+        estimatedTime,
+      }),
+    });
+    return { warnings, clientEmailSent: true };
+  } catch {
+    warnings.push("No se pudo enviar el correo de delivery al cliente.");
+    return { warnings, clientEmailSent: false };
   }
 }
