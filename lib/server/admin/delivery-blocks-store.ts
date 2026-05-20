@@ -149,7 +149,22 @@ export async function listDeliveryBlocks(): Promise<DeliveryBlock[]> {
 
   const pool = await getBlocksPool();
   const res = await pool.query<Record<string, unknown>>(
-    `SELECT * FROM delivery_blocks ORDER BY created_at DESC LIMIT 100`
+    `SELECT
+       id,
+       name,
+       status,
+       route_distance_km,
+       route_duration_minutes,
+       route_polyline,
+       total_amount,
+       total_delivery_fee,
+       created_at,
+       updated_at,
+       created_by,
+       notes
+     FROM delivery_blocks
+     ORDER BY created_at DESC
+     LIMIT 100`
   );
   const blocks = res.rows.map(toBlock);
 
@@ -158,7 +173,14 @@ export async function listDeliveryBlocks(): Promise<DeliveryBlock[]> {
   }
 
   const slotsRes = await pool.query<Record<string, unknown>>(
-    `SELECT * FROM delivery_block_orders
+    `SELECT
+       block_id,
+       order_id,
+       position,
+       leg_distance_km,
+       leg_duration_minutes,
+       created_at
+     FROM delivery_block_orders
      WHERE block_id = ANY($1::text[])
      ORDER BY block_id ASC, position ASC`,
     [blocks.map((block) => block.id)]
@@ -212,11 +234,34 @@ export async function getDeliveryBlockById(id: string): Promise<DeliveryBlock | 
 
   const [blockRes, slotsRes] = await Promise.all([
     pool.query<Record<string, unknown>>(
-      `SELECT * FROM delivery_blocks WHERE id = $1`,
+      `SELECT
+         id,
+         name,
+         status,
+         route_distance_km,
+         route_duration_minutes,
+         route_polyline,
+         total_amount,
+         total_delivery_fee,
+         created_at,
+         updated_at,
+         created_by,
+         notes
+       FROM delivery_blocks
+       WHERE id = $1`,
       [id]
     ),
     pool.query<Record<string, unknown>>(
-      `SELECT * FROM delivery_block_orders WHERE block_id = $1 ORDER BY position ASC`,
+      `SELECT
+         block_id,
+         order_id,
+         position,
+         leg_distance_km,
+         leg_duration_minutes,
+         created_at
+       FROM delivery_block_orders
+       WHERE block_id = $1
+       ORDER BY position ASC`,
       [id]
     ),
   ]);

@@ -5,8 +5,8 @@ import { unstable_cache } from "next/cache";
 import {
   getProductById,
   getProductGalleryImageSource,
+  getProductsDataSource,
   getProductSummaries,
-  getProductsDataSourceInfo,
   type ProductsDataSource,
 } from "@/lib/server/admin/products";
 import type { Product } from "@/lib/shop/admin-types";
@@ -232,10 +232,10 @@ export function toStorefrontProduct(product: Product): StorefrontProduct {
 
 async function readStorefrontProductsUncached(): Promise<StorefrontProductsResult> {
   const products = await getProductSummaries({ onlyActive: true });
-  const info = await getProductsDataSourceInfo({ onlyActive: true });
+  const source = getProductsDataSource();
 
   console.info(
-    `[catalog] storefront loaded ${products.length} product(s) from ${info.source}`
+    `[catalog] storefront loaded ${products.length} product(s) from ${source}`
   );
 
   if (products.length === 0) {
@@ -244,7 +244,7 @@ async function readStorefrontProductsUncached(): Promise<StorefrontProductsResul
 
   return {
     products: products.map(toStorefrontProduct),
-    source: info.source,
+    source,
   };
 }
 

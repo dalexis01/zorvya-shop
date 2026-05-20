@@ -55,6 +55,10 @@ export default function AdminSupportPage() {
     let isActive = true;
 
     async function loadMessages() {
+      if (document.visibilityState !== "visible") {
+        return;
+      }
+
       try {
         const response = await fetch("/api/admin/support", { cache: "no-store" });
         const data = await response.json();
@@ -84,13 +88,20 @@ export default function AdminSupportPage() {
     }
 
     void loadMessages();
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        void loadMessages();
+      }
+    };
     const intervalId = window.setInterval(() => {
       void loadMessages();
-    }, 30_000);
+    }, 90_000);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
       isActive = false;
       window.clearInterval(intervalId);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, [selectedFromUrl]);
 

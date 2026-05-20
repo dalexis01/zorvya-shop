@@ -9,6 +9,15 @@ import { getBlockedUserCount } from "@/lib/server/users";
 
 export const dynamic = "force-dynamic";
 
+const DASHBOARD_CACHE_TTL_MS = 60_000;
+
+let dashboardStatsCache:
+  | {
+      expiresAt: number;
+      value: Record<string, unknown>;
+    }
+  | null = null;
+
 export async function GET() {
   try {
     const auth = await requireAdminRequestUser();
@@ -20,73 +29,67 @@ export async function GET() {
       );
     }
 
-    // All queries run in parallel.
-    // getDashboardOrderStats()  → 2 targeted SQL queries (counts + recent rows)  replaces 3 full-table scans
-    // getProductStats()         → 1 COUNT query                                  replaces getAllProducts()
-    // getRevenueAnalytics(90)   → orders limited to last 90 days                 replaces unbounded getAllAdminOrders()
-    // getBlockedUserCount()     → 1 COUNT query                                  replaces getAllUsers()
-    // getLowStockProducts()     → already targeted SQL
-    // support messages          → filesystem only (fast)
-    const [
-      orderStats,
-      productStats,
-      revenue,
-      lowStockProducts,
-      blockedUsers,
-      supportMessages,
-      allSupportMessages,
-    ] = await Promise.all([
-      getDashboardOrderStats(),
-      getProductStats(),
-      getRevenueAnalytics(90),
-      getLowStockProducts(5),
-      getBlockedUserCount(),
-      getPendingSupportMessages(),
-      getAllSupportMessages(),
-    ]);
+    const cachedStats =
+      dashboardStatsCache && dashboardStatsCache.expiresAt > Date.now()
+        ? dashboardStatsCache.value
+        : null;
 
-    const stats = {
-      // Product counts
-      totalProducts:    productStats.total,
-      activeProducts:   productStats.active,
-      lowStockProducts,
+    let stats = cachedStats;
 
-      // Order counts (from aggregated SQL — no full scan)
-      totalOrders:     orderStats?.totalOrders     ?? 0,
-      pendingOrders:   orderStats?.pendingOrders   ?? 0,
-      completedOrders: orderStats?.completedOrders ?? 0,
-      ordersToday:     orderStats?.ordersToday     ?? 0,
-      ordersThisWeek:  orderStats?.ordersThisWeek  ?? 0,
-      ordersThisMonth: orderStats?.ordersThisMonth ?? 0,
+    if (!stats) {
+      const [
+        orderStats,
+        productStats,
+        revenue,
+        lowStockProducts,
+        blockedUsers,
+        supportMessages,
+        allSupportMessages,
+      ] = await Promise.all([
+        getDashboardOrderStats(),
+        getProductStats(),
+        getRevenueAnalytics(90),
+        getLowStockProducts(5),
+        getBlockedUserCount(),
+        getPendingSupportMessages(),
+        getAllSupportMessages(),
+      ]);
 
-      // Revenue (from aggregated SQL — no full scan)
-      totalRevenue:    orderStats?.totalRevenue    ?? 0,
-      revenueToday:    orderStats?.revenueToday    ?? 0,
-      revenueThisWeek: orderStats?.revenueThisWeek ?? 0,
-      revenueThisMonth:orderStats?.revenueThisMonth?? 0,
-      cancelledOrders: orderStats?.cancelledOrders ?? 0,
-      cancelledValue:  orderStats?.cancelledValue  ?? 0,
+      stats = {
+        totalProducts: productStats.total,
+        activeProducts: productStats.active,
+        lowStockProducts,
+        totalOrders: orderStats?.totalOrders ?? 0,
+        pendingOrders: orderStats?.pendingOrders ?? 0,
+        completedOrders: orderStats?.completedOrders ?? 0,
+        ordersToday: orderStats?.ordersToday ?? 0,
+        ordersThisWeek: orderStats?.ordersThisWeek ?? 0,
+        ordersThisMonth: orderStats?.ordersThisMonth ?? 0,
+        totalRevenue: orderStats?.totalRevenue ?? 0,
+        revenueToday: orderStats?.revenueToday ?? 0,
+        revenueThisWeek: orderStats?.revenueThisWeek ?? 0,
+        revenueThisMonth: orderStats?.revenueThisMonth ?? 0,
+        cancelledOrders: orderStats?.cancelledOrders ?? 0,
+        cancelledValue: orderStats?.cancelledValue ?? 0,
+        cogsTotal: revenue.cogsTotal,
+        grossProfit: revenue.grossProfit,
+        netProfit: revenue.netProfit,
+        trackedProductCount: revenue.trackedProductCount,
+        untrackedProductCount: revenue.untrackedProductCount,
+        totalUnitsSold: revenue.totalUnitsSold,
+        topProducts: revenue.productPerformance.slice(0, 5),
+        revenueSeries: revenue.dailySeries,
+        recentOrders: orderStats?.recentOrders ?? [],
+        pendingSupportMessages: supportMessages.length,
+        recentSupportMessages: allSupportMessages.slice(0, 5),
+        blockedUsers,
+      };
 
-      // Revenue analytics (90-day window — product performance, charts, COGS)
-      cogsTotal:          revenue.cogsTotal,
-      grossProfit:        revenue.grossProfit,
-      netProfit:          revenue.netProfit,
-      trackedProductCount:revenue.trackedProductCount,
-      untrackedProductCount: revenue.untrackedProductCount,
-      totalUnitsSold:     revenue.totalUnitsSold,
-      topProducts:        revenue.productPerformance.slice(0, 5),
-      revenueSeries:      revenue.dailySeries,
-
-      // Recent orders (from lightweight 6-row query)
-      recentOrders: orderStats?.recentOrders ?? [],
-
-      // Support
-      pendingSupportMessages: supportMessages.length,
-      recentSupportMessages:  allSupportMessages.slice(0, 5),
-
-      // Users
-      blockedUsers,
-    };
+      dashboardStatsCache = {
+        expiresAt: Date.now() + DASHBOARD_CACHE_TTL_MS,
+        value: stats,
+      };
+    }
 
     return NextResponse.json({ success: true, stats });
   } catch (error) {

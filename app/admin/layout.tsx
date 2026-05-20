@@ -94,23 +94,49 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       return;
     }
 
-    async function loadOrdersMeta() {
-      try {
-        const [ordersResponse, supportResponse] = await Promise.all([
-          fetch("/api/admin/orders/meta", { cache: "no-store" }),
-          fetch("/api/admin/support/meta", { cache: "no-store" }),
-        ]);
-        const [ordersData, supportData] = await Promise.all([
-          ordersResponse.json(),
-          supportResponse.json(),
-        ]);
+    const shouldLoadOrdersMeta =
+      pathname === "/admin" || pathname.startsWith("/admin/orders");
+    const shouldLoadSupportMeta =
+      pathname === "/admin" || pathname.startsWith("/admin/support");
 
-        if (ordersData.success && ordersData.meta) {
-          setOrdersMeta(ordersData.meta);
+    if (!shouldLoadOrdersMeta && !shouldLoadSupportMeta) {
+      return;
+    }
+
+    async function loadOrdersMeta() {
+      if (document.visibilityState !== "visible") {
+        return;
+      }
+
+      try {
+        const requests: Promise<Response>[] = [];
+
+        if (shouldLoadOrdersMeta) {
+          requests.push(fetch("/api/admin/orders/meta", { cache: "no-store" }));
         }
 
-        if (supportData.success && supportData.meta) {
-          setSupportMeta(supportData.meta);
+        if (shouldLoadSupportMeta) {
+          requests.push(fetch("/api/admin/support/meta", { cache: "no-store" }));
+        }
+
+        const responses = await Promise.all(requests);
+        let responseIndex = 0;
+
+        if (shouldLoadOrdersMeta) {
+          const ordersData = await responses[responseIndex].json();
+          responseIndex += 1;
+
+          if (ordersData.success && ordersData.meta) {
+            setOrdersMeta(ordersData.meta);
+          }
+        }
+
+        if (shouldLoadSupportMeta) {
+          const supportData = await responses[responseIndex].json();
+
+          if (supportData.success && supportData.meta) {
+            setSupportMeta(supportData.meta);
+          }
         }
       } catch {
         return;
@@ -119,19 +145,30 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
     void loadOrdersMeta();
 
-    const intervalId = window.setInterval(loadOrdersMeta, 30_000);
+    const intervalId = window.setInterval(loadOrdersMeta, 90_000);
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        void loadOrdersMeta();
+      }
+    };
     const handleOrdersUpdated = () => {
-      void loadOrdersMeta();
+      if (shouldLoadOrdersMeta) {
+        void loadOrdersMeta();
+      }
     };
     const handleSupportUpdated = () => {
-      void loadOrdersMeta();
+      if (shouldLoadSupportMeta) {
+        void loadOrdersMeta();
+      }
     };
 
+    document.addEventListener("visibilitychange", handleVisibilityChange);
     window.addEventListener("admin-orders-updated", handleOrdersUpdated);
     window.addEventListener("admin-support-updated", handleSupportUpdated);
 
     return () => {
       window.clearInterval(intervalId);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
       window.removeEventListener("admin-orders-updated", handleOrdersUpdated);
       window.removeEventListener("admin-support-updated", handleSupportUpdated);
     };

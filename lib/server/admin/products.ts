@@ -147,6 +147,20 @@ type ProductSummaryRow = QueryResultRow & {
   first_image_url: string | null;
 };
 
+type ProductAnalyticsLookupRow = QueryResultRow & {
+  id: string;
+  name: string;
+  cost_price_value: string | number | null;
+  purchase_price_value: string | number | null;
+};
+
+type ProductAnalyticsLookup = {
+  id: string;
+  name: string;
+  costPrice: number;
+  purchasePrice: number;
+};
+
 export type ProductsDataSource = "postgres" | "postgres-required";
 
 let productsPoolInstance: Pool | null = null;
@@ -159,10 +173,14 @@ let productsListCache: { expiresAt: number; value: Product[] } | null = null;
 // Slim lookup cache — only id+name, used for order-name matching
 const PRODUCTS_LOOKUP_CACHE_TTL_MS = 120_000; // 2 min
 let productsLookupCache: { expiresAt: number; value: Array<{ id: string; name: string }> } | null = null;
+let productsAnalyticsLookupCache:
+  | { expiresAt: number; value: ProductAnalyticsLookup[] }
+  | null = null;
 
 function clearProductsListCache() {
   productsListCache = null;
   productsLookupCache = null;
+  productsAnalyticsLookupCache = null;
 }
 
 function trimText(value: string | undefined) {
@@ -1032,6 +1050,40 @@ export async function getProductsForOrderLookup(): Promise<Array<{ id: string; n
   }
 }
 
+export async function getProductsForAnalyticsLookup(): Promise<ProductAnalyticsLookup[]> {
+  if (!isProductsDatabaseConfigured()) return [];
+  if (productsAnalyticsLookupCache && productsAnalyticsLookupCache.expiresAt > Date.now()) {
+    return productsAnalyticsLookupCache.value;
+  }
+
+  try {
+    const pool = await getProductsPool();
+    const result = await pool.query<ProductAnalyticsLookupRow>(
+      `SELECT
+         id,
+         name,
+         internal_json ->> 'costPrice' AS cost_price_value,
+         internal_json ->> 'purchasePrice' AS purchase_price_value
+       FROM products
+       ORDER BY name`
+    );
+    const value = result.rows.map((row) => ({
+      id: row.id,
+      name: row.name,
+      costPrice: Number(row.cost_price_value ?? 0),
+      purchasePrice: Number(row.purchase_price_value ?? 0),
+    }));
+    productsAnalyticsLookupCache = {
+      expiresAt: Date.now() + PRODUCTS_LOOKUP_CACHE_TTL_MS,
+      value,
+    };
+    return value;
+  } catch (err) {
+    console.error("[products] getProductsForAnalyticsLookup failed:", err);
+    return [];
+  }
+}
+
 export async function getProductSummaries(options?: {
   onlyActive?: boolean;
   category?: string;
@@ -1054,13 +1106,19 @@ export async function getProductsDataSourceInfo(options?: {
   category?: string;
   search?: string;
 }) {
-  const { source } = await readProductsWithSource();
+  const source: ProductsDataSource = isProductsDatabaseConfigured()
+    ? "postgres"
+    : "postgres-required";
   const products = await getProductSummaries(options);
 
   return {
     source,
     count: products.length,
   };
+}
+
+export function getProductsDataSource(): ProductsDataSource {
+  return isProductsDatabaseConfigured() ? "postgres" : "postgres-required";
 }
 
 export async function getProductById(id: string) {
@@ -1072,7 +1130,42 @@ export async function getProductById(id: string) {
     const pool = await getProductsPool();
     const result = await pool.query<ProductRow>(
       `
-        SELECT *
+        SELECT
+          id,
+          public_id,
+          display_order,
+          sku,
+          name,
+          short_description,
+          long_description,
+          brand,
+          category,
+          tags_json,
+          price,
+          original_price,
+          stock,
+          rating,
+          review_count,
+          inventory_label,
+          delivery_label,
+          show_stock,
+          images_json,
+          is_active,
+          is_visible,
+          is_featured,
+          is_top,
+          attributes_json,
+          internal_json,
+          metrics_json,
+          created_at,
+          published_at,
+          stock_added_at,
+          last_sold_at,
+          sale_dates_json,
+          updated_at,
+          updated_by,
+          translations_json,
+          ai_json
         FROM products
         WHERE id = $1
         LIMIT 1
@@ -1096,7 +1189,42 @@ export async function getProductBySku(sku: string) {
     const pool = await getProductsPool();
     const result = await pool.query<ProductRow>(
       `
-        SELECT *
+        SELECT
+          id,
+          public_id,
+          display_order,
+          sku,
+          name,
+          short_description,
+          long_description,
+          brand,
+          category,
+          tags_json,
+          price,
+          original_price,
+          stock,
+          rating,
+          review_count,
+          inventory_label,
+          delivery_label,
+          show_stock,
+          images_json,
+          is_active,
+          is_visible,
+          is_featured,
+          is_top,
+          attributes_json,
+          internal_json,
+          metrics_json,
+          created_at,
+          published_at,
+          stock_added_at,
+          last_sold_at,
+          sale_dates_json,
+          updated_at,
+          updated_by,
+          translations_json,
+          ai_json
         FROM products
         WHERE sku = $1
         LIMIT 1

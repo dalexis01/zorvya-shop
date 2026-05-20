@@ -1,16 +1,27 @@
 import "server-only";
 
 import { getAllAdminOrders } from "@/lib/server/admin/orders";
-import { getAllProducts } from "@/lib/server/admin/products";
 import type {
   AdminOrderRecord,
   DashboardOrderSnapshot,
-  Product,
   RevenueAnalytics,
   RevenueChartPoint,
   RevenueComparison,
   RevenueProductPerformance,
 } from "@/lib/shop/admin-types";
+import { getProductsForAnalyticsLookup } from "@/lib/server/admin/products";
+
+type AnalyticsProduct = {
+  id: string;
+  name: string;
+  internal: {
+    costPrice: number;
+    purchasePrice: number;
+  };
+};
+
+const REVENUE_ANALYTICS_TTL_MS = 60_000;
+const revenueAnalyticsCache = new Map<number, { expiresAt: number; value: RevenueAnalytics }>();
 
 function toMoney(value: number) {
   return Math.round(value * 100) / 100;
@@ -66,7 +77,7 @@ function buildRevenueComparison(current: number, previous: number): RevenueCompa
   };
 }
 
-function createProductLookup(products: Product[]) {
+function createProductLookup(products: AnalyticsProduct[]) {
   const byId = new Map(products.map((product) => [product.id, product]));
   const byName = new Map(products.map((product) => [normalizeText(product.name), product]));
 
@@ -76,7 +87,7 @@ function createProductLookup(products: Product[]) {
   };
 }
 
-function getTrackedUnitCost(product: Product | undefined) {
+function getTrackedUnitCost(product: AnalyticsProduct | undefined) {
   if (!product) {
     return null;
   }
@@ -152,13 +163,24 @@ function buildRecentOrders(orders: AdminOrderRecord[]): DashboardOrderSnapshot[]
 }
 
 export async function getRevenueAnalytics(windowDays = 90): Promise<RevenueAnalytics> {
-  // windowDays limits the orders loaded (default: last 90 days).
-  // getAllProducts uses the 5-min cache — no extra scan when called alongside the dashboard.
+  const cached = revenueAnalyticsCache.get(windowDays);
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.value;
+  }
+
   const [orders, products] = await Promise.all([
     getAllAdminOrders({ windowDays }),
-    getAllProducts(),
+    getProductsForAnalyticsLookup(),
   ]);
-  const lookup = createProductLookup(products);
+  const normalizedProducts: AnalyticsProduct[] = products.map((product) => ({
+    id: product.id,
+    name: product.name,
+    internal: {
+      costPrice: product.costPrice,
+      purchasePrice: product.purchasePrice,
+    },
+  }));
+  const lookup = createProductLookup(normalizedProducts);
   const now = new Date();
   const todayStart = startOfDay(now);
   const yesterdayStart = addDays(todayStart, -1);
@@ -288,7 +310,7 @@ export async function getRevenueAnalytics(windowDays = 90): Promise<RevenueAnaly
     );
   });
 
-  return {
+  const analytics = {
     revenueToday,
     revenueThisWeek,
     revenueThisMonth,
@@ -330,4 +352,11 @@ export async function getRevenueAnalytics(windowDays = 90): Promise<RevenueAnaly
       )
     ),
   };
+
+  revenueAnalyticsCache.set(windowDays, {
+    expiresAt: Date.now() + REVENUE_ANALYTICS_TTL_MS,
+    value: analytics,
+  });
+
+  return analytics;
 }

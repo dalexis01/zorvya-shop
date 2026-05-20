@@ -944,21 +944,22 @@ export default function AdminOrdersPage() {
         fetch("/api/admin/blocks/sync", { method: "POST", cache: "no-store" }).catch(() => {});
       }
 
-      const [blocksRes, assignedRes] = await Promise.all([
-        fetch("/api/admin/blocks", { cache: "no-store" }),
-        fetch("/api/admin/blocks/assigned", { cache: "no-store" }),
-      ]);
+      const blocksRes = await fetch("/api/admin/blocks", { cache: "no-store" });
       const blocksData = (await blocksRes.json()) as {
         success?: boolean;
         blocks?: DeliveryBlock[];
         orderRecords?: AdminOrderRecord[];
       };
-      const assignedData = (await assignedRes.json()) as { success?: boolean; assignedOrderIds?: string[] };
       if (blocksData.success) {
-        setPersistentBlocks(blocksData.blocks ?? []);
+        const nextBlocks = blocksData.blocks ?? [];
+        setPersistentBlocks(nextBlocks);
         setPersistentBlockOrders(blocksData.orderRecords ?? []);
+        setAssignedOrderIds(
+          new Set(
+            nextBlocks.flatMap((block) => (block.orders ?? []).map((slot) => slot.orderId))
+          )
+        );
       }
-      if (assignedData.success) setAssignedOrderIds(new Set(assignedData.assignedOrderIds ?? []));
     } catch {
       // non-critical
     } finally {
@@ -1027,13 +1028,21 @@ export default function AdminOrdersPage() {
       }
     }
 
+    void loadMetaOnly();
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        void loadMetaOnly();
+      }
+    };
     const intervalId = window.setInterval(() => {
       void loadMetaOnly();
-    }, 20000);
+    }, 120000);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
       alive = false;
       window.clearInterval(intervalId);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, []);
 
