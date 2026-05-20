@@ -75,7 +75,7 @@ function emailFooter(unsubToken?: string) {
         <strong style="color:#555">ZorvyA Shop</strong> · ${escapeHtml(PICKUP_ADDRESS)}, Paramaribo, Suriname<br>
         ${unsub}
         <a href="${STORE_URL}" style="color:#0F6E56;text-decoration:none">Ver tienda</a> ·
-        <a href="${STORE_URL}/soporte" style="color:#0F6E56;text-decoration:none">Soporte en vivo</a>
+        <a href="${STORE_URL}/?openChat=1" style="color:#0F6E56;text-decoration:none">Soporte en vivo</a>
       </p>
     </td>
   </tr>
@@ -147,23 +147,34 @@ function totalLine(label: string, amount: number) {
 
 function recoSection(products: EmailProduct[]) {
   if (!products.length) return "";
-  const cards = products.slice(0, 3).map(p => `
+
+  // Split into rows of 3
+  const rows: EmailProduct[][] = [];
+  for (let i = 0; i < products.length; i += 3) {
+    rows.push(products.slice(i, i + 3));
+  }
+
+  const card = (p: EmailProduct) => `
 <td width="33%" style="padding:4px;vertical-align:top">
   <a href="${STORE_URL}/products/${encodeURIComponent(String(p.id))}" style="text-decoration:none;display:block;border:1px solid #e0e8f0;border-radius:8px;overflow:hidden;text-align:center">
-    <div style="height:60px;background:#f0f4f8;overflow:hidden">
-      ${p.image ? `<img src="${escapeHtml(p.image)}" alt="${escapeHtml(p.name)}" width="100%" height="60" style="object-fit:cover;display:block">` : `<div style="height:60px;display:flex;align-items:center;justify-content:center;font-size:28px">📦</div>`}
+    <div style="height:70px;background:#f0f4f8;overflow:hidden">
+      ${p.image
+        ? `<img src="${escapeHtml(p.image)}" alt="${escapeHtml(p.name)}" width="100%" height="70" style="object-fit:cover;display:block">`
+        : `<p style="margin:0;line-height:70px;font-size:28px">📦</p>`}
     </div>
     <div style="padding:6px 4px">
       <p style="margin:0 0 3px;font-size:10px;color:#444;font-family:sans-serif;line-height:1.3">${escapeHtml(p.name)}</p>
       <p style="margin:0;font-size:11px;font-weight:700;color:#0F6E56;font-family:Georgia,serif">${fmtSrd(p.price)}</p>
     </div>
   </a>
-</td>`).join("");
+</td>`;
+
+  const tableRows = rows.map(row => `<tr>${row.map(card).join("")}</tr>`).join("");
 
   return `
 ${divider()}
 <p style="font-size:11px;font-family:sans-serif;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:.5px;margin:0 0 12px;text-align:center">También te puede interesar</p>
-<table width="100%" cellpadding="0" cellspacing="0"><tr>${cards}</tr></table>`;
+<table width="100%" cellpadding="0" cellspacing="0">${tableRows}</table>`;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -299,7 +310,6 @@ ${itemRows(input.items)}
   </tr>
 </table>
 ${totalLine("Total pagado", input.total)}
-${cta("Ver estado de mi pedido", `${STORE_URL}/account/orders`)}
 ${recoSection(input.recommendations ?? [])}`;
 
   return wrap(body, "Confirmación de pedido");

@@ -38,7 +38,7 @@ async function getEmailRecommendations(
       return bScore - aScore;
     });
 
-    return sorted.slice(0, 3).map((p) => ({
+    return sorted.slice(0, 9).map((p) => ({
       id: p.id,
       name: p.name,
       price: p.price,

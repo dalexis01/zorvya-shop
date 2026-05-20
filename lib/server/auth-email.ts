@@ -305,7 +305,7 @@ export async function sendWelcomeSecurityEmail(input: {
     const all = await getStorefrontProducts();
     recs = all
       .filter((p) => p.stock > 0 && (p.isFeatured || p.isTop))
-      .slice(0, 3)
+      .slice(0, 9)
       .map((p) => ({ id: p.id, name: p.name, price: p.price, image: p.image ?? "" }));
   } catch { /* non-critical, email still sends without recs */ }
 
