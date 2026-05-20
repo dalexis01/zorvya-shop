@@ -4,6 +4,7 @@ import { Resend } from "resend";
 
 import type { Locale } from "@/lib/shop/types";
 import { buildAuthCodeEmail, buildSecurityNoticeEmail, buildWelcomeEmail } from "@/lib/server/email-templates";
+import { getStorefrontProducts } from "@/lib/server/catalog";
 
 const copyByLocale: Record<
   Locale,
@@ -298,12 +299,22 @@ export async function sendWelcomeSecurityEmail(input: {
   if (!apiKey) throw new AuthEmailSendError("RESEND_API_KEY_MISSING", "RESEND_API_KEY_MISSING");
   if (!fromEmail) throw new AuthEmailSendError("RESEND_FROM_EMAIL_MISSING", "RESEND_FROM_EMAIL_MISSING");
 
+  // Fetch top/featured products for the welcome email recommendation section
+  let recs: Array<{ id: string | number; name: string; price: number; image: string }> = [];
+  try {
+    const all = await getStorefrontProducts();
+    recs = all
+      .filter((p) => p.stock > 0 && (p.isFeatured || p.isTop))
+      .slice(0, 3)
+      .map((p) => ({ id: p.id, name: p.name, price: p.price, image: p.image ?? "" }));
+  } catch { /* non-critical, email still sends without recs */ }
+
   const resend = new Resend(apiKey);
   const result = await resend.emails.send({
     from: fromEmail,
     to: input.email,
     subject: "¡Bienvenido a ZorvyA Shop!",
-    html: buildWelcomeEmail({ name: input.name }),
+    html: buildWelcomeEmail({ name: input.name, recommendations: recs }),
   });
 
   if (result.error) {

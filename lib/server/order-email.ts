@@ -10,7 +10,44 @@ import {
   buildDeliveryEmail,
   buildOrderConfirmationEmail,
   buildPickupConfirmationEmail,
+  type EmailProduct,
 } from "@/lib/server/email-templates";
+import { getStorefrontProducts } from "@/lib/server/catalog";
+
+// Fetch up to 3 featured/top products for email recommendations
+async function getEmailRecommendations(
+  excludeNames: string[] = [],
+  preferCategory?: string
+): Promise<EmailProduct[]> {
+  try {
+    const all = await getStorefrontProducts();
+    const active = all.filter(
+      (p) => p.stock > 0 && !excludeNames.includes(p.name)
+    );
+
+    // Prefer same category first, then featured/top
+    const sorted = [...active].sort((a, b) => {
+      const aScore =
+        (preferCategory && a.category === preferCategory ? 4 : 0) +
+        (a.isFeatured ? 2 : 0) +
+        (a.isTop ? 1 : 0);
+      const bScore =
+        (preferCategory && b.category === preferCategory ? 4 : 0) +
+        (b.isFeatured ? 2 : 0) +
+        (b.isTop ? 1 : 0);
+      return bScore - aScore;
+    });
+
+    return sorted.slice(0, 3).map((p) => ({
+      id: p.id,
+      name: p.name,
+      price: p.price,
+      image: p.image ?? "",
+    }));
+  } catch {
+    return [];
+  }
+}
 
 function escapeHtml(value: string) {
   return value
@@ -141,7 +178,11 @@ async function sendAdminEmail(subject: string, html: string) {
   }
 }
 
-function buildClientHtml(order: StoredOrder): string {
+async function buildClientHtml(order: StoredOrder): Promise<string> {
+  const orderItemNames = order.items.map((i) => i.name);
+  const category = order.items[0]?.name; // rough heuristic, category isn't on line items
+  const recs = await getEmailRecommendations(orderItemNames, category);
+
   if (order.deliveryType === "pickup" && order.pickupDate && order.pickupTime) {
     return buildPickupConfirmationEmail({
       name: order.customerName,
@@ -150,6 +191,7 @@ function buildClientHtml(order: StoredOrder): string {
       total: order.total,
       pickupDate: formatPickupLabel(order.pickupDate, order.pickupTime).split(" a ")[0] ?? order.pickupDate,
       pickupTime: order.pickupTime,
+      recommendations: recs,
     });
   }
 
@@ -162,6 +204,7 @@ function buildClientHtml(order: StoredOrder): string {
     total: order.total,
     address: order.customerAddress,
     paymentMethod: order.payment.method,
+    recommendations: recs,
   });
 }
 
@@ -247,11 +290,15 @@ function buildAdminIssueHtml(order: StoredOrder, issue: OrderIssueReport) {
   `;
 }
 
-function buildOrderCancellationClientHtml(order: StoredOrder, reason: string): string {
+async function buildOrderCancellationClientHtml(order: StoredOrder, reason: string): Promise<string> {
+  const recs = await getEmailRecommendations(
+    order.items.map((i) => i.name)
+  );
   return buildCancellationEmail({
     name: order.customerName,
     orderId: order.id,
     reason: reason || undefined,
+    recommendations: recs,
   });
 }
 
@@ -278,7 +325,7 @@ export async function sendOrderEmails(order: StoredOrder) {
         from: fromEmail,
         to: order.customerEmail,
         subject: `✓ Pedido confirmado · ZorvyA #${order.id.slice(-8).toUpperCase()}`,
-        html: buildClientHtml(order),
+        html: await buildClientHtml(order),
       });
       clientEmailSent = true;
     } catch {
@@ -364,7 +411,7 @@ export async function sendOrderCancellationEmail(order: StoredOrder, reason: str
       from: fromEmail,
       to: order.customerEmail,
       subject: `Pedido cancelado · ZorvyA #${order.id.slice(-8).toUpperCase()}`,
-      html: buildOrderCancellationClientHtml(order, reason),
+      html: await buildOrderCancellationClientHtml(order, reason),
     });
 
     return {
@@ -399,6 +446,7 @@ export async function sendOrderDeliveryEmail(
 
   try {
     const resend = new Resend(apiKey);
+    const recs = await getEmailRecommendations(order.items.map((i) => i.name));
     await resend.emails.send({
       from: fromEmail,
       to: order.customerEmail,
@@ -408,6 +456,7 @@ export async function sendOrderDeliveryEmail(
         orderId: order.id,
         address: order.customerAddress,
         estimatedTime,
+        recommendations: recs,
       }),
     });
     return { warnings, clientEmailSent: true };
