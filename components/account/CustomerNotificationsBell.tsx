@@ -21,7 +21,6 @@ type NotificationsResponse = {
 const texts = {
   es: {
     title: "Notificaciones",
-    subtitle: "Pedidos y mensajes importantes",
     importantMessages: "Mensajes importantes",
     empty: "No hay novedades activas ahora mismo.",
     confirmed: "Confirmado",
@@ -29,11 +28,7 @@ const texts = {
     inTransit: "En camino",
     delivered: "Entregado",
     lastMessage: "Ultimo mensaje",
-    address: "Direccion",
-    date: "Fecha",
-    order: "Pedido",
     pickupFor: "Recogida programada",
-    close: "Cerrar",
     routeMessage: "Tu pedido va rumbo a tu direccion.",
     processingMessage: "Tu pedido ya esta siendo preparado.",
     confirmedMessage: "Tu pedido fue confirmado y entro a la fila.",
@@ -41,7 +36,6 @@ const texts = {
   },
   nl: {
     title: "Meldingen",
-    subtitle: "Bestellingen en belangrijke berichten",
     importantMessages: "Belangrijke berichten",
     empty: "Er zijn nu geen actieve updates.",
     confirmed: "Bevestigd",
@@ -49,11 +43,7 @@ const texts = {
     inTransit: "Onderweg",
     delivered: "Afgeleverd",
     lastMessage: "Laatste bericht",
-    address: "Adres",
-    date: "Datum",
-    order: "Bestelling",
     pickupFor: "Afhaling gepland",
-    close: "Sluiten",
     routeMessage: "Je bestelling is onderweg naar je adres.",
     processingMessage: "Je bestelling wordt nu klaargemaakt.",
     confirmedMessage: "Je bestelling is bevestigd en staat in de rij.",
@@ -61,7 +51,6 @@ const texts = {
   },
   en: {
     title: "Notifications",
-    subtitle: "Orders and important messages",
     importantMessages: "Important messages",
     empty: "There are no active updates right now.",
     confirmed: "Confirmed",
@@ -69,11 +58,7 @@ const texts = {
     inTransit: "On the way",
     delivered: "Delivered",
     lastMessage: "Latest message",
-    address: "Address",
-    date: "Date",
-    order: "Order",
     pickupFor: "Pickup scheduled",
-    close: "Close",
     routeMessage: "Your order is on the way to your address.",
     processingMessage: "Your order is already being prepared.",
     confirmedMessage: "Your order was confirmed and entered the queue.",
@@ -81,7 +66,6 @@ const texts = {
   },
   pt: {
     title: "Notificacoes",
-    subtitle: "Pedidos e mensagens importantes",
     importantMessages: "Mensagens importantes",
     empty: "Nao ha novidades ativas agora.",
     confirmed: "Confirmado",
@@ -89,11 +73,7 @@ const texts = {
     inTransit: "A caminho",
     delivered: "Entregue",
     lastMessage: "Ultima mensagem",
-    address: "Endereco",
-    date: "Data",
-    order: "Pedido",
     pickupFor: "Retirada agendada",
-    close: "Fechar",
     routeMessage: "Seu pedido esta a caminho do seu endereco.",
     processingMessage: "Seu pedido ja esta sendo preparado.",
     confirmedMessage: "Seu pedido foi confirmado e entrou na fila.",
@@ -105,20 +85,6 @@ interface CustomerNotificationsBellProps {
   locale: Locale;
   user: SessionUser | null;
   buttonClassName: string;
-}
-
-function formatDate(value: string, locale: Locale) {
-  try {
-    return new Intl.DateTimeFormat(
-      locale === "nl" ? "nl-NL" : locale === "pt" ? "pt-BR" : locale === "en" ? "en-US" : "es-SR",
-      {
-        dateStyle: "medium",
-        timeStyle: "short",
-      }
-    ).format(new Date(value));
-  } catch {
-    return new Date(value).toLocaleString();
-  }
 }
 
 function getCustomerTimelineStep(status: string) {
@@ -360,52 +326,21 @@ export default function CustomerNotificationsBell({
 
       {panelOpen ? (
         <div className="customer-notification-panel customer-notification-panel--bot absolute left-0 top-[calc(100%+0.7rem)] z-[85] w-[min(92vw,24rem)] overflow-hidden rounded-[1.45rem] border border-cyan-400/20 text-white shadow-[0_24px_80px_rgba(0,0,0,0.46)] backdrop-blur-xl md:left-auto md:right-0">
-          <div className="flex items-center justify-between gap-3 border-b border-white/10 px-4 py-3">
-            <div>
-              <p className="text-[0.68rem] font-semibold uppercase tracking-[0.24em] text-cyan-300/80">
-                {t.title}
-              </p>
-              <p className="text-xs text-slate-300">{t.subtitle}</p>
-            </div>
-            <button
-              type="button"
-              onClick={() => {
-                setPanelOpen(false);
-              }}
-              className="text-lg leading-none text-slate-300 transition hover:text-white"
-              aria-label={t.close}
-            >
-              X
-            </button>
-          </div>
-
-          <div className="max-h-[min(72vh,34rem)] overflow-y-auto px-4 py-3">
+          <div className="customer-notification-panel__scroll max-h-[min(72vh,34rem)] overflow-y-auto px-4 py-3">
             {loading ? (
-              <div className="rounded-[1rem] border border-white/10 bg-white/5 px-4 py-5 text-center text-sm text-slate-300">
-                {t.subtitle}
+              <div className="px-2 py-5 text-center text-sm text-slate-300">
+                {t.title}
               </div>
             ) : notifications.length > 0 || pendingOrders.length > 0 ? (
               <div className="space-y-4">
                 {notifications.length > 0 ? (
                   <section className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <h3 className="text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-cyan-300/85">
-                        {t.importantMessages}
-                      </h3>
-                      {unreadCount > 0 ? (
-                        <span className="rounded-full border border-cyan-400/25 bg-cyan-400/10 px-2 py-0.5 text-[10px] font-semibold text-cyan-100">
-                          {unreadCount}
-                        </span>
-                      ) : null}
-                    </div>
                     <div className="space-y-2">
                       {notifications.map((notification) => (
                         <article
                           key={notification.id}
-                          className={`rounded-[1rem] border px-3 py-3 ${
-                            notification.readAt
-                              ? "border-white/8 bg-white/5"
-                              : "border-cyan-400/20 bg-cyan-500/10"
+                          className={`px-1 py-2 ${
+                            notification.readAt ? "bg-transparent" : "bg-cyan-500/10"
                           }`}
                         >
                           <div className="flex items-start justify-between gap-3">
@@ -417,9 +352,6 @@ export default function CustomerNotificationsBell({
                               <span className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full bg-cyan-300 shadow-[0_0_14px_rgba(103,232,249,0.7)]" />
                             ) : null}
                           </div>
-                          <p className="mt-2 text-[11px] text-slate-400">
-                            {formatDate(notification.createdAt, locale)}
-                          </p>
                         </article>
                       ))}
                     </div>
@@ -430,15 +362,9 @@ export default function CustomerNotificationsBell({
                   <section className="space-y-2">
                     <div className="space-y-2">
                       {pendingOrders.map((order) => (
-                        <article
-                          key={order.id}
-                          className="space-y-3 rounded-[1rem] border border-white/10 bg-white/5 px-3 py-3"
-                        >
+                        <article key={order.id} className="space-y-3 px-1 py-2">
                           <div className="flex items-start justify-between gap-3">
                             <div className="min-w-0">
-                              <p className="text-sm font-semibold text-white">
-                                {t.order} {order.id}
-                              </p>
                               <p className="mt-1 text-[11px] text-slate-300">
                                 {order.estimatedDateText ??
                                   (order.deliveryType === "pickup"
@@ -520,12 +446,10 @@ export default function CustomerNotificationsBell({
                               {order.lastMessage ?? latestMessageByOrderId.get(order.id)}
                             </p>
                           ) : null}
-                          <div className="flex items-center justify-between gap-3">
-                            <span className="text-[11px] text-slate-400">
-                              {formatDate(order.createdAt, locale)}
-                            </span>
+                          <div className="flex items-center justify-end gap-3">
                             <span className="text-[11px] text-slate-300">
-                              {order.estimatedDateText ?? (order.deliveryType === "pickup" ? t.pickupFor : order.status)}
+                              {order.estimatedDateText ??
+                                (order.deliveryType === "pickup" ? t.pickupFor : order.status)}
                             </span>
                           </div>
                         </article>

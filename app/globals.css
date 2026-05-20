@@ -309,6 +309,15 @@ html[data-client-theme="light"] .store-cart-btn:hover {
   isolation: isolate;
 }
 
+.customer-notification-panel__scroll {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.customer-notification-panel__scroll::-webkit-scrollbar {
+  display: none;
+}
+
 .customer-notification-panel--bot {
   --c: #38bdf8;
   background-color: #020617;
