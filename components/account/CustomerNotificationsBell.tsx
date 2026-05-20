@@ -415,12 +415,13 @@ export default function CustomerNotificationsBell({
                           {(() => {
                             const timelineState = getTimelineStage(order);
                             const showReportIssue = order.status === "Pedido completado";
+                            const hasSingleItemImage = order.itemImages.length <= 1;
 
                             return (
                               <>
                           <div className="flex items-start justify-between gap-3">
                             <div className="min-w-0 flex-1">
-                              <p className="mt-1 text-[11px] text-slate-300">
+                              <p className="mt-1 text-[12px] font-medium leading-5 text-slate-200">
                                 Entrega estimada:{" "}
                                 {order.estimatedDateText ??
                                   (order.deliveryType === "pickup"
@@ -429,7 +430,7 @@ export default function CustomerNotificationsBell({
                               </p>
                             </div>
                             <div className="flex shrink-0 flex-col items-end gap-1.5">
-                              <span className="text-[11px] font-semibold text-cyan-100">
+                              <span className="text-[12px] font-semibold text-cyan-100">
                                 {timelineStageLabels[timelineState.stage]}
                               </span>
                               {showReportIssue ? (
@@ -439,7 +440,7 @@ export default function CustomerNotificationsBell({
                                     event.stopPropagation();
                                     onOpenReportIssue(order.id);
                                   }}
-                                  className="rounded-full border border-rose-400/30 bg-rose-500/10 px-2.5 py-1 text-[10px] font-semibold text-rose-100 transition hover:bg-rose-500/20"
+                                  className="rounded-full border border-rose-400/30 bg-rose-500/10 px-2.5 py-1 text-[11px] font-semibold text-rose-100 transition hover:bg-rose-500/20"
                                 >
                                   Reporta un problema
                                 </button>
@@ -447,13 +448,74 @@ export default function CustomerNotificationsBell({
                             </div>
                           </div>
 
+                          {hasSingleItemImage ? (
+                            <div className="flex items-start gap-3">
+                              {order.itemImages.length > 0 ? (
+                                <div className="h-[5.25rem] w-[5.25rem] shrink-0 overflow-hidden rounded-[1rem] border border-white/10 bg-white/5">
+                                  <Image
+                                    src={order.itemImages[0]!}
+                                    alt={`${order.id} item 1`}
+                                    width={84}
+                                    height={84}
+                                    className="h-full w-full object-cover"
+                                  />
+                                </div>
+                              ) : null}
+                              <div className="min-w-0 flex-1 rounded-[1rem] border border-[#d8e4ef] bg-[#f8fbff] px-3 py-3 text-slate-900">
+                                <div className="grid grid-cols-4 gap-2">
+                                  {timelineLabels.map((label, index) => {
+                                    const step = timelineState.step;
+                                    const isCompleted = index <= step;
+                                    const isCurrent = index === step;
+
+                                    return (
+                                      <div key={`${order.id}-${label}`} className="text-center">
+                                        <div className="relative flex items-center justify-center">
+                                          {index > 0 ? (
+                                            <span
+                                              className={`absolute right-1/2 top-1/2 h-[2px] w-full -translate-y-1/2 ${
+                                                index - 1 < step ? "bg-[#15803d]" : "bg-[#d7dee7]"
+                                              }`}
+                                            />
+                                          ) : null}
+                                          <span
+                                            className={`relative z-10 flex h-8 w-8 items-center justify-center rounded-full border text-[12px] font-semibold ${
+                                              isCompleted
+                                                ? isCurrent && step === 2
+                                                  ? "border-[#1d4ed8] bg-[#1d4ed8] text-white"
+                                                  : "border-[#15803d] bg-[#15803d] text-white"
+                                                : "border-[#d7dee7] bg-white text-[#94a3b8]"
+                                            }`}
+                                          >
+                                            {index + 1}
+                                          </span>
+                                        </div>
+                                        <p
+                                          className={`mt-2 text-[11px] font-semibold leading-4 ${
+                                            isCompleted
+                                              ? isCurrent && step === 2
+                                                ? "text-[#1d4ed8]"
+                                                : "text-[#0f766e]"
+                                              : "text-[#94a3b8]"
+                                          }`}
+                                        >
+                                          {label}
+                                        </p>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            </div>
+                          ) : (
+                            <>
                           <div className="flex items-start justify-between gap-3">
                             {order.itemImages.length > 0 ? (
                               <div className="flex items-center gap-2 overflow-x-auto pb-1">
                                 {order.itemImages.map((imageUrl, index) => (
                                   <div
                                     key={`${order.id}-image-${index}`}
-                                    className="h-14 w-14 shrink-0 overflow-hidden rounded-[0.85rem] border border-white/10 bg-white/5"
+                                    className="h-14 w-14 shrink-0 overflow-hidden rounded-[0.9rem] border border-white/10 bg-white/5"
                                   >
                                     <Image
                                       src={imageUrl}
@@ -500,7 +562,7 @@ export default function CustomerNotificationsBell({
                                       </span>
                                     </div>
                                     <p
-                                      className={`mt-2 text-[10px] font-semibold ${
+                                      className={`mt-2 text-[11px] font-semibold leading-4 ${
                                         isCompleted
                                           ? isCurrent && step === 2
                                             ? "text-[#1d4ed8]"
@@ -515,15 +577,17 @@ export default function CustomerNotificationsBell({
                               })}
                             </div>
                           </div>
+                            </>
+                          )}
 
                           {order.lastMessage ?? latestMessageByOrderId.get(order.id) ? (
-                            <p className="line-clamp-2 text-[11px] text-slate-400">
-                              <span className="font-semibold text-slate-300">{t.lastMessage}:</span>{" "}
+                            <p className="line-clamp-2 text-[12px] leading-5 text-slate-300">
+                              <span className="font-semibold text-slate-100">{t.lastMessage}:</span>{" "}
                               {order.lastMessage ?? latestMessageByOrderId.get(order.id)}
                             </p>
                           ) : null}
                           <div className="flex items-center justify-end gap-3">
-                            <span className="text-[11px] text-slate-300">
+                            <span className="text-[12px] font-medium text-slate-200">
                               {order.estimatedDateText ??
                                 (order.deliveryType === "pickup" ? t.pickupFor : order.status)}
                             </span>
