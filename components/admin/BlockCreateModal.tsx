@@ -26,7 +26,7 @@ export default function BlockCreateModal({ assignedOrderIds, onClose, onCreate }
   useEffect(() => {
     setLoadingOrders(true);
     fetch(
-      "/api/admin/orders?status=pending&deliveryType=delivery&limit=120&noWindow=true",
+      "/api/admin/orders?status=pending&deliveryType=all&limit=120&noWindow=true",
       { cache: "no-store" }
     )
       .then((r) => r.json() as Promise<OrdersResponse>)
@@ -108,7 +108,7 @@ export default function BlockCreateModal({ assignedOrderIds, onClose, onCreate }
           {/* Order list */}
           <div>
             <label className="mb-1.5 block text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
-              Pedidos pendientes de delivery ({orders.length})
+              Pedidos pendientes disponibles ({orders.length})
             </label>
             <input
               value={search}
@@ -123,7 +123,7 @@ export default function BlockCreateModal({ assignedOrderIds, onClose, onCreate }
               </p>
             ) : orders.length === 0 ? (
               <p className="rounded-xl border border-dashed border-slate-700 py-8 text-center text-sm text-slate-500">
-                No hay pedidos de delivery pendientes.
+                No hay pedidos pendientes disponibles.
               </p>
             ) : (
               <div className="space-y-2 rounded-xl border border-slate-800 bg-[#070d1c] p-3">

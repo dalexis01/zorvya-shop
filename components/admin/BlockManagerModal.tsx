@@ -32,6 +32,7 @@ type Props = {
   orders: AdminOrderRecord[];
   availableOrders: AdminOrderRecord[];
   assignedOrderIds: Set<string>;
+  blockByOrderId?: Map<string, DeliveryBlock>;
   onClose: () => void;
   onReorder: (orderedIds: string[]) => Promise<void>;
   onRemoveOrder: (orderId: string) => Promise<void>;
@@ -47,6 +48,7 @@ export default function BlockManagerModal({
   orders,
   availableOrders,
   assignedOrderIds,
+  blockByOrderId,
   onClose,
   onReorder,
   onRemoveOrder,
@@ -74,9 +76,7 @@ export default function BlockManagerModal({
     address: o.customerAddress,
   }));
 
-  const freeToAdd = availableOrders.filter(
-    (o) => !assignedOrderIds.has(o.id) || localOrders.some((lo) => lo.id === o.id)
-  ).filter((o) => !localOrders.some((lo) => lo.id === o.id));
+  const freeToAdd = availableOrders.filter((o) => !localOrders.some((lo) => lo.id === o.id));
 
   function moveOrder(index: number, dir: -1 | 1) {
     const next = [...localOrders];
@@ -282,7 +282,8 @@ export default function BlockManagerModal({
                     <p className="text-xs text-slate-500">No hay pedidos disponibles para agregar.</p>
                   ) : (
                     freeToAdd.map((o) => (
-                      <div key={o.id} className="flex items-center justify-between gap-3 rounded-xl border border-slate-700 bg-[#0a1020] px-3 py-2">
+                      <div key={o.id} className="rounded-xl border border-slate-700 bg-[#0a1020] px-3 py-2">
+                        <div className="flex items-center justify-between gap-3">
                         <div className="min-w-0">
                           <p className="text-sm font-semibold text-white">{o.customerName} <span className="font-mono text-xs text-cyan-400">···{o.idTail}</span></p>
                           <p className="truncate text-xs text-slate-400">{o.customerAddress}</p>
@@ -295,12 +296,22 @@ export default function BlockManagerModal({
                             onClick={() => void handleAddOrder(o)}
                             className="rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-2 py-1 text-[11px] font-bold text-emerald-300 hover:bg-emerald-500/20 disabled:opacity-40"
                           >
-                            {actionLoading === `add-${o.id}` ? "..." : "+ Agregar"}
+                            {actionLoading === `add-${o.id}`
+                              ? "..."
+                              : assignedOrderIds.has(o.id)
+                                ? "Mover aqui"
+                                : "+ Agregar"}
                           </button>
                         </div>
+                        </div>
+                        {assignedOrderIds.has(o.id) && blockByOrderId?.get(o.id) ? (
+                          <p className="mt-2 text-[11px] text-amber-300">
+                            Actualmente en bloque {blockByOrderId.get(o.id)?.id}
+                          </p>
+                        ) : null}
                       </div>
-                    ))
-                  )}
+                  ))
+                )}
                 </div>
               )}
 

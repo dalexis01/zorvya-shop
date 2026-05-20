@@ -237,7 +237,7 @@ function ClickMenu({
 // ─── order row (used in both the orders/pickups table AND block sub-rows) ─────
 function OrderRow({
   order, rowIndex, statusDraft, activeOrderId, pendingAction,
-  stopInfo, accountingMap, onDraftChange, onSaveStatus, onOpenCancel,
+  stopInfo, accountingMap, blockAssignment, onManageBlock, onDraftChange, onSaveStatus, onOpenCancel,
 }: {
   order: AdminOrderRecord;
   rowIndex: number;
@@ -246,6 +246,8 @@ function OrderRow({
   pendingAction: "update-status" | "cancel-order" | null;
   stopInfo?: AdminOrderRouteStop;
   accountingMap: Map<string, ProductAccountingEntry>;
+  blockAssignment?: DeliveryBlock | null;
+  onManageBlock?: (block: DeliveryBlock) => void;
   onDraftChange: (id: string, val: string) => void;
   onSaveStatus: (o: AdminOrderRecord) => Promise<void>;
   onOpenCancel: (o: AdminOrderRecord) => void;
@@ -265,7 +267,7 @@ function OrderRow({
   const pickupScheduleText = formatPickupSchedule(order.pickupDate, order.pickupTime);
 
   return (
-    <tr className={`${rowBg} transition-colors hover:bg-[#0c1530]`}>
+    <tr className={`${rowBg} transition-colors hover:bg-[#0c1530] ${order.isNew ? "shadow-[inset_3px_0_0_0_rgba(34,211,238,0.9)]" : ""}`}>
 
       {/* ── Estado + Fecha + ID + Parada (todo en una casilla) ── */}
       <TD cls="w-48">
@@ -275,7 +277,15 @@ function OrderRow({
               {stopInfo.stopNumber}
             </span>
           ) : (
-            <span className="text-sm text-slate-400 font-mono font-semibold">{rowIndex + 1}</span>
+            <span className="flex items-center gap-2 text-sm text-slate-400 font-mono font-semibold">
+              {rowIndex + 1}
+              {order.isNew ? (
+                <span className="relative inline-flex h-2.5 w-2.5">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-cyan-400 opacity-75"></span>
+                  <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-cyan-300 shadow-[0_0_14px_rgba(34,211,238,0.95)]"></span>
+                </span>
+              ) : null}
+            </span>
           )}
           <span className={`block w-fit rounded border px-2.5 py-1 text-xs font-bold uppercase tracking-[0.08em] ${stCls}`}>
             {stText}
@@ -486,6 +496,26 @@ function OrderRow({
               Ver
             </Link>
           </div>
+          {blockAssignment ? (
+            <div className="rounded border border-slate-700 bg-[#08101f] px-2 py-2 text-[11px] text-slate-300">
+              <p className="font-semibold text-cyan-300">
+                En bloque {blockAssignment.id}
+              </p>
+              {onManageBlock ? (
+                <button
+                  type="button"
+                  onClick={() => onManageBlock(blockAssignment)}
+                  className="mt-1 text-[11px] font-semibold text-amber-300 transition hover:text-amber-200"
+                >
+                  Cambiar bloque
+                </button>
+              ) : null}
+            </div>
+          ) : (
+            <div className="rounded border border-dashed border-slate-700 px-2 py-2 text-[11px] text-slate-500">
+              Orden sin bloque
+            </div>
+          )}
         </div>
       </TD>
     </tr>
@@ -495,13 +525,15 @@ function OrderRow({
 // ─── orders table (Pedidos / Recogida tabs) ───────────────────────────────────
 function OrdersTable({
   orders, statusDrafts, activeOrderId, pendingAction, accountingMap,
-  onDraftChange, onSaveStatus, onOpenCancel,
+  blockByOrderId, onManageBlock, onDraftChange, onSaveStatus, onOpenCancel,
 }: {
   orders: AdminOrderRecord[];
   statusDrafts: Record<string, string>;
   activeOrderId: string | null;
   pendingAction: "update-status" | "cancel-order" | null;
   accountingMap: Map<string, ProductAccountingEntry>;
+  blockByOrderId: Map<string, DeliveryBlock>;
+  onManageBlock: (block: DeliveryBlock) => void;
   onDraftChange: (id: string, val: string) => void;
   onSaveStatus: (o: AdminOrderRecord) => Promise<void>;
   onOpenCancel: (o: AdminOrderRecord) => void;
@@ -529,6 +561,8 @@ function OrdersTable({
               order={order}
               rowIndex={i}
               accountingMap={accountingMap}
+              blockAssignment={blockByOrderId.get(order.id) ?? null}
+              onManageBlock={onManageBlock}
               statusDraft={statusDrafts[order.id] ?? ""}
               activeOrderId={activeOrderId}
               pendingAction={pendingAction}
@@ -584,8 +618,8 @@ function computeBlockProfit(
 // ─── blocks table (Bloques de ordenes tab) ────────────────────────────────────
 function BlocksTable({
   routeBlocks, nonRouteOrders, statusDrafts, activeOrderId, pendingAction,
-  sentBlocks, sendingBlockId, accountingMap,
-  onViewRoute, onSend, onDraftChange, onSaveStatus, onOpenCancel,
+  sentBlocks, sendingBlockId, accountingMap, blockByOrderId,
+  onViewRoute, onSend, onManageBlock, onDraftChange, onSaveStatus, onOpenCancel,
 }: {
   routeBlocks: AdminOrderRouteBlock[];
   nonRouteOrders: AdminOrderRecord[];
@@ -595,8 +629,10 @@ function BlocksTable({
   sentBlocks: Set<string>;
   sendingBlockId: string | null;
   accountingMap: Map<string, ProductAccountingEntry>;
+  blockByOrderId: Map<string, DeliveryBlock>;
   onViewRoute: (b: AdminOrderRouteBlock) => void;
   onSend: (b: AdminOrderRouteBlock) => Promise<void>;
+  onManageBlock: (block: DeliveryBlock) => void;
   onDraftChange: (id: string, val: string) => void;
   onSaveStatus: (o: AdminOrderRecord) => Promise<void>;
   onOpenCancel: (o: AdminOrderRecord) => void;
@@ -786,6 +822,8 @@ function BlocksTable({
                         order={stop.order}
                         rowIndex={i}
                         accountingMap={accountingMap}
+                        blockAssignment={blockByOrderId.get(stop.order.id) ?? null}
+                        onManageBlock={onManageBlock}
                         statusDraft={statusDrafts[stop.order.id] ?? ""}
                         activeOrderId={activeOrderId}
                         pendingAction={pendingAction}
@@ -834,6 +872,8 @@ function BlocksTable({
                     order={order}
                     rowIndex={i}
                     accountingMap={accountingMap}
+                    blockAssignment={blockByOrderId.get(order.id) ?? null}
+                    onManageBlock={onManageBlock}
                     statusDraft={statusDrafts[order.id] ?? ""}
                     activeOrderId={activeOrderId}
                     pendingAction={pendingAction}
@@ -853,7 +893,7 @@ function BlocksTable({
 
 // ─── page ─────────────────────────────────────────────────────────────────────
 export default function AdminOrdersPage() {
-  const [activeTab, setActiveTab] = useState<Tab>("blocks");
+  const [activeTab, setActiveTab] = useState<Tab>("orders");
   const [orders, setOrders] = useState<AdminOrderRecord[]>([]);
   const [meta, setMeta] = useState<AdminOrdersMeta | null>(null);
   const [loading, setLoading] = useState(true);
@@ -874,6 +914,7 @@ export default function AdminOrdersPage() {
   const [sentBlocks, setSentBlocks] = useState<Set<string>>(new Set());
   const [sendingBlockId, setSendingBlockId] = useState<string | null>(null);
   const [accountingMap, setAccountingMap] = useState<Map<string, ProductAccountingEntry>>(new Map());
+  const [allPendingOrders, setAllPendingOrders] = useState<AdminOrderRecord[]>([]);
   const [noWindow, setNoWindow] = useState(false);
 
   // ── Persistent blocks ────────────────────────────────────────────────────────
@@ -890,6 +931,14 @@ export default function AdminOrdersPage() {
     const fn = () => setRefreshKey((k) => k + 1);
     window.addEventListener("admin-orders-updated", fn);
     return () => window.removeEventListener("admin-orders-updated", fn);
+  }, []);
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      setRefreshKey((current) => current + 1);
+    }, 15000);
+
+    return () => window.clearInterval(intervalId);
   }, []);
 
   const syncCalledRef = React.useRef(false);
@@ -969,10 +1018,15 @@ export default function AdminOrdersPage() {
             }),
             { cache: "no-store", signal: abort.signal }
           ),
+          fetch(
+            "/api/admin/orders?status=pending&deliveryType=all&limit=120&noWindow=true",
+            { cache: "no-store", signal: abort.signal }
+          ),
         ];
         requests.push(fetch("/api/admin/orders/meta", { cache: "no-store", signal: abort.signal }));
-        const [ordRes, metaRes] = await Promise.all(requests);
+        const [ordRes, pendingRes, metaRes] = await Promise.all(requests);
         const ordData = (await ordRes.json()) as AdminOrdersResponse;
+        const pendingData = (await pendingRes.json()) as AdminOrdersResponse;
         const metaData = metaRes
           ? ((await metaRes.json()) as { success?: boolean; meta?: AdminOrdersMeta })
           : null;
@@ -1010,6 +1064,9 @@ export default function AdminOrdersPage() {
               })
               .catch(() => {/* non-critical */});
           }
+        }
+        if (pendingData.success) {
+          setAllPendingOrders(pendingData.orders ?? []);
         }
         if (metaData?.success) setMeta(metaData.meta ?? null);
       } catch (err) {
@@ -1120,6 +1177,15 @@ export default function AdminOrdersPage() {
   }
 
   const ordersById = useMemo(() => new Map(orders.map((order) => [order.id, order])), [orders]);
+  const allKnownOrdersById = useMemo(() => {
+    const map = new Map<string, AdminOrderRecord>();
+
+    for (const order of [...persistentBlockOrders, ...allPendingOrders, ...orders]) {
+      map.set(order.id, order);
+    }
+
+    return map;
+  }, [allPendingOrders, orders, persistentBlockOrders]);
   const persistentBlockOrdersById = useMemo(
     () => new Map(persistentBlockOrders.map((order) => [order.id, order])),
     [persistentBlockOrders]
@@ -1198,20 +1264,33 @@ export default function AdminOrdersPage() {
     [persistentBlocks]
   );
 
+  const blockByOrderId = useMemo(() => {
+    const map = new Map<string, DeliveryBlock>();
+
+    for (const block of persistentBlocks) {
+      for (const slot of block.orders ?? []) {
+        map.set(slot.orderId, block);
+      }
+    }
+
+    return map;
+  }, [persistentBlocks]);
+
   const TABS: Array<{ id: Tab; label: string; accent?: string; badge?: number }> = [
-    { id: "blocks",    label: "Bloques de ordenes" },
-    { id: "orders",    label: "Pedidos" },
+    { id: "orders",    label: "Pedidos", badge: meta?.newOrdersCount || undefined },
+    { id: "blocks",    label: "Bloques de ordenes", badge: ordersWithoutBlock.length || undefined },
     { id: "pickups",   label: "Recogida", accent: "sky", badge: meta?.pickupOrdersCount || undefined },
+    { id: "cancelled", label: "Canceladas", accent: "rose", badge: meta?.cancelledOrdersCount || undefined },
+    { id: "completed", label: "Completadas", accent: "emerald", badge: meta?.completedOrdersCount || undefined },
     { id: "enviadas",  label: "Enviadas", accent: "sky", badge: sentPersistentBlocks.length || undefined },
-    { id: "cancelled", label: "Canceladas", accent: "rose" },
-    { id: "completed", label: "Completadas", accent: "emerald" },
   ];
 
   const commonTableProps = {
-    statusDrafts, activeOrderId, pendingAction, accountingMap,
+    statusDrafts, activeOrderId, pendingAction, accountingMap, blockByOrderId,
     onDraftChange: (id: string, val: string) => setStatusDrafts((c) => ({ ...c, [id]: val })),
     onSaveStatus: handleUpdateStatus,
     onOpenCancel: (o: AdminOrderRecord) => { setCancelError(""); setCancelTarget(o); },
+    onManageBlock: (block: DeliveryBlock) => setManagingBlock(block),
   };
 
   return (
@@ -1444,15 +1523,17 @@ export default function AdminOrdersPage() {
       {managingBlock && (
         <BlockManagerModal
           block={managingBlock}
-          orders={orders.filter((o) =>
-            (managingBlock.orders ?? []).some((s) => s.orderId === o.id)
-          ).sort((a, b) => {
-            const posA = managingBlock.orders?.find((s) => s.orderId === a.id)?.position ?? 0;
-            const posB = managingBlock.orders?.find((s) => s.orderId === b.id)?.position ?? 0;
-            return posA - posB;
-          })}
-          availableOrders={orders.filter((o) => o.deliveryType === "delivery" && !o.isCancelled && !o.isCompleted)}
+          orders={(managingBlock.orders ?? [])
+            .map((slot) => allKnownOrdersById.get(slot.orderId))
+            .filter((order): order is AdminOrderRecord => Boolean(order))
+            .sort((a, b) => {
+              const posA = managingBlock.orders?.find((s) => s.orderId === a.id)?.position ?? 0;
+              const posB = managingBlock.orders?.find((s) => s.orderId === b.id)?.position ?? 0;
+              return posA - posB;
+            })}
+          availableOrders={allPendingOrders.filter((o) => !o.isCancelled && !o.isCompleted)}
           assignedOrderIds={assignedOrderIds}
+          blockByOrderId={blockByOrderId}
           onClose={() => { setManagingBlock(null); void loadPersistentBlocks(); }}
           onReorder={async (orderedIds) => {
             const response = await fetch(`/api/admin/blocks/${managingBlock.id}`, {
