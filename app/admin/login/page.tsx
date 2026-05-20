@@ -20,6 +20,7 @@ export default function AdminLoginPage() {
       const response = await fetch("/api/admin/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
         body: JSON.stringify({ email, password }),
       });
 
@@ -31,8 +32,8 @@ export default function AdminLoginPage() {
         return;
       }
 
-      // Login successful
-      router.push("/admin");
+      router.replace("/admin");
+      router.refresh();
     } catch {
       setError("An error occurred. Please try again.");
       setLoading(false);
