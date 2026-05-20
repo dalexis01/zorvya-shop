@@ -352,58 +352,32 @@ export async function getCustomerNotificationsPanelData(
   locale: "es" | "nl" | "en" | "pt"
 ) {
   const pool = await getNotificationsPool();
-  const [notificationsResult, pendingOrdersResult] = await Promise.all([
-    pool.query<CustomerNotificationRow>(
-      `
-        SELECT
-          id,
-          user_id,
-          order_id,
-          type,
-          title,
-          message,
-          status,
-          read_at,
-          created_at
-        FROM customer_notifications
-        WHERE user_id = $1
-          AND status = 'active'
-        ORDER BY created_at DESC
-        LIMIT 12
-      `,
-      [userId]
-    ),
-    pool.query<PendingOrderRow>(
-      `
-        SELECT
-          id,
-          customer_address,
-          delivery_type,
-          pickup_date,
-          pickup_time,
-          total,
-          delivery_distance_km,
-          created_at,
-          updated_at,
-          cancelled_at,
-          cancellation_reason,
-          cancelled_by,
-          admin_status,
-          status_history_json,
-          items_json
-        FROM orders
-        WHERE user_id = $1
-          AND cancelled_at IS NULL
-          AND (admin_status IS NULL OR admin_status <> 'Pedido completado')
-        ORDER BY created_at DESC
-        LIMIT 8
-      `,
-      [userId]
-    ),
-  ]);
+  const notificationsResult = await pool.query<CustomerNotificationRow>(
+    `
+      SELECT
+        id,
+        user_id,
+        order_id,
+        type,
+        title,
+        message,
+        status,
+        read_at,
+        created_at
+      FROM customer_notifications
+      WHERE user_id = $1
+        AND status = 'active'
+      ORDER BY created_at DESC
+      LIMIT 12
+    `,
+    [userId]
+  );
 
   const notifications = notificationsResult.rows.map(rowToCustomerNotification);
   const latestMessageByOrderId = new Map<string, string>();
+  const orderIdsWithNotifications = notifications
+    .map((notification) => notification.orderId)
+    .filter((value): value is string => Boolean(value));
 
   for (const notification of notifications) {
     if (!notification.orderId || latestMessageByOrderId.has(notification.orderId)) {
@@ -413,9 +387,48 @@ export async function getCustomerNotificationsPanelData(
     latestMessageByOrderId.set(notification.orderId, notification.message);
   }
 
-  const pendingOrders = pendingOrdersResult.rows
+  const ordersResult = await pool.query<PendingOrderRow>(
+    `
+      SELECT
+        id,
+        customer_address,
+        delivery_type,
+        pickup_date,
+        pickup_time,
+        total,
+        delivery_distance_km,
+        created_at,
+        updated_at,
+        cancelled_at,
+        cancellation_reason,
+        cancelled_by,
+        admin_status,
+        status_history_json,
+        items_json
+      FROM orders
+      WHERE user_id = $1
+        AND (
+          id = ANY($2::text[])
+          OR (
+            cancelled_at IS NULL
+            AND (admin_status IS NULL OR admin_status <> 'Pedido completado')
+          )
+        )
+      ORDER BY created_at DESC
+      LIMIT 8
+    `,
+    [userId, orderIdsWithNotifications]
+  );
+
+  const pendingOrders = ordersResult.rows
     .map((row) => buildPendingOrderSummary(row, latestMessageByOrderId.get(row.id) ?? null, locale))
-    .filter((order) => isCustomerNotificationPendingStatus(order.status));
+    .filter((order) => {
+      if (orderIdsWithNotifications.includes(order.id)) {
+        return true;
+      }
+
+      return isCustomerNotificationPendingStatus(order.status);
+    });
 
   return {
     notifications,

@@ -919,6 +919,7 @@ interface OrdersPanelProps {
   ) => Promise<OrderActionResult>;
   onReportIssue: (orderId: string, message: string) => Promise<OrderActionResult>;
   initialReceiptOrderId?: string | null;
+  initialIssueOrderId?: string | null;
 }
 
 export default function OrdersPanel({
@@ -941,6 +942,7 @@ export default function OrdersPanel({
   onUpdateContact,
   onReportIssue,
   initialReceiptOrderId = null,
+  initialIssueOrderId = null,
 }: OrdersPanelProps) {
   const router = useRouter();
   const t = texts[locale];
@@ -958,11 +960,11 @@ export default function OrdersPanel({
     : "border-slate-800 bg-[#0a1020] text-slate-400";
   const [selectedOrder, setSelectedOrder] = useState<OrderSummary | null>(null);
   const [receiptOrderId, setReceiptOrderId] = useState<string | null>(initialReceiptOrderId);
+  const [issueTargetId, setIssueTargetId] = useState<string | null>(initialIssueOrderId);
   const [contactTarget, setContactTarget] = useState<{
     order: OrderSummary;
     mode: "address" | "phone";
   } | null>(null);
-  const [issueTarget, setIssueTarget] = useState<OrderSummary | null>(null);
   const [addItemsError, setAddItemsError] = useState("");
   const [contactError, setContactError] = useState("");
   const [issueError, setIssueError] = useState("");
@@ -976,6 +978,8 @@ export default function OrdersPanel({
     selectedOrder && pendingOrderId === selectedOrder.id ? pendingAction : null;
   const receiptOrder =
     receiptOrderId ? visibleOrders.find((order) => order.id === receiptOrderId) ?? null : null;
+  const issueTarget =
+    issueTargetId ? visibleOrders.find((order) => order.id === issueTargetId) ?? null : null;
   const contactPending =
     contactTarget && pendingOrderId === contactTarget.order.id ? pendingAction : null;
   const issuePending =
@@ -1058,7 +1062,7 @@ export default function OrdersPanel({
                     }}
                     onReportIssue={(order) => {
                       setIssueError("");
-                      setIssueTarget(order);
+                      setIssueTargetId(order.id);
                     }}
                   />
                 </section>
@@ -1097,7 +1101,7 @@ export default function OrdersPanel({
                         }}
                         onReportIssue={(selected) => {
                           setIssueError("");
-                          setIssueTarget(selected);
+                          setIssueTargetId(selected.id);
                         }}
                       />
                     ))}
@@ -1181,14 +1185,14 @@ export default function OrdersPanel({
           errorMessage={issueError}
           onClose={() => {
             setIssueError("");
-            setIssueTarget(null);
+            setIssueTargetId(null);
           }}
           onSubmit={async (message) => {
             const result = await onReportIssue(issueTarget.id, message);
 
             if (result.success) {
               setIssueError("");
-              setIssueTarget(null);
+              setIssueTargetId(null);
               return;
             }
 
@@ -1207,7 +1211,7 @@ export default function OrdersPanel({
           onOpenProduct={openProduct}
           onReportIssue={(selected) => {
             setIssueError("");
-            setIssueTarget(selected);
+            setIssueTargetId(selected.id);
           }}
         />
       ) : null}

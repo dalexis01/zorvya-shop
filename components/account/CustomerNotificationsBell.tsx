@@ -86,30 +86,56 @@ interface CustomerNotificationsBellProps {
   user: SessionUser | null;
   buttonClassName: string;
   onOpenReceipt: (orderId: string) => void;
+  onOpenReportIssue: (orderId: string) => void;
 }
 
-function getCustomerTimelineStep(status: string) {
-  if (status === "Pedido completado") {
-    return 3;
+type CustomerTimelineStage = "confirmed" | "processed" | "in_transit" | "delivered";
+
+const CONFIRMED_STATUSES = new Set([
+  "Pedido confirmado",
+  "Pedido confirmado para recogida",
+  "Pedido aceptado",
+  "Confirmando stock",
+  "Orden confirmada y procesandose",
+]);
+
+const PROCESSED_STATUSES = new Set([
+  "Preparando pedido",
+  "Pagada / Preparando",
+  "Pedido listo para delivery",
+  "Procesandose para delivery",
+]);
+
+function getTimelineStage(order: CustomerNotificationOrderSummary): {
+  stage: CustomerTimelineStage;
+  step: number;
+} {
+  if (order.status === "Pedido completado") {
+    return { stage: "delivered", step: 3 };
   }
 
-  if (status === "En delivery") {
-    return 2;
+  if (order.status === "En delivery") {
+    return { stage: "in_transit", step: 2 };
   }
 
-  if (
-    [
-      "Confirmando stock",
-      "Preparando pedido",
-      "Pagada / Preparando",
-      "Pedido listo para delivery",
-      "Procesandose para delivery",
-    ].includes(status)
-  ) {
-    return 1;
+  if (PROCESSED_STATUSES.has(order.status)) {
+    return { stage: "processed", step: 1 };
   }
 
-  return 0;
+  const relevantEntry = [...order.statusHistory]
+    .reverse()
+    .find((entry) => CONFIRMED_STATUSES.has(entry.status) || PROCESSED_STATUSES.has(entry.status));
+  const referenceTime = relevantEntry?.changedAt ?? order.createdAt;
+  const minutesSinceReference = Math.max(
+    0,
+    (Date.now() - new Date(referenceTime).getTime()) / 60_000
+  );
+
+  if (CONFIRMED_STATUSES.has(order.status) && minutesSinceReference >= 20) {
+    return { stage: "processed", step: 1 };
+  }
+
+  return { stage: "confirmed", step: 0 };
 }
 
 function formatCustomerNotificationPickupLabel(
@@ -127,6 +153,7 @@ export default function CustomerNotificationsBell({
   user,
   buttonClassName,
   onOpenReceipt,
+  onOpenReportIssue,
 }: CustomerNotificationsBellProps) {
   const t = texts[locale];
   const wrapperRef = useRef<HTMLDivElement | null>(null);
@@ -284,6 +311,12 @@ export default function CustomerNotificationsBell({
   }
 
   const timelineLabels = [t.confirmed, t.processed, t.inTransit, t.delivered];
+  const timelineStageLabels: Record<CustomerTimelineStage, string> = {
+    confirmed: t.confirmed,
+    processed: t.processed,
+    in_transit: t.inTransit,
+    delivered: t.delivered,
+  };
 
   return (
     <div ref={wrapperRef} className="relative min-w-0 shrink-0 basis-[3.55rem] md:basis-auto">
@@ -379,6 +412,12 @@ export default function CustomerNotificationsBell({
                           }}
                           className="space-y-3 px-1 py-2 cursor-pointer"
                         >
+                          {(() => {
+                            const timelineState = getTimelineStage(order);
+                            const showReportIssue = order.status === "Pedido completado";
+
+                            return (
+                              <>
                           <div className="flex items-start justify-between gap-3">
                             <div className="min-w-0 flex-1">
                               <p className="mt-1 text-[11px] text-slate-300">
@@ -389,7 +428,23 @@ export default function CustomerNotificationsBell({
                                     : t.routeMessage)}
                               </p>
                             </div>
-                            <span className="shrink-0 text-[11px] font-semibold text-cyan-100">{order.status}</span>
+                            <div className="flex shrink-0 flex-col items-end gap-1.5">
+                              <span className="text-[11px] font-semibold text-cyan-100">
+                                {timelineStageLabels[timelineState.stage]}
+                              </span>
+                              {showReportIssue ? (
+                                <button
+                                  type="button"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    onOpenReportIssue(order.id);
+                                  }}
+                                  className="rounded-full border border-rose-400/30 bg-rose-500/10 px-2.5 py-1 text-[10px] font-semibold text-rose-100 transition hover:bg-rose-500/20"
+                                >
+                                  Reporta un problema
+                                </button>
+                              ) : null}
+                            </div>
                           </div>
 
                           <div className="flex items-start justify-between gap-3">
@@ -418,7 +473,7 @@ export default function CustomerNotificationsBell({
                           <div className="rounded-[1rem] border border-[#d8e4ef] bg-[#f8fbff] px-3 py-3 text-slate-900">
                             <div className="grid grid-cols-4 gap-2">
                               {timelineLabels.map((label, index) => {
-                                const step = getCustomerTimelineStep(order.status);
+                                const step = timelineState.step;
                                 const isCompleted = index <= step;
                                 const isCurrent = index === step;
 
@@ -473,6 +528,9 @@ export default function CustomerNotificationsBell({
                                 (order.deliveryType === "pickup" ? t.pickupFor : order.status)}
                             </span>
                           </div>
+                              </>
+                            );
+                          })()}
                         </article>
                       ))}
                     </div>

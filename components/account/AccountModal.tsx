@@ -343,6 +343,7 @@ interface AccountModalProps {
   user: SessionUser | null;
   products: CatalogProductOption[];
   initialReceiptOrderId?: string | null;
+  initialIssueOrderId?: string | null;
   onOpenProduct?: (input: {
     productId: string | number;
     selectedVariantId?: string;
@@ -360,6 +361,7 @@ export default function AccountModal({
   user,
   products,
   initialReceiptOrderId = null,
+  initialIssueOrderId = null,
   onOpenProduct,
   onClose,
   onSessionChange,
@@ -439,10 +441,10 @@ export default function AccountModal({
   }, [user?.id]);
 
   useEffect(() => {
-    if (initialReceiptOrderId && user) {
+    if ((initialReceiptOrderId || initialIssueOrderId) && user) {
       setActiveTab("orders");
     }
-  }, [initialReceiptOrderId, user]);
+  }, [initialIssueOrderId, initialReceiptOrderId, user]);
 
   useEffect(() => {
     if (!languageMenuOpen) {
@@ -1397,7 +1399,7 @@ export default function AccountModal({
               </div>
             ) : (
               <OrdersPanel
-                key={initialReceiptOrderId ?? user?.id ?? "orders-panel"}
+                key={`${initialReceiptOrderId ?? "receipt-none"}-${initialIssueOrderId ?? "issue-none"}-${user?.id ?? "orders-panel"}`}
                 clientTheme={accountTheme}
                 locale={accountLocale}
                 latestOrder={latestOrder}
@@ -1419,6 +1421,7 @@ export default function AccountModal({
                 onUpdateContact={handleUpdateContact}
                 onReportIssue={handleReportIssue}
                 initialReceiptOrderId={initialReceiptOrderId}
+                initialIssueOrderId={initialIssueOrderId}
               />
             )}
           </div>
