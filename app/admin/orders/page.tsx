@@ -935,8 +935,17 @@ export default function AdminOrdersPage() {
 
   const syncCalledRef = React.useRef(false);
 
+  function approximatePayloadKb(payload: unknown) {
+    try {
+      return Math.round(JSON.stringify(payload).length / 1024);
+    } catch {
+      return 0;
+    }
+  }
+
   async function loadPersistentBlocks(triggerSync = false) {
     setPersistentBlocksLoading(true);
+    const startedAt = performance.now();
     try {
       // On first open, trigger auto-assign in background (non-blocking)
       if (triggerSync && !syncCalledRef.current) {
@@ -958,6 +967,9 @@ export default function AdminOrdersPage() {
           new Set(
             nextBlocks.flatMap((block) => (block.orders ?? []).map((slot) => slot.orderId))
           )
+        );
+        console.info(
+          `[egress-metrics] source=admin/orders:blocks rows=${nextBlocks.length} payloadKB=${approximatePayloadKb(blocksData)} durationMs=${Math.round(performance.now() - startedAt)} cache=client-fetch columns=id,label,status,orders,orderRecords`
         );
       }
     } catch {
@@ -1062,6 +1074,7 @@ export default function AdminOrdersPage() {
     async function load() {
       const abort = new AbortController();
       const timer = setTimeout(() => abort.abort(), 25_000);
+      const startedAt = performance.now();
       try {
         const primaryRequest = fetch(
           apiUrl({
@@ -1120,9 +1133,15 @@ export default function AdminOrdersPage() {
               })
               .catch(() => {/* non-critical */});
           }
+          console.info(
+            `[egress-metrics] source=admin/orders:orders rows=${next.length} payloadKB=${approximatePayloadKb(ordData)} durationMs=${Math.round(performance.now() - startedAt)} cache=client-fetch columns=id,status,customerName,customerAddress,customerPhone,total,deliveryFee,items`
+          );
         }
         if (pendingData?.success) {
           setAllPendingOrders(pendingData.orders ?? []);
+          console.info(
+            `[egress-metrics] source=admin/orders:pending rows=${(pendingData.orders ?? []).length} payloadKB=${approximatePayloadKb(pendingData)} durationMs=${Math.round(performance.now() - startedAt)} cache=client-fetch columns=id,status,deliveryType,customerName,total,items`
+          );
         }
       } catch (err) {
         if (!alive) return;

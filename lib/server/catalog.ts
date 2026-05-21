@@ -21,6 +21,35 @@ type StorefrontProductsResult = {
   source: ProductsDataSource;
 };
 
+const STOREFRONT_PRODUCTS_CACHE_TTL_MS = 300_000;
+const STOREFRONT_PRODUCT_DETAIL_CACHE_TTL_MS = 300_000;
+
+const storefrontMetricsState = globalThis as typeof globalThis & {
+  __zorvyaStorefrontMetricsCache?: {
+    productsExpiresAt: number;
+    productExpiresAtById: Map<string, number>;
+  };
+};
+
+function getStorefrontMetricsCache() {
+  if (!storefrontMetricsState.__zorvyaStorefrontMetricsCache) {
+    storefrontMetricsState.__zorvyaStorefrontMetricsCache = {
+      productsExpiresAt: 0,
+      productExpiresAtById: new Map<string, number>(),
+    };
+  }
+
+  return storefrontMetricsState.__zorvyaStorefrontMetricsCache;
+}
+
+function approximatePayloadKb(payload: unknown) {
+  try {
+    return Math.round(Buffer.byteLength(JSON.stringify(payload), "utf8") / 1024);
+  } catch {
+    return 0;
+  }
+}
+
 function buildMediaProxyUrl(
   productId: string | number,
   kind: "gallery" | "variant" | "color",
@@ -276,7 +305,18 @@ const getCachedStorefrontProductRecord = unstable_cache(
 );
 
 export async function getStorefrontProducts() {
+  const startedAt = Date.now();
+  const metricsCache = getStorefrontMetricsCache();
+  const cache = metricsCache.productsExpiresAt > Date.now() ? "hit" : "miss";
   const result = await getCachedStorefrontProducts();
+  const payload = result.products;
+  const payloadKb = approximatePayloadKb(payload);
+  const durationMs = Date.now() - startedAt;
+  metricsCache.productsExpiresAt = Date.now() + STOREFRONT_PRODUCTS_CACHE_TTL_MS;
+
+  console.info(
+    `[egress-metrics] source=getStorefrontProducts rows=${payload.length} payloadKB=${payloadKb} durationMs=${durationMs} cache=${cache} columns=id,name,price,originalPrice,stock,category,brand,image,images,rating,reviewCount,badge,inventoryLabel,deliveryLabel,hasFreeDelivery,isHeavy,showStock,displayOrder,isFeatured,isTop,colors,colorOptions,colorImageMap,variants,createdAt,updatedAt,translations`
+  );
   return result.products;
 }
 
@@ -294,8 +334,25 @@ export function getStorefrontSnapshotTimestamp() {
 }
 
 export async function getStorefrontProductById(productId: string) {
+  const startedAt = Date.now();
+  const metricsCache = getStorefrontMetricsCache();
+  const cache = (metricsCache.productExpiresAtById.get(productId) ?? 0) > Date.now() ? "hit" : "miss";
   const product = await getCachedStorefrontProductRecord(productId);
-  return product ? toStorefrontProduct(product) : null;
+  const storefrontProduct = product ? toStorefrontProduct(product) : null;
+  const payloadKb = approximatePayloadKb(storefrontProduct);
+  const durationMs = Date.now() - startedAt;
+
+  if (storefrontProduct) {
+    metricsCache.productExpiresAtById.set(
+      productId,
+      Date.now() + STOREFRONT_PRODUCT_DETAIL_CACHE_TTL_MS
+    );
+  }
+
+  console.info(
+    `[egress-metrics] source=getStorefrontProductById rows=${storefrontProduct ? 1 : 0} payloadKB=${payloadKb} durationMs=${durationMs} cache=${cache} columns=id,name,price,stock,category,brand,image,images,shortDescription,longDescription,rating,reviewCount,deliveryLabel,inventoryLabel,colors,colorOptions,colorImageMap,variants,translations`
+  );
+  return storefrontProduct;
 }
 
 export async function getStorefrontRecommendedProducts(

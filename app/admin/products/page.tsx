@@ -56,11 +56,20 @@ export default function AdminProductsPage() {
   const searchParams = useSearchParams();
   const search = searchParams.get("q") ?? "";
 
+  function approximatePayloadKb(payload: unknown) {
+    try {
+      return Math.round(JSON.stringify(payload).length / 1024);
+    } catch {
+      return 0;
+    }
+  }
+
   useEffect(() => {
     let isActive = true;
 
     async function loadProducts() {
       setLoading(true);
+      const startedAt = performance.now();
 
       try {
         const response = await fetch(`/api/admin/products?search=${encodeURIComponent(search)}`, {
@@ -76,6 +85,9 @@ export default function AdminProductsPage() {
             Object.fromEntries(
               nextProducts.map((product: Product) => [product.id, String(product.stock)])
             )
+          );
+          console.info(
+            `[egress-metrics] source=admin/products rows=${nextProducts.length} payloadKB=${approximatePayloadKb(data)} durationMs=${Math.round(performance.now() - startedAt)} cache=client-fetch columns=id,name,price,stock,category,brand,publicId,sku,images,isVisible,isActive,isFeatured,internal.costPrice,internal.supplier`
           );
         }
       } finally {

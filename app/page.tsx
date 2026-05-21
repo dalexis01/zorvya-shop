@@ -12,7 +12,8 @@ import { CLIENT_THEME_COOKIE_KEY, normalizeClientTheme } from "@/lib/shop/client
 
 export const revalidate = 300;
 
-export default async function Page() {
+async function loadHomePayload() {
+  const startedAt = Date.now();
   const cookieStore = await cookies();
   const initialClientTheme = normalizeClientTheme(
     cookieStore.get(CLIENT_THEME_COOKIE_KEY)?.value,
@@ -24,6 +25,31 @@ export default async function Page() {
     getPayPalClientId(),
   ]);
   const initialRenderAt = getStorefrontSnapshotTimestamp();
+  const payloadKb = Math.round(
+    Buffer.byteLength(JSON.stringify(initialProducts), "utf8") / 1024
+  );
+
+  console.info(
+    `[egress-metrics] source=app/page rows=${initialProducts.length} payloadKB=${payloadKb} durationMs=${Date.now() - startedAt} cache=server-render columns=id,name,price,originalPrice,stock,category,brand,image,images,rating,reviewCount,badge,inventoryLabel,deliveryLabel,hasFreeDelivery,isHeavy,showStock,displayOrder,isFeatured,isTop,colors,colorOptions,colorImageMap,variants,createdAt,updatedAt,translations`
+  );
+
+  return {
+    initialProducts,
+    initialSettings,
+    paypalClientId,
+    initialClientTheme,
+    initialRenderAt,
+  };
+}
+
+export default async function Page() {
+  const {
+    initialProducts,
+    initialSettings,
+    paypalClientId,
+    initialClientTheme,
+    initialRenderAt,
+  } = await loadHomePayload();
 
   return (
     <ShopPage

@@ -948,10 +948,19 @@ export default function AdminSettingsPage() {
   const [activePanel, setActivePanel] = useState<"branding" | "hero" | "builder" | "styles" | "paypal">("branding");
   const [expandedBlockId, setExpandedBlockId] = useState<string>("hero-main");
 
+  function approximatePayloadKb(payload: unknown) {
+    try {
+      return Math.round(JSON.stringify(payload).length / 1024);
+    } catch {
+      return 0;
+    }
+  }
+
   useEffect(() => {
     let isActive = true;
 
     async function loadSettings() {
+      const startedAt = performance.now();
       try {
         const [settingsResponse, productsResponse, paypalResponse] = await Promise.all([
           fetch("/api/admin/settings/homepage", { cache: "no-store" }),
@@ -970,6 +979,9 @@ export default function AdminSettingsPage() {
 
         if (isActive && productsData.success) {
           setProducts(productsData.products ?? []);
+          console.info(
+            `[egress-metrics] source=admin/settings:products rows=${(productsData.products ?? []).length} payloadKB=${approximatePayloadKb(productsData)} durationMs=${Math.round(performance.now() - startedAt)} cache=client-fetch columns=id,name,price,stock,category,brand,images,isActive,isVisible,isFeatured,isTop,rating,reviewCount,shortDescription,inventoryLabel,deliveryLabel`
+          );
         }
 
         if (isActive && paypalData.success && paypalData.settings) {
