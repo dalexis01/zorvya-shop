@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { logApiResponseMetrics } from "@/lib/server/api-response-metrics";
 import { getRevenueAnalytics } from "@/lib/server/admin/analytics";
 import { getAllSupportMessages, getPendingSupportMessages } from "@/lib/server/admin/support";
 import { getLowStockProducts, getProductStats } from "@/lib/server/admin/products";
@@ -9,7 +10,7 @@ import { getBlockedUserCount } from "@/lib/server/users";
 
 export const dynamic = "force-dynamic";
 
-const DASHBOARD_CACHE_TTL_MS = 60_000;
+const DASHBOARD_CACHE_TTL_MS = 300_000;
 
 let dashboardStatsCache:
   | {
@@ -91,7 +92,20 @@ export async function GET() {
       };
     }
 
-    return NextResponse.json({ success: true, stats });
+    const payload = { success: true, stats };
+    logApiResponseMetrics({
+      endpoint: "/api/admin/dashboard",
+      payload,
+      rowCount: Array.isArray((stats as { recentOrders?: unknown[] }).recentOrders)
+        ? ((stats as { recentOrders?: unknown[] }).recentOrders?.length ?? 0)
+        : 0,
+    });
+
+    return NextResponse.json(payload, {
+      headers: {
+        "Cache-Control": "private, max-age=60, stale-while-revalidate=300",
+      },
+    });
   } catch (error) {
     console.error("Dashboard error:", error);
     return NextResponse.json(

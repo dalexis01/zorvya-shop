@@ -252,7 +252,7 @@ export default function CustomerNotificationsBell({
     };
 
     refreshIfVisible();
-    const intervalId = window.setInterval(refreshIfVisible, 75_000);
+    const intervalId = window.setInterval(refreshIfVisible, 180_000);
     document.addEventListener("visibilitychange", refreshIfVisible);
     window.addEventListener("focus", refreshIfVisible);
 

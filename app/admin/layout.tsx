@@ -144,8 +144,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     }
 
     void loadOrdersMeta();
-
-    const intervalId = window.setInterval(loadOrdersMeta, 90_000);
     const handleVisibilityChange = () => {
       if (document.visibilityState === "visible") {
         void loadOrdersMeta();
@@ -167,7 +165,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     window.addEventListener("admin-support-updated", handleSupportUpdated);
 
     return () => {
-      window.clearInterval(intervalId);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       window.removeEventListener("admin-orders-updated", handleOrdersUpdated);
       window.removeEventListener("admin-support-updated", handleSupportUpdated);

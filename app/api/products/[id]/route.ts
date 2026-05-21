@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { logApiResponseMetrics } from "@/lib/server/api-response-metrics";
 import {
   getStorefrontProductById,
   getStorefrontRecommendedProducts,
@@ -25,11 +26,22 @@ export async function GET(request: Request, context: RouteContext<"/api/products
   }
 
   if (!includeExtras) {
-    return NextResponse.json({
+    const payload = {
       success: true,
       product,
       reviews: [],
       recommended: [],
+    };
+    logApiResponseMetrics({
+      endpoint: "/api/products/[id]?includeExtras=false",
+      payload,
+      rowCount: 1,
+    });
+
+    return NextResponse.json(payload, {
+      headers: {
+        "Cache-Control": "public, s-maxage=300, stale-while-revalidate=900",
+      },
     });
   }
 
@@ -38,10 +50,21 @@ export async function GET(request: Request, context: RouteContext<"/api/products
     getStorefrontRecommendedProducts(product, 4),
   ]);
 
-  return NextResponse.json({
+  const payload = {
     success: true,
     product,
     reviews,
     recommended,
+  };
+  logApiResponseMetrics({
+    endpoint: "/api/products/[id]",
+    payload,
+    rowCount: 1 + reviews.length + recommended.length,
+  });
+
+  return NextResponse.json(payload, {
+    headers: {
+      "Cache-Control": "public, s-maxage=300, stale-while-revalidate=900",
+    },
   });
 }

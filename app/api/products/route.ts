@@ -4,22 +4,33 @@ import {
   getStorefrontProducts,
   getStorefrontProductsDebugInfo,
 } from "@/lib/server/catalog";
+import { logApiResponseMetrics } from "@/lib/server/api-response-metrics";
 
-export const revalidate = 60;
+export const revalidate = 300;
 
 export async function GET() {
   try {
     const products = await getStorefrontProducts();
     const info = await getStorefrontProductsDebugInfo();
+    const payload = {
+      success: true,
+      products,
+      meta: info,
+    };
 
     console.info(
       `[api/products] returning ${info.count} product(s) from ${info.source}`
     );
+    logApiResponseMetrics({
+      endpoint: "/api/products",
+      payload,
+      rowCount: products.length,
+    });
 
-    return NextResponse.json({
-      success: true,
-      products,
-      meta: info,
+    return NextResponse.json(payload, {
+      headers: {
+        "Cache-Control": "public, s-maxage=300, stale-while-revalidate=900",
+      },
     });
   } catch (error) {
     console.error("Failed to load storefront products:", error);

@@ -105,7 +105,8 @@ export async function createAddress(
     `INSERT INTO addresses (id, user_id, label, address_line, city, country, reference,
        latitude, longitude, is_default, created_at, updated_at)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::timestamptz, $12::timestamptz)
-     RETURNING *`,
+     RETURNING id, user_id, label, address_line, city, country, reference,
+               latitude, longitude, is_default, created_at, updated_at`,
     [
       id, userId,
       input.label.trim() || "Mi dirección",
@@ -138,7 +139,11 @@ export async function updateAddress(
   const now = new Date().toISOString();
 
   const existing = await pool.query<AddressRow>(
-    `SELECT * FROM addresses WHERE id = $1 AND user_id = $2 LIMIT 1`,
+    `SELECT id, user_id, label, address_line, city, country, reference,
+            latitude, longitude, is_default, created_at, updated_at
+     FROM addresses
+     WHERE id = $1 AND user_id = $2
+     LIMIT 1`,
     [id, userId]
   );
   if (!existing.rows[0]) return null;
@@ -161,7 +166,8 @@ export async function updateAddress(
          is_default   = $8,
          updated_at   = $9::timestamptz
      WHERE id = $1 AND user_id = $2
-     RETURNING *`,
+     RETURNING id, user_id, label, address_line, city, country, reference,
+               latitude, longitude, is_default, created_at, updated_at`,
     [
       id, userId,
       input.label?.trim() ?? row.label,
@@ -181,7 +187,11 @@ export async function deleteAddress(id: string, userId: string): Promise<boolean
   const pool = await getCustomerPool();
   // Prevent deleting the default address if there are others
   const existing = await pool.query<AddressRow>(
-    `SELECT * FROM addresses WHERE id = $1 AND user_id = $2 LIMIT 1`,
+    `SELECT id, user_id, label, address_line, city, country, reference,
+            latitude, longitude, is_default, created_at, updated_at
+     FROM addresses
+     WHERE id = $1 AND user_id = $2
+     LIMIT 1`,
     [id, userId]
   );
   if (!existing.rows[0]) return false;

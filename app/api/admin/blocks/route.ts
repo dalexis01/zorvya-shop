@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { logApiResponseMetrics } from "@/lib/server/api-response-metrics";
 import {
   createDeliveryBlock,
   listDeliveryBlocks,
@@ -23,7 +24,18 @@ export async function GET() {
     new Set(activeBlocks.flatMap((block) => (block.orders ?? []).map((slot) => slot.orderId)))
   );
   const orderRecords = orderIds.length > 0 ? await getAdminOrdersByIds(orderIds) : [];
-  return NextResponse.json({ success: true, blocks, orderRecords });
+  const payload = { success: true, blocks, orderRecords };
+  logApiResponseMetrics({
+    endpoint: "/api/admin/blocks",
+    payload,
+    rowCount: blocks.length + orderRecords.length,
+  });
+
+  return NextResponse.json(payload, {
+    headers: {
+      "Cache-Control": "private, max-age=30, stale-while-revalidate=120",
+    },
+  });
 }
 
 export async function POST(request: Request) {

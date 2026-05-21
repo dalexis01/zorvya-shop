@@ -87,21 +87,23 @@ export default function AdminSupportPage() {
       }
     }
 
-    void loadMessages();
     const handleVisibilityChange = () => {
       if (document.visibilityState === "visible") {
         void loadMessages();
       }
     };
-    const intervalId = window.setInterval(() => {
+    const handleSupportUpdated = () => {
       void loadMessages();
-    }, 90_000);
+    };
+
+    void loadMessages();
     document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("admin-support-updated", handleSupportUpdated);
 
     return () => {
       isActive = false;
-      window.clearInterval(intervalId);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("admin-support-updated", handleSupportUpdated);
     };
   }, [selectedFromUrl]);
 

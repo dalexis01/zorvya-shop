@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { logApiResponseMetrics } from "@/lib/server/api-response-metrics";
 import { getAdminOrders } from "@/lib/server/admin/orders";
 import { requireAdminRequestUser } from "@/lib/server/admin/request-auth";
 import type { DeliveryType } from "@/lib/shop/types";
@@ -48,11 +49,22 @@ export async function GET(request: Request) {
       windowHours,
     });
 
-    return NextResponse.json({
+    const payload = {
       success: true,
       orders: result.orders,
       hasMore: result.hasMore,
       nextCursor: result.nextCursor,
+    };
+    logApiResponseMetrics({
+      endpoint: "/api/admin/orders",
+      payload,
+      rowCount: result.orders.length,
+    });
+
+    return NextResponse.json(payload, {
+      headers: {
+        "Cache-Control": "private, max-age=30, stale-while-revalidate=120",
+      },
     });
   } catch (error) {
     console.error("Failed to get admin orders:", error);

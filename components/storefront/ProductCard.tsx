@@ -163,7 +163,7 @@ function ProductCard({
         ) : (
           <Link
             href={`/products/${product.id}`}
-            prefetch
+            prefetch={false}
             className="block h-[56%] min-h-0 w-full shrink-0 sm:h-[55%]"
           >
             <div className={`relative h-full overflow-hidden border-b border-slate-800 ${styles.mediaShell}`}>
@@ -198,7 +198,7 @@ function ProductCard({
                     </h3>
                   </button>
                 ) : (
-                  <Link href={`/products/${product.id}`} prefetch className="block">
+                  <Link href={`/products/${product.id}`} prefetch={false} className="block">
                     <h3
                       className={`${styles.title} line-clamp-2 text-[11.5px] leading-[1.18] transition hover:text-cyan-100 sm:text-[13.5px]`}
                     >
@@ -250,7 +250,7 @@ function ProductCard({
                 <div className="shrink-0 self-end">
                   <Link
                     href={`/products/${product.id}`}
-                    prefetch
+                    prefetch={false}
                     aria-label={t.chooseOptions}
                     title={t.chooseOptions}
                     className={styles.iconActionButton}

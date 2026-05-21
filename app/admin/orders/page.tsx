@@ -1028,21 +1028,22 @@ export default function AdminOrdersPage() {
       }
     }
 
-    void loadMetaOnly();
     const handleVisibilityChange = () => {
       if (document.visibilityState === "visible") {
         void loadMetaOnly();
       }
     };
-    const intervalId = window.setInterval(() => {
+    const handleOrdersUpdated = () => {
       void loadMetaOnly();
-    }, 120000);
+    };
+    void loadMetaOnly();
     document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("admin-orders-updated", handleOrdersUpdated);
 
     return () => {
       alive = false;
-      window.clearInterval(intervalId);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("admin-orders-updated", handleOrdersUpdated);
     };
   }, []);
 

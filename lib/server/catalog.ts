@@ -252,7 +252,7 @@ const getCachedStorefrontProducts = unstable_cache(
   async () => readStorefrontProductsUncached(),
   ["storefront-products"],
   {
-    revalidate: 60,
+    revalidate: 300,
     tags: [STOREFRONT_PRODUCTS_TAG],
   }
 );

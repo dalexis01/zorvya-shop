@@ -10,7 +10,7 @@ import {
 import { getPayPalClientId } from "@/lib/server/paypal";
 import { CLIENT_THEME_COOKIE_KEY, normalizeClientTheme } from "@/lib/shop/client-theme";
 
-export const revalidate = 60;
+export const revalidate = 300;
 
 export default async function Page() {
   const cookieStore = await cookies();

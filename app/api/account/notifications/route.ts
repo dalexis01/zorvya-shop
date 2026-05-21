@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { logApiResponseMetrics } from "@/lib/server/api-response-metrics";
 import {
   getCustomerNotificationsPanelData,
   markCustomerNotificationsRead,
@@ -28,10 +29,20 @@ export async function GET(request: Request) {
       requestLocale && ["es", "nl", "en", "pt"].includes(requestLocale) ? requestLocale : "es"
     ) as Locale;
     const payload = await getCustomerNotificationsPanelData(user.id, locale);
-
-    return NextResponse.json({
+    const responsePayload = {
       success: true,
       ...payload,
+    };
+    logApiResponseMetrics({
+      endpoint: "/api/account/notifications",
+      payload: responsePayload,
+      rowCount: payload.notifications.length + payload.pendingOrders.length,
+    });
+
+    return NextResponse.json(responsePayload, {
+      headers: {
+        "Cache-Control": "private, max-age=30, stale-while-revalidate=120",
+      },
     });
   } catch (error) {
     console.error("[account/notifications] failed to load notifications:", error);

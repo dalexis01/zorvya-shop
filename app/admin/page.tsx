@@ -41,19 +41,6 @@ function SummaryCard({ href, label, value, helper, accent }: SummaryCardProps) {
 export default function AdminDashboardPage() {
   const [stats, setStats] = useState<AdminDashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
-  const [refreshKey, setRefreshKey] = useState(0);
-
-  useEffect(() => {
-    const handleOrdersUpdated = () => {
-      setRefreshKey((currentKey) => currentKey + 1);
-    };
-
-    window.addEventListener("admin-orders-updated", handleOrdersUpdated);
-
-    return () => {
-      window.removeEventListener("admin-orders-updated", handleOrdersUpdated);
-    };
-  }, []);
 
   useEffect(() => {
     let isActive = true;
@@ -78,7 +65,7 @@ export default function AdminDashboardPage() {
     return () => {
       isActive = false;
     };
-  }, [refreshKey]);
+  }, []);
 
   if (loading) {
     return (

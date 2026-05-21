@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { revalidateTag } from "next/cache";
 
+import { logApiResponseMetrics } from "@/lib/server/api-response-metrics";
 import { createStatusLog } from "@/lib/server/admin/logs";
 import { createProduct } from "@/lib/server/admin/products";
 import { requireAdminRequestUser } from "@/lib/server/admin/request-auth";
@@ -34,12 +35,23 @@ export async function GET(request: Request) {
       `[admin/products] loaded ${products.length} product(s) from ${source}`
     );
 
-    return NextResponse.json({
+    const payload = {
       success: true,
       products,
       meta: {
         source,
         count: products.length,
+      },
+    };
+    logApiResponseMetrics({
+      endpoint: "/api/admin/products",
+      payload,
+      rowCount: products.length,
+    });
+
+    return NextResponse.json(payload, {
+      headers: {
+        "Cache-Control": "private, max-age=60, stale-while-revalidate=300",
       },
     });
   } catch (error) {
