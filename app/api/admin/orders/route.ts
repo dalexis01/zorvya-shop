@@ -6,6 +6,8 @@ import { requireAdminRequestUser } from "@/lib/server/admin/request-auth";
 import type { DeliveryType } from "@/lib/shop/types";
 
 export const dynamic = "force-dynamic";
+export const revalidate = 0;
+export const runtime = "nodejs";
 
 export async function GET(request: Request) {
   try {
@@ -68,7 +70,8 @@ export async function GET(request: Request) {
 
     return NextResponse.json(payload, {
       headers: {
-        "Cache-Control": "private, max-age=30, stale-while-revalidate=120",
+        "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+        "x-api-metrics-debug": "true",
       },
     });
   } catch (error) {
@@ -79,7 +82,13 @@ export async function GET(request: Request) {
         success: false,
         error: "Failed to get orders",
       },
-      { status: 500 }
+      {
+        status: 500,
+        headers: {
+          "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+          "x-api-metrics-debug": "true",
+        },
+      }
     );
   }
 }

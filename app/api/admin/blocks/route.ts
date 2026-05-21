@@ -11,11 +11,24 @@ import { getAdminOrdersByIds } from "@/lib/server/admin/orders";
 import { requireAdminRequestUser } from "@/lib/server/admin/request-auth";
 
 export const dynamic = "force-dynamic";
+export const revalidate = 0;
+export const runtime = "nodejs";
 
 export async function GET() {
   console.log("[api-metrics] admin blocks route called");
   const auth = await requireAdminRequestUser();
-  if (!auth.user) return NextResponse.json({ success: false, error: auth.error }, { status: auth.status });
+  if (!auth.user) {
+    return NextResponse.json(
+      { success: false, error: auth.error },
+      {
+        status: auth.status,
+        headers: {
+          "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+          "x-api-metrics-debug": "true",
+        },
+      }
+    );
+  }
 
   const blocks = await listDeliveryBlocks();
 
@@ -38,14 +51,26 @@ export async function GET() {
 
   return NextResponse.json(payload, {
     headers: {
-      "Cache-Control": "private, max-age=30, stale-while-revalidate=120",
+      "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+      "x-api-metrics-debug": "true",
     },
   });
 }
 
 export async function POST(request: Request) {
   const auth = await requireAdminRequestUser();
-  if (!auth.user) return NextResponse.json({ success: false, error: auth.error }, { status: auth.status });
+  if (!auth.user) {
+    return NextResponse.json(
+      { success: false, error: auth.error },
+      {
+        status: auth.status,
+        headers: {
+          "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+          "x-api-metrics-debug": "true",
+        },
+      }
+    );
+  }
 
   try {
     const body = (await request.json()) as { name?: string; orderIds?: string[]; initialStatus?: BlockStatus };
@@ -62,7 +87,13 @@ export async function POST(request: Request) {
           success: false,
           error: `Un bloque puede tener máximo ${MAX_ORDERS_PER_BLOCK} pedidos. Tienes ${orderIds.length} seleccionados.`,
         },
-        { status: 400 }
+        {
+          status: 400,
+          headers: {
+            "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+            "x-api-metrics-debug": "true",
+          },
+        }
       );
     }
 
@@ -85,15 +116,39 @@ export async function POST(request: Request) {
       initialStatus: body.initialStatus,
     });
 
-    return NextResponse.json({ success: true, block }, { status: 201 });
+    return NextResponse.json(
+      { success: true, block },
+      {
+        status: 201,
+        headers: {
+          "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+          "x-api-metrics-debug": "true",
+        },
+      }
+    );
   } catch (err) {
     console.error("[blocks] POST error:", err);
     if (err instanceof Error && err.message.startsWith("BLOCK_LIMIT_EXCEEDED:")) {
       return NextResponse.json(
         { success: false, error: `Un bloque puede tener maximo ${MAX_ORDERS_PER_BLOCK} pedidos.` },
-        { status: 400 }
+        {
+          status: 400,
+          headers: {
+            "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+            "x-api-metrics-debug": "true",
+          },
+        }
       );
     }
-    return NextResponse.json({ success: false, error: "No se pudo crear el bloque." }, { status: 500 });
+    return NextResponse.json(
+      { success: false, error: "No se pudo crear el bloque." },
+      {
+        status: 500,
+        headers: {
+          "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+          "x-api-metrics-debug": "true",
+        },
+      }
+    );
   }
 }

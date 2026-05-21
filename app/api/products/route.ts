@@ -6,7 +6,9 @@ import {
 } from "@/lib/server/catalog";
 import { logApiResponseMetrics } from "@/lib/server/api-response-metrics";
 
-export const revalidate = 300;
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+export const runtime = "nodejs";
 
 export async function GET() {
   try {
@@ -34,7 +36,8 @@ export async function GET() {
 
     return NextResponse.json(payload, {
       headers: {
-        "Cache-Control": "public, s-maxage=300, stale-while-revalidate=900",
+        "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+        "x-api-metrics-debug": "true",
       },
     });
   } catch (error) {
@@ -45,7 +48,13 @@ export async function GET() {
         success: false,
         error: "No se pudieron cargar los productos.",
       },
-      { status: 500 }
+      {
+        status: 500,
+        headers: {
+          "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+          "x-api-metrics-debug": "true",
+        },
+      }
     );
   }
 }

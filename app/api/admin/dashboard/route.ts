@@ -9,6 +9,8 @@ import { getDashboardOrderStats } from "@/lib/server/orders-store";
 import { getBlockedUserCount } from "@/lib/server/users";
 
 export const dynamic = "force-dynamic";
+export const revalidate = 0;
+export const runtime = "nodejs";
 
 const DASHBOARD_CACHE_TTL_MS = 300_000;
 
@@ -108,14 +110,21 @@ export async function GET() {
 
     return NextResponse.json(payload, {
       headers: {
-        "Cache-Control": "private, max-age=60, stale-while-revalidate=300",
+        "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+        "x-api-metrics-debug": "true",
       },
     });
   } catch (error) {
     console.error("Dashboard error:", error);
     return NextResponse.json(
       { success: false, error: "Failed to load dashboard stats" },
-      { status: 500 }
+      {
+        status: 500,
+        headers: {
+          "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+          "x-api-metrics-debug": "true",
+        },
+      }
     );
   }
 }
