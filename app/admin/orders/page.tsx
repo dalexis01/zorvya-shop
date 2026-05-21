@@ -19,6 +19,7 @@ import {
 import { STORE_ADDRESS } from "@/helpers/delivery";
 import { ADMIN_ORDER_STATUS_OPTIONS } from "@/lib/shop/order-status";
 import type { AdminOrderRecord, AdminOrdersMeta } from "@/lib/shop/admin-types";
+import { postDebugEgressMetric } from "@/lib/shop/debug-egress-client";
 import type { ProductAccountingEntry } from "@/app/api/admin/products/accounting/route";
 import type { DeliveryBlock } from "@/lib/server/admin/delivery-blocks-store";
 
@@ -971,6 +972,14 @@ export default function AdminOrdersPage() {
         console.info(
           `[egress-metrics] source=admin/orders:blocks rows=${nextBlocks.length} payloadKB=${approximatePayloadKb(blocksData)} durationMs=${Math.round(performance.now() - startedAt)} cache=client-fetch columns=id,label,status,orders,orderRecords`
         );
+        void postDebugEgressMetric({
+          source: "admin/orders:blocks",
+          route: "/admin/orders",
+          rowsCount: nextBlocks.length,
+          payloadKb: approximatePayloadKb(blocksData),
+          durationMs: Math.round(performance.now() - startedAt),
+          cacheStatus: "client-fetch",
+        });
       }
     } catch {
       // non-critical
@@ -1136,12 +1145,28 @@ export default function AdminOrdersPage() {
           console.info(
             `[egress-metrics] source=admin/orders:orders rows=${next.length} payloadKB=${approximatePayloadKb(ordData)} durationMs=${Math.round(performance.now() - startedAt)} cache=client-fetch columns=id,status,customerName,customerAddress,customerPhone,total,deliveryFee,items`
           );
+          void postDebugEgressMetric({
+            source: "admin/orders:orders",
+            route: "/admin/orders",
+            rowsCount: next.length,
+            payloadKb: approximatePayloadKb(ordData),
+            durationMs: Math.round(performance.now() - startedAt),
+            cacheStatus: "client-fetch",
+          });
         }
         if (pendingData?.success) {
           setAllPendingOrders(pendingData.orders ?? []);
           console.info(
             `[egress-metrics] source=admin/orders:pending rows=${(pendingData.orders ?? []).length} payloadKB=${approximatePayloadKb(pendingData)} durationMs=${Math.round(performance.now() - startedAt)} cache=client-fetch columns=id,status,deliveryType,customerName,total,items`
           );
+          void postDebugEgressMetric({
+            source: "admin/orders:pending",
+            route: "/admin/orders",
+            rowsCount: (pendingData.orders ?? []).length,
+            payloadKb: approximatePayloadKb(pendingData),
+            durationMs: Math.round(performance.now() - startedAt),
+            cacheStatus: "client-fetch",
+          });
         }
       } catch (err) {
         if (!alive) return;

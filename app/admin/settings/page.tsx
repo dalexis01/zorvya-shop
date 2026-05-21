@@ -5,6 +5,7 @@ import type { CSSProperties } from "react";
 import { useEffect, useMemo, useState } from "react";
 
 import { ACCEPTED_IMAGE_TYPES, imageFileToDataUrl } from "@/lib/shop/image-upload";
+import { postDebugEgressMetric } from "@/lib/shop/debug-egress-client";
 import type {
   HomepageBlock,
   HomepageCatalogSource,
@@ -982,6 +983,14 @@ export default function AdminSettingsPage() {
           console.info(
             `[egress-metrics] source=admin/settings:products rows=${(productsData.products ?? []).length} payloadKB=${approximatePayloadKb(productsData)} durationMs=${Math.round(performance.now() - startedAt)} cache=client-fetch columns=id,name,price,stock,category,brand,images,isActive,isVisible,isFeatured,isTop,rating,reviewCount,shortDescription,inventoryLabel,deliveryLabel`
           );
+          void postDebugEgressMetric({
+            source: "admin/settings:products",
+            route: "/admin/settings",
+            rowsCount: (productsData.products ?? []).length,
+            payloadKb: approximatePayloadKb(productsData),
+            durationMs: Math.round(performance.now() - startedAt),
+            cacheStatus: "client-fetch",
+          });
         }
 
         if (isActive && paypalData.success && paypalData.settings) {

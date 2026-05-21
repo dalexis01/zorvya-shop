@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 
+import { postDebugEgressMetric } from "@/lib/shop/debug-egress-client";
 import { formatCurrencyDollar } from "@/lib/shop/number-format";
 import type { Product } from "@/lib/shop/admin-types";
 
@@ -89,6 +90,14 @@ export default function AdminProductsPage() {
           console.info(
             `[egress-metrics] source=admin/products rows=${nextProducts.length} payloadKB=${approximatePayloadKb(data)} durationMs=${Math.round(performance.now() - startedAt)} cache=client-fetch columns=id,name,price,stock,category,brand,publicId,sku,images,isVisible,isActive,isFeatured,internal.costPrice,internal.supplier`
           );
+          void postDebugEgressMetric({
+            source: "admin/products",
+            route: "/admin/products",
+            rowsCount: nextProducts.length,
+            payloadKb: approximatePayloadKb(data),
+            durationMs: Math.round(performance.now() - startedAt),
+            cacheStatus: "client-fetch",
+          });
         }
       } finally {
         if (isActive) {

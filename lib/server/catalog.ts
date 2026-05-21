@@ -8,6 +8,7 @@ import {
   getStorefrontProductDetailById,
   type ProductsDataSource,
 } from "@/lib/server/admin/products";
+import { recordDebugEgressMetric } from "@/lib/server/debug-egress-metrics";
 import type { Product } from "@/lib/shop/admin-types";
 import type {
   StorefrontProduct,
@@ -317,6 +318,14 @@ export async function getStorefrontProducts() {
   console.info(
     `[egress-metrics] source=getStorefrontProducts rows=${payload.length} payloadKB=${payloadKb} durationMs=${durationMs} cache=${cache} columns=id,name,price,originalPrice,stock,category,brand,image,images,rating,reviewCount,badge,inventoryLabel,deliveryLabel,hasFreeDelivery,isHeavy,showStock,displayOrder,isFeatured,isTop,colors,colorOptions,colorImageMap,variants,createdAt,updatedAt,translations`
   );
+  await recordDebugEgressMetric({
+    source: "getStorefrontProducts",
+    route: "/",
+    rowsCount: payload.length,
+    payloadKb,
+    durationMs,
+    cacheStatus: cache,
+  });
   return result.products;
 }
 
@@ -352,6 +361,14 @@ export async function getStorefrontProductById(productId: string) {
   console.info(
     `[egress-metrics] source=getStorefrontProductById rows=${storefrontProduct ? 1 : 0} payloadKB=${payloadKb} durationMs=${durationMs} cache=${cache} columns=id,name,price,stock,category,brand,image,images,shortDescription,longDescription,rating,reviewCount,deliveryLabel,inventoryLabel,colors,colorOptions,colorImageMap,variants,translations`
   );
+  await recordDebugEgressMetric({
+    source: "getStorefrontProductById",
+    route: `/products/${productId}`,
+    rowsCount: storefrontProduct ? 1 : 0,
+    payloadKb,
+    durationMs,
+    cacheStatus: cache,
+  });
   return storefrontProduct;
 }
 
