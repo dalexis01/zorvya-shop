@@ -1054,34 +1054,37 @@ export default function AdminOrdersPage() {
     setHasMore(false);
     setNextCursor(null);
     setAccountingMap(new Map());
+    if (activeTab !== "blocks") {
+      setAllPendingOrders([]);
+    }
     // noWindow resets when tab or search changes (only persists within same tab/search context)
 
     async function load() {
       const abort = new AbortController();
       const timer = setTimeout(() => abort.abort(), 25_000);
       try {
-        const requests: Array<Promise<Response>> = [
-          fetch(
-            apiUrl({
-              status,
-              deliveryType,
-              search,
-              limit: activeTab === "blocks" ? BLOCKS_LIMIT : LIMIT,
-              noWindow,
-            }),
-            { cache: "no-store", signal: abort.signal }
-          ),
-          fetch(
-            "/api/admin/orders?status=pending&deliveryType=all&limit=120&noWindow=true",
-            { cache: "no-store", signal: abort.signal }
-          ),
-        ];
-        requests.push(fetch("/api/admin/orders/meta", { cache: "no-store", signal: abort.signal }));
-        const [ordRes, pendingRes, metaRes] = await Promise.all(requests);
+        const primaryRequest = fetch(
+          apiUrl({
+            status,
+            deliveryType,
+            search,
+            limit: activeTab === "blocks" ? BLOCKS_LIMIT : LIMIT,
+            noWindow,
+          }),
+          { cache: "no-store", signal: abort.signal }
+        );
+        const pendingRequest =
+          activeTab === "blocks"
+            ? fetch(
+                "/api/admin/orders?status=pending&deliveryType=all&limit=120&noWindow=true",
+                { cache: "no-store", signal: abort.signal }
+              )
+            : null;
+
+        const [ordRes, pendingRes] = await Promise.all([primaryRequest, pendingRequest]);
         const ordData = (await ordRes.json()) as AdminOrdersResponse;
-        const pendingData = (await pendingRes.json()) as AdminOrdersResponse;
-        const metaData = metaRes
-          ? ((await metaRes.json()) as { success?: boolean; meta?: AdminOrdersMeta })
+        const pendingData = pendingRes
+          ? ((await pendingRes.json()) as AdminOrdersResponse)
           : null;
         if (!alive) return;
         if (!ordData.success) {
@@ -1118,10 +1121,9 @@ export default function AdminOrdersPage() {
               .catch(() => {/* non-critical */});
           }
         }
-        if (pendingData.success) {
+        if (pendingData?.success) {
           setAllPendingOrders(pendingData.orders ?? []);
         }
-        if (metaData?.success) setMeta(metaData.meta ?? null);
       } catch (err) {
         if (!alive) return;
         const isTimeout = err instanceof DOMException && err.name === "AbortError";

@@ -6,8 +6,7 @@ import {
 } from "@/lib/server/catalog";
 import { logApiResponseMetrics } from "@/lib/server/api-response-metrics";
 
-export const dynamic = "force-dynamic";
-export const revalidate = 0;
+export const revalidate = 300;
 export const runtime = "nodejs";
 
 export async function GET() {
@@ -36,7 +35,7 @@ export async function GET() {
 
     return NextResponse.json(payload, {
       headers: {
-        "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate",
+        "Cache-Control": "public, s-maxage=300, stale-while-revalidate=900",
         "x-api-metrics-debug": "true",
       },
     });

@@ -3,10 +3,9 @@ import "server-only";
 import { unstable_cache } from "next/cache";
 
 import {
-  getProductById,
-  getProductGalleryImageSource,
   getProductsDataSource,
   getProductSummaries,
+  getStorefrontProductDetailById,
   type ProductsDataSource,
 } from "@/lib/server/admin/products";
 import type { Product } from "@/lib/shop/admin-types";
@@ -248,9 +247,28 @@ async function readStorefrontProductsUncached(): Promise<StorefrontProductsResul
   };
 }
 
+async function readStorefrontProductRecordUncached(productId: string) {
+  const product = await getStorefrontProductDetailById(productId);
+
+  if (!product || !product.isActive || !product.isVisible) {
+    return null;
+  }
+
+  return product;
+}
+
 const getCachedStorefrontProducts = unstable_cache(
   async () => readStorefrontProductsUncached(),
   ["storefront-products"],
+  {
+    revalidate: 300,
+    tags: [STOREFRONT_PRODUCTS_TAG],
+  }
+);
+
+const getCachedStorefrontProductRecord = unstable_cache(
+  async (productId: string) => readStorefrontProductRecordUncached(productId),
+  ["storefront-product-record"],
   {
     revalidate: 300,
     tags: [STOREFRONT_PRODUCTS_TAG],
@@ -276,13 +294,8 @@ export function getStorefrontSnapshotTimestamp() {
 }
 
 export async function getStorefrontProductById(productId: string) {
-  const product = await getProductById(productId);
-
-  if (!product || !product.isActive || !product.isVisible) {
-    return null;
-  }
-
-  return toStorefrontProduct(product);
+  const product = await getCachedStorefrontProductRecord(productId);
+  return product ? toStorefrontProduct(product) : null;
 }
 
 export async function getStorefrontRecommendedProducts(
@@ -302,9 +315,9 @@ export async function getStorefrontProductMediaSource(
   kind: string | null,
   key: string | null
 ) {
-  const product = await getProductById(productId);
+  const product = await getCachedStorefrontProductRecord(productId);
 
-  if (!product || !product.isActive || !product.isVisible) {
+  if (!product) {
     return null;
   }
 
@@ -315,7 +328,8 @@ export async function getStorefrontProductMediaSource(
       return null;
     }
 
-    return getProductGalleryImageSource(productId, imageIndex);
+    const imageUrl = product.images[imageIndex]?.url;
+    return typeof imageUrl === "string" ? imageUrl.trim() || null : null;
   }
 
   if (kind === "variant") {

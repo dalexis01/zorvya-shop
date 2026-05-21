@@ -147,6 +147,41 @@ type ProductSummaryRow = QueryResultRow & {
   first_image_url: string | null;
 };
 
+type StorefrontProductRow = QueryResultRow & {
+  id: string;
+  public_id: string;
+  display_order: number;
+  sku: string;
+  name: string;
+  short_description: string;
+  long_description: string;
+  brand: string;
+  category: string;
+  tags_json: string[] | null;
+  price: number | string;
+  original_price: number | string | null;
+  stock: number;
+  rating: number | string;
+  review_count: number;
+  inventory_label: string;
+  delivery_label: string;
+  show_stock: boolean;
+  images_json: ProductImage[] | null;
+  is_active: boolean;
+  is_visible: boolean;
+  is_featured: boolean;
+  is_top: boolean;
+  attributes_json: Record<string, string> | null;
+  is_heavy_value: string | null;
+  created_at: Date | string;
+  published_at: Date | string | null;
+  stock_added_at: Date | string | null;
+  last_sold_at: Date | string | null;
+  updated_at: Date | string;
+  updated_by: string;
+  translations_json: Product["translations"] | null;
+};
+
 type ProductAnalyticsLookupRow = QueryResultRow & {
   id: string;
   name: string;
@@ -176,11 +211,14 @@ let productsLookupCache: { expiresAt: number; value: Array<{ id: string; name: s
 let productsAnalyticsLookupCache:
   | { expiresAt: number; value: ProductAnalyticsLookup[] }
   | null = null;
+const PRODUCT_SUMMARIES_CACHE_TTL_MS = 120_000;
+const productSummariesCache = new Map<string, { expiresAt: number; value: Product[] }>();
 
 function clearProductsListCache() {
   productsListCache = null;
   productsLookupCache = null;
   productsAnalyticsLookupCache = null;
+  productSummariesCache.clear();
 }
 
 function trimText(value: string | undefined) {
@@ -722,6 +760,49 @@ function productSummaryRowToProduct(row: ProductSummaryRow): Product {
   });
 }
 
+function storefrontProductRowToProduct(row: StorefrontProductRow): Product {
+  const internal = normalizeInternalDetails({
+    isHeavy: row.is_heavy_value === "true",
+  });
+
+  return normalizeProduct({
+    id: row.id,
+    publicId: row.public_id,
+    displayOrder: Number(row.display_order ?? 0),
+    sku: row.sku,
+    name: row.name,
+    shortDescription: row.short_description,
+    longDescription: row.long_description,
+    brand: row.brand,
+    category: row.category,
+    tags: Array.isArray(row.tags_json) ? row.tags_json : [],
+    price: Number(row.price ?? 0),
+    originalPrice: row.original_price === null ? undefined : Number(row.original_price),
+    stock: Number(row.stock ?? 0),
+    rating: Number(row.rating ?? 0),
+    reviewCount: Number(row.review_count ?? 0),
+    inventoryLabel: row.inventory_label,
+    deliveryLabel: row.delivery_label,
+    showStock: Boolean(row.show_stock),
+    images: Array.isArray(row.images_json) ? row.images_json : [],
+    isActive: Boolean(row.is_active),
+    isVisible: Boolean(row.is_visible),
+    isFeatured: Boolean(row.is_featured),
+    isTop: Boolean(row.is_top),
+    attributes: row.attributes_json ?? {},
+    internal,
+    metrics: createProductMetrics(Number(row.price ?? 0), Number(row.stock ?? 0), 0),
+    createdAt: toIsoString(row.created_at) ?? new Date().toISOString(),
+    publishedAt: toIsoString(row.published_at),
+    stockAddedAt: toIsoString(row.stock_added_at),
+    lastSoldAt: toIsoString(row.last_sold_at),
+    saleDates: [],
+    updatedAt: toIsoString(row.updated_at) ?? new Date().toISOString(),
+    updatedBy: row.updated_by,
+    translations: row.translations_json ?? undefined,
+  });
+}
+
 async function readProductSummariesFromDatabase(options?: {
   onlyActive?: boolean;
   category?: string;
@@ -1093,8 +1174,24 @@ export async function getProductSummaries(options?: {
     return [];
   }
 
+  const cacheKey = JSON.stringify({
+    onlyActive: Boolean(options?.onlyActive),
+    category: trimText(options?.category),
+    search: trimText(options?.search).toLowerCase(),
+  });
+  const cached = productSummariesCache.get(cacheKey);
+
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.value;
+  }
+
   try {
-    return await readProductSummariesFromDatabase(options);
+    const products = await readProductSummariesFromDatabase(options);
+    productSummariesCache.set(cacheKey, {
+      expiresAt: Date.now() + PRODUCT_SUMMARIES_CACHE_TTL_MS,
+      value: products,
+    });
+    return products;
   } catch (error) {
     console.error("[products] summary read failed:", error);
     return [];
@@ -1176,6 +1273,62 @@ export async function getProductById(id: string) {
     return result.rows[0] ? productRowToProduct(result.rows[0]) : null;
   } catch (error) {
     console.error("[products] getProductById failed:", error);
+    return null;
+  }
+}
+
+export async function getStorefrontProductDetailById(id: string) {
+  if (!isProductsDatabaseConfigured()) {
+    return null;
+  }
+
+  try {
+    const pool = await getProductsPool();
+    const result = await pool.query<StorefrontProductRow>(
+      `
+        SELECT
+          id,
+          public_id,
+          display_order,
+          sku,
+          name,
+          short_description,
+          long_description,
+          brand,
+          category,
+          tags_json,
+          price,
+          original_price,
+          stock,
+          rating,
+          review_count,
+          inventory_label,
+          delivery_label,
+          show_stock,
+          images_json,
+          is_active,
+          is_visible,
+          is_featured,
+          is_top,
+          attributes_json,
+          internal_json ->> 'isHeavy' AS is_heavy_value,
+          created_at,
+          published_at,
+          stock_added_at,
+          last_sold_at,
+          updated_at,
+          updated_by,
+          translations_json
+        FROM products
+        WHERE id = $1
+        LIMIT 1
+      `,
+      [id]
+    );
+
+    return result.rows[0] ? storefrontProductRowToProduct(result.rows[0]) : null;
+  } catch (error) {
+    console.error("[products] getStorefrontProductDetailById failed:", error);
     return null;
   }
 }
