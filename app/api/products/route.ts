@@ -10,6 +10,7 @@ export const revalidate = 300;
 
 export async function GET() {
   try {
+    console.log("[api-metrics] products route called");
     const products = await getStorefrontProducts();
     const info = await getStorefrontProductsDebugInfo();
     const payload = {
@@ -21,6 +22,10 @@ export async function GET() {
     console.info(
       `[api/products] returning ${info.count} product(s) from ${info.source}`
     );
+    console.log("[api-metrics] products payload", {
+      count: products?.length ?? 0,
+      kb: Math.round(JSON.stringify(products).length / 1024),
+    });
     logApiResponseMetrics({
       endpoint: "/api/products",
       payload,

@@ -21,6 +21,7 @@ let dashboardStatsCache:
 
 export async function GET() {
   try {
+    console.log("[api-metrics] admin dashboard route called");
     const auth = await requireAdminRequestUser();
 
     if (!auth.user) {
@@ -93,6 +94,10 @@ export async function GET() {
     }
 
     const payload = { success: true, stats };
+    console.log("[api-metrics] admin dashboard payload", {
+      count: 1,
+      kb: Math.round(JSON.stringify(stats).length / 1024),
+    });
     logApiResponseMetrics({
       endpoint: "/api/admin/dashboard",
       payload,

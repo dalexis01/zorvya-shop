@@ -9,6 +9,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
   try {
+    console.log("[api-metrics] admin orders route called");
     const auth = await requireAdminRequestUser();
 
     if (!auth.user) {
@@ -55,6 +56,10 @@ export async function GET(request: Request) {
       hasMore: result.hasMore,
       nextCursor: result.nextCursor,
     };
+    console.log("[api-metrics] admin orders payload", {
+      count: result.orders?.length ?? 0,
+      kb: Math.round(JSON.stringify(result.orders).length / 1024),
+    });
     logApiResponseMetrics({
       endpoint: "/api/admin/orders",
       payload,

@@ -13,6 +13,7 @@ import { requireAdminRequestUser } from "@/lib/server/admin/request-auth";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
+  console.log("[api-metrics] admin blocks route called");
   const auth = await requireAdminRequestUser();
   if (!auth.user) return NextResponse.json({ success: false, error: auth.error }, { status: auth.status });
 
@@ -25,6 +26,10 @@ export async function GET() {
   );
   const orderRecords = orderIds.length > 0 ? await getAdminOrdersByIds(orderIds) : [];
   const payload = { success: true, blocks, orderRecords };
+  console.log("[api-metrics] admin blocks payload", {
+    count: (blocks?.length ?? 0) + (orderRecords?.length ?? 0),
+    kb: Math.round(JSON.stringify({ blocks, orderRecords }).length / 1024),
+  });
   logApiResponseMetrics({
     endpoint: "/api/admin/blocks",
     payload,
