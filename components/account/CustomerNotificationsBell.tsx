@@ -449,20 +449,20 @@ export default function CustomerNotificationsBell({
                           </div>
 
                           {hasSingleItemImage ? (
-                            <div className="flex items-start gap-3">
+                            <div className="flex items-stretch gap-3">
                               {order.itemImages.length > 0 ? (
-                                <div className="h-[5.25rem] w-[5.25rem] shrink-0 overflow-hidden rounded-[1rem] border border-white/10 bg-white/5">
+                                <div className="h-[5rem] w-[5rem] shrink-0 overflow-hidden rounded-[1rem] border border-white/10 bg-white/5">
                                   <Image
                                     src={order.itemImages[0]!}
                                     alt={`${order.id} item 1`}
-                                    width={84}
-                                    height={84}
+                                    width={80}
+                                    height={80}
                                     className="h-full w-full object-cover"
                                   />
                                 </div>
                               ) : null}
-                              <div className="min-w-0 flex-1 rounded-[1rem] border border-[#d8e4ef] bg-[#f8fbff] px-3 py-3 text-slate-900">
-                                <div className="grid grid-cols-4 gap-2">
+                              <div className="min-w-0 flex-1 rounded-[1rem] border border-[#d8e4ef] bg-[#f8fbff] px-2.5 py-2 text-slate-900 h-[5rem] flex items-center">
+                                <div className="grid w-full grid-cols-4 gap-1">
                                   {timelineLabels.map((label, index) => {
                                     const step = timelineState.step;
                                     const isCompleted = index <= step;
@@ -479,7 +479,7 @@ export default function CustomerNotificationsBell({
                                             />
                                           ) : null}
                                           <span
-                                            className={`relative z-10 flex h-8 w-8 items-center justify-center rounded-full border text-[12px] font-semibold ${
+                                            className={`relative z-10 flex h-7 w-7 items-center justify-center rounded-full border text-[11px] font-semibold ${
                                               isCompleted
                                                 ? isCurrent && step === 2
                                                   ? "border-[#1d4ed8] bg-[#1d4ed8] text-white"
@@ -491,7 +491,7 @@ export default function CustomerNotificationsBell({
                                           </span>
                                         </div>
                                         <p
-                                          className={`mt-2 text-[11px] font-semibold leading-4 ${
+                                          className={`mt-1.5 text-[9px] font-semibold leading-[1.1] tracking-[-0.01em] ${
                                             isCompleted
                                               ? isCurrent && step === 2
                                                 ? "text-[#1d4ed8]"
@@ -550,7 +550,7 @@ export default function CustomerNotificationsBell({
                                         />
                                       ) : null}
                                       <span
-                                        className={`relative z-10 flex h-8 w-8 items-center justify-center rounded-full border text-[12px] font-semibold ${
+                                        className={`relative z-10 flex h-7 w-7 items-center justify-center rounded-full border text-[11px] font-semibold ${
                                           isCompleted
                                             ? isCurrent && step === 2
                                               ? "border-[#1d4ed8] bg-[#1d4ed8] text-white"
@@ -562,7 +562,7 @@ export default function CustomerNotificationsBell({
                                       </span>
                                     </div>
                                     <p
-                                      className={`mt-2 text-[11px] font-semibold leading-4 ${
+                                      className={`mt-1.5 text-[10px] font-semibold leading-[1.15] ${
                                         isCompleted
                                           ? isCurrent && step === 2
                                             ? "text-[#1d4ed8]"
@@ -586,12 +586,6 @@ export default function CustomerNotificationsBell({
                               {order.lastMessage ?? latestMessageByOrderId.get(order.id)}
                             </p>
                           ) : null}
-                          <div className="flex items-center justify-end gap-3">
-                            <span className="text-[12px] font-medium text-slate-200">
-                              {order.estimatedDateText ??
-                                (order.deliveryType === "pickup" ? t.pickupFor : order.status)}
-                            </span>
-                          </div>
                               </>
                             );
                           })()}
