@@ -360,7 +360,7 @@ export default function CustomerNotificationsBell({
       </button>
 
       {panelOpen ? (
-        <div className="customer-notification-panel customer-notification-panel--bot absolute left-0 top-[calc(100%+0.7rem)] z-[85] w-[min(92vw,24rem)] overflow-hidden rounded-[1.45rem] border border-cyan-400/20 text-white shadow-[0_24px_80px_rgba(0,0,0,0.46)] backdrop-blur-xl md:left-auto md:right-0">
+        <div className="customer-notification-panel customer-notification-panel--bot absolute right-0 top-[calc(100%+0.7rem)] z-[85] w-[min(calc(100vw-1rem),24rem)] overflow-hidden rounded-[1.45rem] border border-cyan-400/20 text-white shadow-[0_24px_80px_rgba(0,0,0,0.46)] backdrop-blur-xl md:w-[min(92vw,24rem)]">
           <div className="customer-notification-panel__scroll max-h-[min(72vh,34rem)] overflow-y-auto px-4 py-3">
             {loading ? (
               <div className="px-2 py-5 text-center text-sm text-slate-300">

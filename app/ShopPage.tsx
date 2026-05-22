@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import {
   Fragment,
   useCallback,
@@ -152,7 +153,7 @@ function CatalogPromoBanner({
   initialIndex = 0,
 }: {
   products: StorefrontProduct[];
-  onOpen: (product: StorefrontProduct) => void;
+  onOpen?: (product: StorefrontProduct) => void;
   initialIndex?: number;
 }) {
   const [activeIndex, setActiveIndex] = useState(
@@ -179,13 +180,8 @@ function CatalogPromoBanner({
     return null;
   }
 
-  return (
-    <article className="relative col-span-2 row-span-2 overflow-hidden rounded-[1.15rem] border border-rose-400/40 bg-[#050816] shadow-[0_18px_50px_rgba(2,6,23,0.46)] sm:rounded-[1.35rem] md:col-span-2 lg:col-span-2 xl:col-span-2">
-      <button
-        type="button"
-        onClick={() => onOpen(activeProduct)}
-        className="relative block h-full min-h-[16.5rem] w-full overflow-hidden text-left sm:min-h-[19rem] lg:min-h-[20rem]"
-      >
+  const bannerContent = (
+    <>
         {products.map((product, index) => {
           const isActive = index === activeIndex;
 
@@ -225,7 +221,28 @@ function CatalogPromoBanner({
             />
           ))}
         </div>
-      </button>
+    </>
+  );
+
+  return (
+    <article className="relative col-span-2 row-span-2 overflow-hidden rounded-[1.15rem] border border-rose-400/40 bg-[#050816] shadow-[0_18px_50px_rgba(2,6,23,0.46)] sm:rounded-[1.35rem] md:col-span-2 lg:col-span-2 xl:col-span-2">
+      {onOpen ? (
+        <button
+          type="button"
+          onClick={() => onOpen(activeProduct)}
+          className="relative block h-full min-h-[16.5rem] w-full overflow-hidden text-left sm:min-h-[19rem] lg:min-h-[20rem]"
+        >
+          {bannerContent}
+        </button>
+      ) : (
+        <Link
+          href={`/products/${activeProduct.id}`}
+          prefetch={false}
+          className="relative block h-full min-h-[16.5rem] w-full overflow-hidden text-left sm:min-h-[19rem] lg:min-h-[20rem]"
+        >
+          {bannerContent}
+        </Link>
+      )}
     </article>
   );
 }
@@ -2585,13 +2602,13 @@ export default function ShopPage({
                       product={product}
                       deliveryEstimateText={deliveryEstimateText}
                       onAdd={addToCart}
-                      onOpen={openProduct}
+                      onOpen={isCompactViewport ? undefined : openProduct}
                     />
                     {mobilePromoInsertionIndexes.has(index) && catalogPromoProducts.length > 0 ? (
                       <div className="col-span-2 md:hidden">
                         <CatalogPromoBanner
                           products={catalogPromoProducts}
-                          onOpen={openProduct}
+                          onOpen={isCompactViewport ? undefined : openProduct}
                           initialIndex={index}
                         />
                       </div>

@@ -148,7 +148,7 @@ function ProductCard({
           <button
             type="button"
             onClick={openProduct}
-            className="block h-[56%] min-h-0 w-full shrink-0 text-left sm:h-[55%]"
+            className="block h-[62%] min-h-0 w-full shrink-0 text-left sm:h-[60%]"
           >
             <div className={`relative h-full overflow-hidden border-b border-slate-800 ${styles.mediaShell}`}>
               <div className="absolute left-2 top-2 z-[2] sm:hidden">
@@ -164,7 +164,7 @@ function ProductCard({
           <Link
             href={`/products/${product.id}`}
             prefetch={false}
-            className="block h-[56%] min-h-0 w-full shrink-0 sm:h-[55%]"
+            className="block h-[62%] min-h-0 w-full shrink-0 sm:h-[60%]"
           >
             <div className={`relative h-full overflow-hidden border-b border-slate-800 ${styles.mediaShell}`}>
               <div className="absolute left-2 top-2 z-[2] sm:hidden">
@@ -178,21 +178,21 @@ function ProductCard({
           </Link>
         )}
 
-        <div className="flex min-h-0 flex-1 flex-col gap-0.5 p-1.5 pt-1 sm:gap-1.5 sm:p-2.5 sm:pt-2">
-          <div className="flex min-h-0 flex-1 items-end justify-between gap-1.5 sm:gap-2.5">
+        <div className="flex min-h-0 flex-1 flex-col gap-0 p-1.5 pt-0.5 sm:gap-1 sm:p-[0.55rem] sm:pt-1">
+          <div className="flex min-h-0 flex-1 items-end justify-between gap-1.5 sm:gap-2">
             <div className="min-w-0 flex-1">
-              <div className="mb-1 hidden sm:block">
+              <div className="mb-0.5 hidden sm:block">
                 <DeliveryEstimateBadge
                   text={deliveryEstimateText || t.localWarehouse}
                   className="max-w-full"
                 />
               </div>
 
-              <div className="space-y-0.5">
+              <div className="space-y-0">
                 {useOverlay ? (
                   <button type="button" onClick={openProduct} className="block w-full text-left">
                     <h3
-                      className={`${styles.title} line-clamp-2 text-[11.5px] leading-[1.18] transition hover:text-cyan-100 sm:text-[13.5px]`}
+                      className={`${styles.title} line-clamp-2 text-[11.5px] leading-[1.14] transition hover:text-cyan-100 sm:text-[13.5px]`}
                     >
                       {product.name}
                     </h3>
@@ -200,14 +200,14 @@ function ProductCard({
                 ) : (
                   <Link href={`/products/${product.id}`} prefetch={false} className="block">
                     <h3
-                      className={`${styles.title} line-clamp-2 text-[11.5px] leading-[1.18] transition hover:text-cyan-100 sm:text-[13.5px]`}
+                      className={`${styles.title} line-clamp-2 text-[11.5px] leading-[1.14] transition hover:text-cyan-100 sm:text-[13.5px]`}
                     >
                       {product.name}
                     </h3>
                   </Link>
                 )}
 
-                <div className="flex items-center gap-1.5">
+                <div className="flex items-center gap-1.5 pt-0.5">
                   <span className="block max-w-full overflow-hidden text-[12px] leading-none tracking-[0.04em] text-amber-400 sm:text-[13px]">
                     {reviewStars}
                   </span>
@@ -219,7 +219,7 @@ function ProductCard({
                 </div>
               </div>
 
-              <div className="mt-0.5">
+              <div className="mt-0">
                 <div className={styles.priceScene}>
                   <div className={`${styles.priceCube} ${styles.priceCubeMobile}`}>
                     <span className={`${styles.price} ${styles.priceSideTop} text-[14px] leading-none sm:text-[17px]`}>
