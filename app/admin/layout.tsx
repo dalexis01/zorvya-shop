@@ -230,6 +230,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 <Link
                   key={item.href}
                   href={item.href}
+                  prefetch={false}
                   className={`relative flex items-center rounded-xl px-3 py-2.5 transition ${
                     isActive(item.href)
                       ? "border border-cyan-500/40 bg-cyan-400/10 text-white"
