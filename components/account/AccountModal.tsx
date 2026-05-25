@@ -1140,11 +1140,11 @@ export default function AccountModal({
           </div>
         ) : user ? (
           <div className="flex min-h-0 flex-1 flex-col gap-6">
-            <div className="grid grid-cols-2 items-center gap-2 sm:flex sm:flex-wrap sm:justify-start">
+            <div className="account-toolbar flex flex-wrap items-center gap-x-3 gap-y-2 sm:gap-x-2 sm:gap-y-2">
               <button
                 type="button"
                 onClick={() => setActiveTab("orders")}
-                className={`account-option-button w-full sm:w-auto ${
+                className={`account-option-button account-toolbar__button ${
                   activeTab === "orders" ? "account-option-button--active" : ""
                 }`}
               >
@@ -1156,7 +1156,7 @@ export default function AccountModal({
                   onClick={() => setLanguageMenuOpen((current) => !current)}
                   aria-expanded={languageMenuOpen}
                   aria-haspopup="menu"
-                  className="account-option-button w-full sm:w-auto"
+                  className="account-option-button account-toolbar__button"
                 >
                   {t.languages}
                 </button>
@@ -1182,7 +1182,7 @@ export default function AccountModal({
               <button
                 type="button"
                 onClick={() => setActiveTab("profile")}
-                className={`account-option-button w-full sm:w-auto ${
+                className={`account-option-button account-toolbar__button ${
                   activeTab === "profile" ? "account-option-button--active" : ""
                 }`}
               >
@@ -1192,7 +1192,7 @@ export default function AccountModal({
                 href="/terms"
                 target="_blank"
                 rel="noreferrer"
-                className="account-option-button w-full text-center sm:w-auto"
+                className="account-option-button account-toolbar__button text-center"
               >
                 {t.termsButton}
               </Link>
@@ -1200,11 +1200,11 @@ export default function AccountModal({
                 type="button"
                 onClick={() => void handleLogout()}
                 disabled={submitting}
-                className="account-option-button account-option-button--danger w-full sm:w-auto"
+                className="account-option-button account-toolbar__button account-option-button--danger"
               >
                 {t.logout}
               </button>
-              <div className="col-span-2 flex justify-center sm:col-auto sm:justify-start">
+              <div className="flex items-center justify-center sm:justify-start">
                 <label className="account-theme-switch" title={t.themeLabel}>
                   <input
                     type="checkbox"

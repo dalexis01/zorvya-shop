@@ -1055,6 +1055,51 @@ html[data-client-theme="light"] .storefront-cosmic-button {
   transform: none;
 }
 
+.account-toolbar {
+  align-content: flex-start;
+}
+
+.account-toolbar__button {
+  width: auto;
+  flex: 0 0 auto;
+}
+
+@media (max-width: 767px) {
+  .account-toolbar {
+    gap: 0.35rem 0.8rem;
+  }
+
+  .account-toolbar__button {
+    min-height: auto;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    font-size: 0.8rem;
+    font-weight: 600;
+    letter-spacing: 0;
+    line-height: 1.2;
+    color: rgb(226 232 240 / 0.84);
+  }
+
+  .account-toolbar__button:hover,
+  .account-toolbar__button:focus-visible,
+  .account-toolbar__button:active {
+    background: transparent;
+    box-shadow: none;
+    transform: none;
+  }
+
+  .account-toolbar__button.account-option-button--active,
+  .account-toolbar__button.account-option-button--primary,
+  .account-toolbar__button.account-option-button--danger {
+    background: transparent;
+    color: #fff;
+    box-shadow: none;
+  }
+}
+
 .account-auth-submit {
   width: 100%;
   border: none;
