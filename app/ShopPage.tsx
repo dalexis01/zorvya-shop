@@ -59,7 +59,7 @@ import {
   isCartEntryPayable,
 } from "@/lib/shop/product-stock";
 import { ACCEPTED_IMAGE_TYPES, imageFileToDataUrl } from "@/lib/shop/image-upload";
-import { localizeProduct } from "@/lib/shop/product-localization";
+import { getProductSearchText, localizeProduct } from "@/lib/shop/product-localization";
 import type { HomepageSettings, SupportMessage } from "@/lib/shop/admin-types";
 import type {
   CatalogProductOption,
@@ -531,21 +531,7 @@ function translateStaticText(value: string, locale: Locale) {
 }
 
 function buildProductSearchBlob(product: StorefrontProduct) {
-  return normalizeText(
-    [
-      product.name,
-      product.shortDescription,
-      product.longDescription,
-      product.brand,
-      product.category,
-      product.inventoryLabel,
-      product.deliveryLabel,
-      product.badge,
-      ...product.tags,
-      ...product.colors,
-      ...product.variants.flatMap((variant) => [variant.name, variant.details, variant.color]),
-    ].join(" ")
-  );
+  return normalizeText(getProductSearchText(product));
 }
 
 function getSuggestionIcon(kind: SearchSuggestion["kind"]) {

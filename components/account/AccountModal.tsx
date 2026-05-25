@@ -59,6 +59,12 @@ type CachedAccountOrders = {
 
 const ACCOUNT_ORDERS_CACHE_TTL_MS = 60_000;
 const accountOrdersCache = new Map<string, CachedAccountOrders>();
+const LANGUAGE_OPTIONS: Array<{ locale: Locale; flag: string; label: string }> = [
+  { locale: "es", flag: "🇪🇸", label: "Espanol" },
+  { locale: "nl", flag: "🇳🇱", label: "Nederlands" },
+  { locale: "en", flag: "🇺🇸", label: "English" },
+  { locale: "pt", flag: "🇧🇷", label: "Portugues" },
+];
 
 function getCachedAccountOrders(userId: string) {
   return accountOrdersCache.get(userId) ?? null;
@@ -1160,22 +1166,29 @@ export default function AccountModal({
                 >
                   {t.languages}
                 </button>
-                {languageMenuOpen ? (
+{languageMenuOpen ? (
                   <div className="absolute left-0 right-0 top-[calc(100%+0.55rem)] z-10 min-w-[10rem] overflow-hidden rounded-2xl border border-slate-700 bg-[#0f1b2e] p-1.5 shadow-[0_18px_50px_rgba(0,0,0,0.38)] sm:left-0 sm:right-auto">
-                    {(["es", "nl", "en", "pt"] as Locale[]).map((language) => (
-                      <button
-                        key={language}
-                        type="button"
-                        onClick={() => handleLocaleSelect(language)}
-                        className={`account-option-button flex w-full items-center justify-between px-3 ${
-                          accountLocale === language ? "account-option-button--active" : ""
-                        }`}
-                        aria-label={`${t.languages}: ${language}`}
-                      >
-                        <span>{language}</span>
-                        {accountLocale === language ? <span>•</span> : null}
-                      </button>
-                    ))}
+                    {LANGUAGE_OPTIONS.map(({ locale: language, flag, label }) => {
+                      const isActiveLanguage = accountLocale === language;
+
+                      return (
+                        <button
+                          key={language}
+                          type="button"
+                          onClick={() => handleLocaleSelect(language)}
+                          className={`account-option-button flex w-full items-center justify-between px-3 ${
+                            isActiveLanguage ? "account-option-button--active" : ""
+                          }`}
+                          aria-label={`${t.languages}: ${label}`}
+                        >
+                          <span className="flex items-center gap-2">
+                            <span aria-hidden="true">{flag}</span>
+                            <span>{language}</span>
+                          </span>
+                          {isActiveLanguage ? <span aria-hidden="true">•</span> : null}
+                        </button>
+                      );
+                    })}
                   </div>
                 ) : null}
               </div>
