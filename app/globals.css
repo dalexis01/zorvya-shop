@@ -2830,6 +2830,11 @@ html[data-client-theme="light"] .meteor {
   flex: 0 0 auto;
 }
 
+.cart-control-icon--close {
+  width: 1.05rem;
+  height: 1.05rem;
+}
+
 .cart-control-badge {
   box-sizing: border-box;
   display: inline-flex;
@@ -2873,6 +2878,11 @@ html[data-client-theme="light"] .meteor {
     background-color 0.2s ease,
     color 0.2s ease,
     box-shadow 0.2s ease;
+}
+
+.cart-control-btn--close {
+  width: 2rem;
+  height: 2rem;
 }
 
 .cart-control-btn:hover {

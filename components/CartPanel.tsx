@@ -430,7 +430,7 @@ export default function CartPanel({
           style={cartPanelStyle}
         >
           <div className="flex items-center justify-between border-b border-slate-800 bg-[#03050f]/92 px-3 py-3 sm:px-5 sm:py-4">
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2.5 sm:gap-3">
               <span className="cart-control-badge cart-control-badge--cart">
                 <svg
                   viewBox="0 0 24 24"
@@ -446,16 +446,6 @@ export default function CartPanel({
                   <path d="M3 4h2l2.4 10.2a1 1 0 0 0 1 .8h8.7a1 1 0 0 0 1-.8L21 7H7" />
                 </svg>
               </span>
-              {sharedMode ? (
-                <div>
-                  <p className="text-xs font-semibold text-white sm:text-sm">{sharedFromName || t.share}</p>
-                  <p className="text-[10px] uppercase tracking-[0.16em] text-slate-500 sm:text-[11px]">
-                    {t.share}
-                  </p>
-                </div>
-              ) : null}
-            </div>
-            <div className="flex items-center gap-1.5 sm:gap-2">
               {!sharedMode ? (
                 <div className="group relative">
                   <button
@@ -484,16 +474,26 @@ export default function CartPanel({
                   </span>
                 </div>
               ) : null}
+              {sharedMode ? (
+                <div>
+                  <p className="text-xs font-semibold text-white sm:text-sm">{sharedFromName || t.share}</p>
+                  <p className="text-[10px] uppercase tracking-[0.16em] text-slate-500 sm:text-[11px]">
+                    {t.share}
+                  </p>
+                </div>
+              ) : null}
+            </div>
+            <div className="flex items-center gap-1.5 sm:gap-2">
               <button
                 type="button"
                 onClick={onClose}
                 onPointerDown={(event) => event.stopPropagation()}
-                className="cart-control-btn cart-control-btn--ghost"
+                className="cart-control-btn cart-control-btn--ghost cart-control-btn--close"
                 aria-label={t.close}
               >
                 <svg
                   viewBox="0 0 24 24"
-                  className="cart-control-icon"
+                  className="cart-control-icon cart-control-icon--close"
                   fill="none"
                   stroke="currentColor"
                   strokeWidth="2.2"
