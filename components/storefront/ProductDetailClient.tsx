@@ -903,8 +903,14 @@ function ProductDetailClient({
           </div>
         ) : null}
 
-        <div className="lg:hidden">
+        <div className="space-y-2 lg:hidden">
           <h1 className="text-3xl font-semibold tracking-tight text-white">{product.name}</h1>
+          <div className="flex items-center gap-2 text-sm text-slate-300">
+            <span className="text-amber-300">{createStars(averageRating)}</span>
+            <span>
+              {formatGroupedNumber(averageRating, 1)} · {reviewCount} {t.reviews}
+            </span>
+          </div>
         </div>
 
         <section className={`grid items-start gap-5 lg:grid-cols-[0.35fr_1.18fr_0.82fr] ${compact ? "mt-3" : "mt-5 lg:mt-6"}`}>
@@ -1026,11 +1032,49 @@ function ProductDetailClient({
             <div>
               <h1 className="hidden text-3xl font-semibold tracking-tight text-white lg:block">{product.name}</h1>
               {selectedModel?.details ? (
-                <p className="mt-2 text-sm leading-6 text-slate-300">{selectedModel.details}</p>
+                <p className="mt-2 hidden text-sm leading-6 text-slate-300 lg:block">{selectedModel.details}</p>
               ) : null}
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
+            <div className="space-y-3 lg:hidden">
+              <div className="rounded-[1.75rem] border border-slate-800 bg-[#0a1020] p-4">
+                <p className="text-xs uppercase tracking-[0.22em] text-slate-500">{t.price}</p>
+                <p className="mt-2 text-3xl font-semibold text-white">{formatCurrency(activePrice)}</p>
+                {product.originalPrice ? (
+                  <p className="mt-1 text-sm text-slate-500 line-through">
+                    {formatCurrency(product.originalPrice)}
+                  </p>
+                ) : null}
+
+                <div className="mt-4 flex flex-wrap items-center gap-2">
+                  {product.hasFreeDelivery ? (
+                    <span className="rounded-full border border-emerald-400/30 bg-emerald-500/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-200">
+                      {product.deliveryLabel}
+                    </span>
+                  ) : null}
+                </div>
+
+                <div className="mt-4">
+                  <div className="product-action-shell w-full">
+                    <button
+                      type="button"
+                      onClick={() => addToCart(product)}
+                      className="product-action-button w-full"
+                    >
+                      {t.addToCart}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {selectedModel?.details ? (
+                <div className="rounded-[1.75rem] border border-slate-800 bg-[#0a1020] p-4">
+                  <p className="text-sm leading-6 text-slate-300">{selectedModel.details}</p>
+                </div>
+              ) : null}
+            </div>
+
+            <div className="hidden gap-3 lg:grid sm:grid-cols-[1fr_auto]">
               <div className="grid gap-3 sm:grid-cols-2">
                 <button
                   type="button"
