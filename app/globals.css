@@ -869,10 +869,10 @@ html[data-client-theme="light"] .storefront-cosmic-button {
   }
 
   .product-action-button {
-    min-height: 3.1rem;
-    padding: 1rem 1.45rem;
-    font-size: 11px;
-    letter-spacing: 0.16em;
+    min-height: 2.9rem;
+    padding: 0.9rem 1.1rem;
+    font-size: 10px;
+    letter-spacing: 0.08em;
   }
 }
 

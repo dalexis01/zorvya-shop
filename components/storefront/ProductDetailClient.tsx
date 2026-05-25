@@ -896,15 +896,15 @@ function ProductDetailClient({
         </div>
       </header>
 
-      <div className={`w-full px-4 lg:px-6 2xl:px-8 ${compact ? "py-5" : "py-8"}`}>
+      <div className={`w-full overflow-x-hidden px-4 lg:px-6 2xl:px-8 ${compact ? "py-5" : "py-8"}`}>
         {notice ? (
           <div className="rounded-[1.5rem] border border-emerald-500/20 bg-emerald-500/10 px-5 py-4 text-sm text-emerald-100">
             {notice}
           </div>
         ) : null}
 
-        <div className="space-y-2 lg:hidden">
-          <h1 className="text-3xl font-semibold tracking-tight text-white">{product.name}</h1>
+        <div className="min-w-0 space-y-2 lg:hidden">
+          <h1 className="break-words text-[1.7rem] font-semibold tracking-tight text-white">{product.name}</h1>
           <div className="flex items-center gap-2 text-sm text-slate-300">
             <span className="text-amber-300">{createStars(averageRating)}</span>
             <span>
@@ -913,10 +913,10 @@ function ProductDetailClient({
           </div>
         </div>
 
-        <section className={`grid items-start gap-5 lg:grid-cols-[0.35fr_1.18fr_0.82fr] ${compact ? "mt-3" : "mt-5 lg:mt-6"}`}>
+        <section className={`grid min-w-0 items-start gap-5 lg:grid-cols-[0.35fr_1.18fr_0.82fr] ${compact ? "mt-3" : "mt-5 lg:mt-6"}`}>
           {/* Panel lateral izquierdo - Productos similares */}
           {filteredRecommended.length > 0 || recommendedSearch ? (
-            <div className="order-3 h-fit rounded-[2.25rem] border border-slate-800 bg-[#050816] p-4 shadow-[0_24px_80px_rgba(0,0,0,0.35)] lg:order-1">
+            <div className="order-3 min-w-0 h-fit rounded-[2.25rem] border border-slate-800 bg-[#050816] p-4 shadow-[0_24px_80px_rgba(0,0,0,0.35)] lg:order-1">
               <p className="text-xs uppercase tracking-[0.3em] text-cyan-300 font-semibold">{t.recommended}</p>
               <div className="mt-4 rounded-full border border-slate-800 bg-[#0a1020] px-3 py-2">
                 <div className="flex items-center gap-2.5">
@@ -978,11 +978,11 @@ function ProductDetailClient({
           ) : null}
 
           {/* Sección central - Imágenes del producto */}
-          <div className="order-1 space-y-4 lg:order-2">
+          <div className="order-1 min-w-0 space-y-4 lg:order-2">
             <div className="relative overflow-hidden rounded-[2.25rem] border border-slate-800 bg-[#050816] shadow-[0_24px_80px_rgba(0,0,0,0.35)]">
               {activeImage ? (
                 <button type="button" onClick={() => setLightboxOpen(true)} className="block w-full">
-                    <div className="relative aspect-[5/4] min-h-[20rem] w-full sm:min-h-[24rem] lg:min-h-[31rem]">
+                    <div className="relative aspect-[5/4] min-h-[16.5rem] w-full sm:min-h-[24rem] lg:min-h-[31rem]">
                       <StorefrontImage
                         src={activeImage}
                         alt={product.name}
@@ -1028,11 +1028,11 @@ function ProductDetailClient({
           </div>
 
           {/* Sección derecha - Información del producto */}
-          <div className="order-2 space-y-4 rounded-[2.25rem] border border-transparent bg-transparent p-0 shadow-none lg:order-3 lg:border-slate-800 lg:bg-[#050816] lg:p-5 lg:shadow-[0_24px_80px_rgba(0,0,0,0.35)]">
-            <div>
+          <div className="order-2 min-w-0 space-y-4 rounded-[2.25rem] border border-transparent bg-transparent p-0 shadow-none lg:order-3 lg:border-slate-800 lg:bg-[#050816] lg:p-5 lg:shadow-[0_24px_80px_rgba(0,0,0,0.35)]">
+            <div className="min-w-0">
               <h1 className="hidden text-3xl font-semibold tracking-tight text-white lg:block">{product.name}</h1>
               {selectedModel?.details ? (
-                <p className="mt-2 hidden text-sm leading-6 text-slate-300 lg:block">{selectedModel.details}</p>
+                <p className="mt-2 hidden break-words text-sm leading-6 text-slate-300 lg:block">{selectedModel.details}</p>
               ) : null}
             </div>
 
@@ -1069,7 +1069,7 @@ function ProductDetailClient({
 
               {selectedModel?.details ? (
                 <div className="rounded-[1.75rem] border border-slate-800 bg-[#0a1020] p-4">
-                  <p className="text-sm leading-6 text-slate-300">{selectedModel.details}</p>
+                  <p className="break-words text-sm leading-6 text-slate-300">{selectedModel.details}</p>
                 </div>
               ) : null}
             </div>
