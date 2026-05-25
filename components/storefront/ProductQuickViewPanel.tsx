@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
 import DeliveryEstimateBadge from "@/components/storefront/DeliveryEstimateBadge";
@@ -23,6 +24,8 @@ type RelatedProductEntry = {
 
 const texts = {
   es: {
+    back: "Volver atras",
+    home: "Volver al inicio",
     close: "Cerrar",
     addToCart: "Agregar al carro",
     modelLabel: "Modelos disponibles",
@@ -52,6 +55,8 @@ const texts = {
     seeMore: "Ver mas",
   },
   nl: {
+    back: "Terug",
+    home: "Terug naar home",
     close: "Sluiten",
     addToCart: "Toevoegen",
     modelLabel: "Beschikbare modellen",
@@ -81,6 +86,8 @@ const texts = {
     seeMore: "Meer zien",
   },
   en: {
+    back: "Back",
+    home: "Back to home",
     close: "Close",
     addToCart: "Add to cart",
     modelLabel: "Available models",
@@ -110,6 +117,8 @@ const texts = {
     seeMore: "See more",
   },
   pt: {
+    back: "Voltar",
+    home: "Voltar ao inicio",
     close: "Fechar",
     addToCart: "Adicionar ao carrinho",
     modelLabel: "Modelos disponiveis",
@@ -301,6 +310,7 @@ export default function ProductQuickViewPanel({
   ) => void;
   initialSelection?: QuickViewSelection;
 }) {
+  const router = useRouter();
   const t = texts[locale];
   const [isCompactViewport, setIsCompactViewport] = useState(false);
   const relatedVisibleLimit = isCompactViewport ? 8 : 4;
@@ -377,6 +387,10 @@ export default function ProductQuickViewPanel({
   }, [product, t.currentModel]);
 
   const selectedModel = modelOptions.find((entry) => entry.id === selectedModelId) ?? modelOptions[0];
+  const displayModelOptions = useMemo(
+    () => modelOptions.filter((entry) => !entry.isBase),
+    [modelOptions]
+  );
   const availableColors = useMemo(() => {
     const colors = new Set(product.colors.filter(Boolean));
 
@@ -388,6 +402,10 @@ export default function ProductQuickViewPanel({
 
     return Array.from(colors);
   }, [modelOptions, product.colors]);
+  const displayColors = useMemo(
+    () => availableColors.filter(Boolean),
+    [availableColors]
+  );
   const colorImage = useMemo(() => {
     if (!selectedColor) {
       return "";
@@ -621,17 +639,39 @@ export default function ProductQuickViewPanel({
       <div className="absolute inset-0 flex items-center justify-center p-2 sm:p-5 lg:p-6">
         <div className="relative z-10 flex max-h-[96dvh] w-full max-w-[min(100vw-0.75rem,86rem)] flex-col overflow-hidden rounded-[1.6rem] border border-slate-800 bg-[#02030a] shadow-[0_32px_120px_rgba(0,0,0,0.55)] sm:rounded-[2rem] lg:h-[min(90dvh,48rem)] [transform:translateZ(0)]">
           <div className="flex items-center justify-between border-b border-slate-800 bg-[#030611]/85 px-4 py-3 sm:px-5" style={{ WebkitBackdropFilter: "blur(24px)", backdropFilter: "blur(24px)" }}>
-            <div className="min-w-0">
+            <button
+              type="button"
+              onClick={() => onClose(currentSelection)}
+              className="inline-flex h-9 items-center justify-center rounded-full border border-slate-700 bg-[#0a1020] px-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-300 transition hover:border-cyan-500 hover:text-white"
+            >
+              {t.back}
+            </button>
+            <div className="min-w-0 flex-1 px-3">
               <h2 className="truncate text-base font-semibold text-white sm:text-lg">{product.name}</h2>
               <p className="mt-1 text-xs uppercase tracking-[0.2em] text-slate-500">{product.category}</p>
             </div>
             <button
               type="button"
-              onClick={() => onClose(currentSelection)}
+              onClick={() => {
+                onClose(currentSelection);
+                router.push("/");
+              }}
               className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-700 bg-[#0a1020] text-sm font-semibold text-slate-300 transition hover:border-cyan-500 hover:text-white"
-              aria-label={t.close}
+              aria-label={t.home}
+              title={t.home}
             >
-              X
+              <svg
+                viewBox="0 0 24 24"
+                aria-hidden="true"
+                className="h-4 w-4"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.9"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 10.5 12 3l9 7.5" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5.5 9.5V20h13V9.5" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9.5 20v-5.5h5V20" />
+              </svg>
             </button>
           </div>
 
@@ -818,13 +858,16 @@ export default function ProductQuickViewPanel({
                   ) : null}
                 </div>
 
+                {(displayModelOptions.length > 0 || displayColors.length > 0) ? (
                 <div className="rounded-[1.5rem] border border-slate-800 bg-[#050816] p-2.5 lg:mt-auto lg:flex-none">
+                  {displayModelOptions.length > 0 ? (
+                  <>
                   <div className="flex items-center justify-between gap-3">
                     <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">{t.modelLabel}</p>
-                    <p className="text-xs text-slate-500">{modelOptions.length}</p>
+                    <p className="text-xs text-slate-500">{displayModelOptions.length}</p>
                   </div>
                   <div className="mt-2 flex flex-wrap gap-1.5">
-                    {modelOptions.map((model) => (
+                    {displayModelOptions.map((model) => (
                       <button
                         key={model.id}
                         type="button"
@@ -847,11 +890,13 @@ export default function ProductQuickViewPanel({
                       </button>
                     ))}
                   </div>
-                  {availableColors.length > 0 ? (
-                    <div className="mt-2.5 border-t border-slate-800/85 pt-2.5">
+                  </>
+                  ) : null}
+                  {displayColors.length > 0 ? (
+                    <div className={`${displayModelOptions.length > 0 ? "mt-2.5 border-t border-slate-800/85 pt-2.5" : ""}`}>
                       <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">{t.colorLabel}</p>
                       <div className="mt-2 flex flex-wrap gap-1.5">
-                        {availableColors.map((color) => (
+                        {displayColors.map((color) => (
                           <button
                             key={color}
                             type="button"
@@ -870,6 +915,7 @@ export default function ProductQuickViewPanel({
                     </div>
                   ) : null}
                 </div>
+                ) : null}
               </div>
             </div>
           </div>

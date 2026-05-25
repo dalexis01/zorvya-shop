@@ -35,6 +35,7 @@ const CartPanel = dynamic(() => import("@/components/CartPanel"));
 const texts = {
   es: {
     back: "Volver a la tienda",
+    home: "Volver al inicio",
     comments: "Comentarios reales",
     leaveComment: "Dejar comentario",
     name: "Nombre",
@@ -69,6 +70,7 @@ const texts = {
   },
   nl: {
     back: "Terug naar de shop",
+    home: "Terug naar home",
     comments: "Echte reacties",
     leaveComment: "Reactie plaatsen",
     name: "Naam",
@@ -103,6 +105,7 @@ const texts = {
   },
   en: {
     back: "Back to store",
+    home: "Back to home",
     comments: "Real comments",
     leaveComment: "Leave a comment",
     name: "Name",
@@ -137,6 +140,7 @@ const texts = {
   },
   pt: {
     back: "Voltar para a loja",
+    home: "Voltar ao inicio",
     comments: "Comentarios reais",
     leaveComment: "Deixar comentario",
     name: "Nome",
@@ -589,6 +593,10 @@ function ProductDetailClient({
   ]);
   const selectedModel =
     modelOptions.find((model) => model.id === selectedModelId) ?? modelOptions[0];
+  const displayModelOptions = useMemo(
+    () => modelOptions.filter((model) => !model.isBase),
+    [modelOptions]
+  );
   const availableColors = useMemo(() => {
     const colors = new Set(product.colors.map((color) => normalizeOption(color)).filter(Boolean));
 
@@ -600,6 +608,10 @@ function ProductDetailClient({
 
     return Array.from(colors);
   }, [modelOptions, product.colors]);
+  const displayColors = useMemo(
+    () => availableColors.filter(Boolean),
+    [availableColors]
+  );
   const colorImage = useMemo(() => {
     if (!selectedColor) {
       return "";
@@ -830,7 +842,28 @@ function ProductDetailClient({
             {t.back}
           </button>
 
-          <div className="hidden items-center gap-2 lg:flex">
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => router.push("/")}
+              className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-700 bg-[#0a1020] text-slate-300 transition hover:border-cyan-500 hover:text-white"
+              aria-label={t.home}
+              title={t.home}
+            >
+              <svg
+                viewBox="0 0 24 24"
+                aria-hidden="true"
+                className="h-4 w-4"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.9"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 10.5 12 3l9 7.5" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5.5 9.5V20h13V9.5" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9.5 20v-5.5h5V20" />
+              </svg>
+            </button>
+            <div className="hidden items-center gap-2 lg:flex">
             <label className="theme-switch" aria-label={t.themeAria}>
               <span className="sun">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
@@ -892,6 +925,7 @@ function ProductDetailClient({
             >
               {t.support}
             </button>
+            </div>
           </div>
         </div>
       </header>
@@ -1119,16 +1153,17 @@ function ProductDetailClient({
               </div>
             </div>
 
+            {displayModelOptions.length > 0 ? (
             <div className="rounded-[1.75rem] border border-slate-800 bg-[#0a1020] p-5">
               <div className="flex items-center justify-between gap-3">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
                   {t.modelLabel}
                 </p>
-                <p className="text-xs text-slate-500">{modelOptions.length}</p>
+                <p className="text-xs text-slate-500">{displayModelOptions.length}</p>
               </div>
 
               <div className="mt-4 grid gap-3">
-                {modelOptions.map((model) => (
+                {displayModelOptions.map((model) => (
                   <button
                     key={model.id}
                     type="button"
@@ -1166,14 +1201,15 @@ function ProductDetailClient({
                 ))}
               </div>
             </div>
+            ) : null}
 
-            {availableColors.length > 0 ? (
+            {displayColors.length > 0 ? (
               <div className="rounded-[1.75rem] border border-slate-800 bg-[#0a1020] p-5">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
                   {t.colorLabel}
                 </p>
                 <div className="mt-4 flex flex-wrap gap-2">
-                  {availableColors.map((color) => (
+                  {displayColors.map((color) => (
                     <button
                       key={color}
                       type="button"
@@ -1195,14 +1231,6 @@ function ProductDetailClient({
                 </div>
               </div>
             ) : null}
-
-            <div className="flex flex-wrap gap-2 text-[10px] uppercase tracking-[0.16em] text-slate-300">
-              {product.tags.map((tag) => (
-                <span key={tag} className="rounded-full border border-slate-700 bg-[#0a1020] px-3 py-1">
-                  {tag}
-                </span>
-              ))}
-            </div>
           </div>
         </section>
 
