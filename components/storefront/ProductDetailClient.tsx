@@ -2,7 +2,6 @@
 
 import dynamic from "next/dynamic";
 import Image from "next/image";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { memo, startTransition, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -64,6 +63,9 @@ const texts = {
     price: "Precio",
     themeAria: "Cambiar tema de la tienda",
     cartAddedToast: "Articulo Agregado",
+    recommendedSearchPlaceholder: "Buscar entre recomendados...",
+    recommendedEmpty: "No encontramos recomendados para esa busqueda.",
+    loadingMoreRecommended: "Cargando mas productos...",
   },
   nl: {
     back: "Terug naar de shop",
@@ -95,6 +97,9 @@ const texts = {
     price: "Prijs",
     themeAria: "Winkelthema wijzigen",
     cartAddedToast: "Artikel Toegevoegd",
+    recommendedSearchPlaceholder: "Zoek in aanbevolen producten...",
+    recommendedEmpty: "Geen aanbevolen producten gevonden voor die zoekopdracht.",
+    loadingMoreRecommended: "Meer producten laden...",
   },
   en: {
     back: "Back to store",
@@ -126,6 +131,9 @@ const texts = {
     price: "Price",
     themeAria: "Change store theme",
     cartAddedToast: "Item Added",
+    recommendedSearchPlaceholder: "Search within recommended products...",
+    recommendedEmpty: "We could not find recommended products for that search.",
+    loadingMoreRecommended: "Loading more products...",
   },
   pt: {
     back: "Voltar para a loja",
@@ -157,6 +165,9 @@ const texts = {
     price: "Preco",
     themeAria: "Alterar tema da loja",
     cartAddedToast: "Artigo Adicionado",
+    recommendedSearchPlaceholder: "Buscar entre recomendados...",
+    recommendedEmpty: "Nao encontramos recomendados para essa busca.",
+    loadingMoreRecommended: "Carregando mais produtos...",
   },
 } as const;
 
@@ -175,6 +186,57 @@ type ModelOption = {
 
 function normalizeOption(value: string | undefined) {
   return value?.trim() || "";
+}
+
+function normalizeSearchText(value: string | undefined) {
+  return (value || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
+}
+
+function buildRecommendedSearchBlob(product: StorefrontProduct) {
+  return normalizeSearchText(
+    [
+      product.name,
+      product.shortDescription,
+      product.longDescription,
+      product.brand,
+      product.category,
+      product.inventoryLabel,
+      product.deliveryLabel,
+      product.badge,
+      ...product.tags,
+      ...product.colors,
+      ...product.variants.flatMap((variant) => [variant.name, variant.details, variant.color]),
+    ].join(" ")
+  );
+}
+
+function scoreRecommendedProduct(base: StorefrontProduct, candidate: StorefrontProduct) {
+  let score = 0;
+
+  if (base.category && candidate.category && base.category === candidate.category) {
+    score += 6;
+  }
+
+  if (base.brand && candidate.brand && base.brand === candidate.brand) {
+    score += 4;
+  }
+
+  const tagSet = new Set(base.tags.map((tag) => normalizeSearchText(tag)));
+  for (const tag of candidate.tags) {
+    if (tagSet.has(normalizeSearchText(tag))) {
+      score += 2;
+    }
+  }
+
+  if (candidate.isFeatured) score += 1.5;
+  if (candidate.isTop) score += 1.5;
+  if ((candidate.rating ?? 0) >= 4) score += 1;
+
+  return score;
 }
 
 function shouldUseDirectStorefrontImage(src: string) {
@@ -244,7 +306,9 @@ function ProductDetailClient({
   const [clientTheme, setClientTheme] = useState<ClientTheme>(initialClientTheme);
   const [preferencesHydrated, setPreferencesHydrated] = useState(false);
   const [reviews, setReviews] = useState<ProductReview[]>(initialReviews);
-  const [recommended] = useState<StorefrontProduct[]>(initialRecommended);
+  const [recommended, setRecommended] = useState<StorefrontProduct[]>(initialRecommended);
+  const [recommendedSearch, setRecommendedSearch] = useState("");
+  const [visibleRecommendedCount, setVisibleRecommendedCount] = useState(8);
   const [name, setName] = useState(sessionUser?.name ?? "");
   const [email, setEmail] = useState(sessionUser?.email ?? "");
   const [comment, setComment] = useState("");
@@ -262,6 +326,7 @@ function ProductDetailClient({
   const [notice, setNotice] = useState("");
   const [showSecondaryContent, setShowSecondaryContent] = useState(false);
   const reviewSectionRef = useRef<HTMLDivElement | null>(null);
+  const loadMoreRef = useRef<HTMLDivElement | null>(null);
   const handleClientThemeChange = useCallback(
     (nextTheme: ClientTheme) => {
       if (nextTheme === clientTheme) {
@@ -399,6 +464,45 @@ function ProductDetailClient({
   useEffect(() => {
     let cancelled = false;
 
+    if (initialRecommended.length > 0) {
+      return;
+    }
+
+    const loadRecommended = async () => {
+      try {
+        const response = await fetch("/api/products", {
+          next: { revalidate: 300 },
+        });
+
+        if (!response.ok) {
+          return;
+        }
+
+        const payload = (await response.json()) as {
+          success?: boolean;
+          products?: StorefrontProduct[];
+        };
+
+        if (!cancelled && payload.success && Array.isArray(payload.products)) {
+          setRecommended(
+            payload.products.filter((item) => String(item.id) !== String(initialProduct.id))
+          );
+        }
+      } catch {
+        return;
+      }
+    };
+
+    void loadRecommended();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [initialProduct.id, initialRecommended.length]);
+
+  useEffect(() => {
+    let cancelled = false;
+
     const loadReviews = async () => {
       try {
         const response = await fetch(`/api/products/${initialProduct.id}/reviews`, {
@@ -434,6 +538,22 @@ function ProductDetailClient({
   const localizedRecommended = useMemo(
     () => recommended.map((item) => localizeProduct(item, locale)),
     [recommended, locale]
+  );
+  const filteredRecommended = useMemo(() => {
+    const sorted = [...localizedRecommended]
+      .filter((item) => String(item.id) !== String(product.id))
+      .sort((left, right) => scoreRecommendedProduct(product, right) - scoreRecommendedProduct(product, left));
+    const normalizedQuery = normalizeSearchText(recommendedSearch);
+
+    if (!normalizedQuery) {
+      return sorted;
+    }
+
+    return sorted.filter((item) => buildRecommendedSearchBlob(item).includes(normalizedQuery));
+  }, [localizedRecommended, product, recommendedSearch]);
+  const visibleRecommended = useMemo(
+    () => filteredRecommended.slice(0, visibleRecommendedCount),
+    [filteredRecommended, visibleRecommendedCount]
   );
   const modelOptions = useMemo<ModelOption[]>(() => {
     const fullProductDescription = product.longDescription || product.shortDescription;
@@ -502,6 +622,37 @@ function ProductDetailClient({
     return Array.from(new Set(nextGallery));
   }, [colorImage, product.images, selectedImage, selectedModel?.imageUrl]);
   const cartItemsCount = cart.reduce((sum, entry) => sum + entry.quantity, 0);
+
+  useEffect(() => {
+    setVisibleRecommendedCount(8);
+  }, [product.id, recommendedSearch]);
+
+  useEffect(() => {
+    if (!loadMoreRef.current || visibleRecommendedCount >= filteredRecommended.length) {
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const [entry] = entries;
+
+        if (!entry?.isIntersecting) {
+          return;
+        }
+
+        setVisibleRecommendedCount((current) => Math.min(current + 8, filteredRecommended.length));
+      },
+      {
+        rootMargin: "320px 0px",
+      }
+    );
+
+    observer.observe(loadMoreRef.current);
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [filteredRecommended.length, visibleRecommendedCount]);
 
 
 
@@ -644,6 +795,15 @@ function ProductDetailClient({
     setSelectedImage(gallery[nextIndex] ?? gallery[0] ?? product.image);
   }
 
+  function handleBack() {
+    if (typeof window !== "undefined" && window.history.length > 1) {
+      router.back();
+      return;
+    }
+
+    router.push("/");
+  }
+
   return (
     <div
       className={`client-page-shell bg-[radial-gradient(circle_at_top,_rgba(6,182,212,0.16),_transparent_28%),linear-gradient(180deg,_#02030a_0%,_#050816_100%)] text-white ${compact ? "min-h-0" : "min-h-screen"}`}
@@ -662,12 +822,13 @@ function ProductDetailClient({
         className={`client-sticky-header z-50 border-b border-slate-800/80 bg-[#030611]/85 backdrop-blur-xl ${compact ? "sticky top-0" : "sticky top-0"}`}
       >
         <div className="flex w-full items-center justify-between gap-3 px-4 py-3 lg:px-6 2xl:px-8">
-          <Link
-            href="/"
+          <button
+            type="button"
+            onClick={handleBack}
             className="rounded-full border border-slate-700 bg-[#0a1020] px-3.5 py-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-300 transition hover:border-cyan-500 hover:text-white"
           >
             {t.back}
-          </Link>
+          </button>
 
           <div className="flex items-center gap-2">
             <label className="theme-switch" aria-label={t.themeAria}>
@@ -742,40 +903,42 @@ function ProductDetailClient({
           </div>
         ) : null}
 
+        <div className="lg:hidden">
+          <h1 className="text-3xl font-semibold tracking-tight text-white">{product.name}</h1>
+        </div>
+
         <section className={`grid items-start gap-6 lg:grid-cols-[0.35fr_1.18fr_0.82fr] ${compact ? "mt-2" : "mt-6"}`}>
           {/* Panel lateral izquierdo - Productos similares */}
-          {localizedRecommended.length > 0 ? (
-            <div className="rounded-[2.25rem] border border-slate-800 bg-[#050816] p-4 shadow-[0_24px_80px_rgba(0,0,0,0.35)] h-fit">
+          {filteredRecommended.length > 0 || recommendedSearch ? (
+            <div className="order-3 h-fit rounded-[2.25rem] border border-slate-800 bg-[#050816] p-4 shadow-[0_24px_80px_rgba(0,0,0,0.35)] lg:order-1">
               <p className="text-xs uppercase tracking-[0.3em] text-cyan-300 font-semibold">{t.recommended}</p>
+              <div className="mt-4 rounded-full border border-slate-800 bg-[#0a1020] px-3 py-2">
+                <div className="flex items-center gap-2.5">
+                  <svg
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                    className="h-4 w-4 shrink-0 text-slate-500"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                  >
+                    <circle cx="11" cy="11" r="7" />
+                    <path strokeLinecap="round" d="m20 20-3.5-3.5" />
+                  </svg>
+                  <input
+                    type="search"
+                    value={recommendedSearch}
+                    onChange={(event) => setRecommendedSearch(event.target.value)}
+                    placeholder={t.recommendedSearchPlaceholder}
+                    className="min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-slate-500"
+                  />
+                </div>
+              </div>
               <div className="mt-4 flex flex-col gap-3">
-                {localizedRecommended.map((item) => (
+                {visibleRecommended.map((item) => (
                   <button
                     key={String(item.id)}
-                    onClick={() => {
-                      if (item.variants.length > 0 || item.colors.length > 0) {
-                        return;
-                      }
-
-                      const cartKey = buildCartKey(item.id);
-                      const existing = cart.find((entry) => entry.cartKey === cartKey);
-                      const nextCart = existing
-                        ? cart.map((entry) =>
-                            entry.cartKey === cartKey
-                              ? { ...entry, quantity: entry.quantity + 1 }
-                              : entry
-                          )
-                        : [
-                            ...cart,
-                            {
-                              cartKey,
-                              product: item,
-                              quantity: 1,
-                            },
-                          ];
-
-                      persistCart(nextCart);
-                      setNotice(t.added);
-                    }}
+                    onClick={() => router.push(`/products/${item.id}`)}
                     type="button"
                     className="text-left rounded-lg border border-slate-800 bg-[#0a1020] p-2 hover:border-cyan-500/40 transition group"
                   >
@@ -791,16 +954,29 @@ function ProductDetailClient({
                     <p className="text-xs text-cyan-300 font-bold mt-1">{formatCurrency(item.price)}</p>
                   </button>
                 ))}
+                {visibleRecommended.length === 0 ? (
+                  <div className="rounded-[1.5rem] border border-dashed border-slate-700 bg-[#0a1020] px-4 py-5 text-sm text-slate-400">
+                    {t.recommendedEmpty}
+                  </div>
+                ) : null}
+                {visibleRecommendedCount < filteredRecommended.length ? (
+                  <div
+                    ref={loadMoreRef}
+                    className="px-1 py-2 text-center text-xs uppercase tracking-[0.16em] text-slate-500"
+                  >
+                    {t.loadingMoreRecommended}
+                  </div>
+                ) : null}
               </div>
             </div>
           ) : null}
 
           {/* Sección central - Imágenes del producto */}
-          <div className="space-y-4">
+          <div className="order-1 space-y-4 lg:order-2">
             <div className="relative overflow-hidden rounded-[2.25rem] border border-slate-800 bg-[#050816] shadow-[0_24px_80px_rgba(0,0,0,0.35)]">
               {activeImage ? (
                 <button type="button" onClick={() => setLightboxOpen(true)} className="block w-full">
-                    <div className="relative aspect-[5/4] min-h-[26rem] w-full sm:min-h-[31rem]">
+                    <div className="relative aspect-[5/4] min-h-[20rem] w-full sm:min-h-[24rem] lg:min-h-[31rem]">
                       <StorefrontImage
                         src={activeImage}
                         alt={product.name}
@@ -846,9 +1022,9 @@ function ProductDetailClient({
           </div>
 
           {/* Sección derecha - Información del producto */}
-          <div className="space-y-4 rounded-[2.25rem] border border-slate-800 bg-[#050816] p-5 shadow-[0_24px_80px_rgba(0,0,0,0.35)]">
+          <div className="order-2 space-y-4 rounded-[2.25rem] border border-slate-800 bg-[#050816] p-5 shadow-[0_24px_80px_rgba(0,0,0,0.35)] lg:order-3">
             <div>
-              <h1 className="text-3xl font-semibold tracking-tight text-white">{product.name}</h1>
+              <h1 className="hidden text-3xl font-semibold tracking-tight text-white lg:block">{product.name}</h1>
               {selectedModel?.details ? (
                 <p className="mt-2 text-sm leading-6 text-slate-300">{selectedModel.details}</p>
               ) : null}
