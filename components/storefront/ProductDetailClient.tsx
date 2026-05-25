@@ -34,7 +34,7 @@ const CartPanel = dynamic(() => import("@/components/CartPanel"));
 
 const texts = {
   es: {
-    back: "Volver a la tienda",
+    back: "Volver atras",
     home: "Volver al inicio",
     comments: "Comentarios reales",
     leaveComment: "Dejar comentario",
@@ -69,7 +69,7 @@ const texts = {
     loadingMoreRecommended: "Cargando mas productos...",
   },
   nl: {
-    back: "Terug naar de shop",
+    back: "Terug",
     home: "Terug naar home",
     comments: "Echte reacties",
     leaveComment: "Reactie plaatsen",
@@ -104,7 +104,7 @@ const texts = {
     loadingMoreRecommended: "Meer producten laden...",
   },
   en: {
-    back: "Back to store",
+    back: "Back",
     home: "Back to home",
     comments: "Real comments",
     leaveComment: "Leave a comment",
@@ -139,7 +139,7 @@ const texts = {
     loadingMoreRecommended: "Loading more products...",
   },
   pt: {
-    back: "Voltar para a loja",
+    back: "Voltar",
     home: "Voltar ao inicio",
     comments: "Comentarios reais",
     leaveComment: "Deixar comentario",
@@ -843,12 +843,12 @@ function ProductDetailClient({
           </button>
 
           <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => router.push("/")}
-              className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-700 bg-[#0a1020] text-slate-300 transition hover:border-cyan-500 hover:text-white"
-              aria-label={t.home}
-              title={t.home}
+              <button
+                type="button"
+                onClick={() => window.location.assign("/")}
+                className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-700 bg-[#0a1020] text-slate-300 transition hover:border-cyan-500 hover:text-white"
+                aria-label={t.home}
+                title={t.home}
             >
               <svg
                 viewBox="0 0 24 24"

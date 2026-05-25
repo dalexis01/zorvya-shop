@@ -1,7 +1,6 @@
 "use client";
 
 import Image from "next/image";
-import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
 import DeliveryEstimateBadge from "@/components/storefront/DeliveryEstimateBadge";
@@ -310,7 +309,6 @@ export default function ProductQuickViewPanel({
   ) => void;
   initialSelection?: QuickViewSelection;
 }) {
-  const router = useRouter();
   const t = texts[locale];
   const [isCompactViewport, setIsCompactViewport] = useState(false);
   const relatedVisibleLimit = isCompactViewport ? 8 : 4;
@@ -653,8 +651,7 @@ export default function ProductQuickViewPanel({
             <button
               type="button"
               onClick={() => {
-                onClose(currentSelection);
-                router.push("/");
+                window.location.assign("/");
               }}
               className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-700 bg-[#0a1020] text-sm font-semibold text-slate-300 transition hover:border-cyan-500 hover:text-white"
               aria-label={t.home}
