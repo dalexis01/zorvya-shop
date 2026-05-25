@@ -830,7 +830,7 @@ function ProductDetailClient({
             {t.back}
           </button>
 
-          <div className="flex items-center gap-2">
+          <div className="hidden items-center gap-2 lg:flex">
             <label className="theme-switch" aria-label={t.themeAria}>
               <span className="sun">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
@@ -907,7 +907,7 @@ function ProductDetailClient({
           <h1 className="text-3xl font-semibold tracking-tight text-white">{product.name}</h1>
         </div>
 
-        <section className={`grid items-start gap-6 lg:grid-cols-[0.35fr_1.18fr_0.82fr] ${compact ? "mt-2" : "mt-6"}`}>
+        <section className={`grid items-start gap-5 lg:grid-cols-[0.35fr_1.18fr_0.82fr] ${compact ? "mt-3" : "mt-5 lg:mt-6"}`}>
           {/* Panel lateral izquierdo - Productos similares */}
           {filteredRecommended.length > 0 || recommendedSearch ? (
             <div className="order-3 h-fit rounded-[2.25rem] border border-slate-800 bg-[#050816] p-4 shadow-[0_24px_80px_rgba(0,0,0,0.35)] lg:order-1">
@@ -982,7 +982,7 @@ function ProductDetailClient({
                         alt={product.name}
                         priority
                         sizes="(max-width: 1024px) 100vw, 58vw"
-                        className="product-media product-media--contain"
+                        className="product-media product-media--detail"
                       />
                     </div>
                 </button>
@@ -1022,7 +1022,7 @@ function ProductDetailClient({
           </div>
 
           {/* Sección derecha - Información del producto */}
-          <div className="order-2 space-y-4 rounded-[2.25rem] border border-slate-800 bg-[#050816] p-5 shadow-[0_24px_80px_rgba(0,0,0,0.35)] lg:order-3">
+          <div className="order-2 space-y-4 rounded-[2.25rem] border border-transparent bg-transparent p-0 shadow-none lg:order-3 lg:border-slate-800 lg:bg-[#050816] lg:p-5 lg:shadow-[0_24px_80px_rgba(0,0,0,0.35)]">
             <div>
               <h1 className="hidden text-3xl font-semibold tracking-tight text-white lg:block">{product.name}</h1>
               {selectedModel?.details ? (

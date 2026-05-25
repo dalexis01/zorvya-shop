@@ -499,6 +499,14 @@ html[data-client-theme="light"] .storefront-cosmic-button {
     linear-gradient(180deg, rgb(2 6 23 / 0.92) 0%, rgb(1 4 12 / 0.96) 100%);
 }
 
+.product-media--detail {
+  object-fit: contain;
+  padding: 0.9rem;
+  background:
+    radial-gradient(circle at top, rgb(34 211 238 / 0.08), transparent 42%),
+    linear-gradient(180deg, rgb(2 6 23 / 0.92) 0%, rgb(1 4 12 / 0.96) 100%);
+}
+
 .store-cart-btn {
   position: relative;
   z-index: 60;
@@ -1936,6 +1944,10 @@ html[data-client-theme="light"] .client-panel * {
 }
 
 @media (max-width: 767px) {
+  .product-media--detail {
+    padding: 0.25rem;
+  }
+
   .client-sticky-header,
   .header-search-shell,
   .storefront-cosmic-button,
