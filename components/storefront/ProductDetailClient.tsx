@@ -523,6 +523,7 @@ function ProductDetailClient({
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [confirmationOpen, setConfirmationOpen] = useState(false);
   const [checkoutData, setCheckoutData] = useState<CheckoutCustomerData | null>(null);
+  const [desktopSearch, setDesktopSearch] = useState("");
   const reviewSectionRef = useRef<HTMLDivElement | null>(null);
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
   const supportMessagesRef = useRef<HTMLDivElement | null>(null);
@@ -1269,6 +1270,22 @@ function ProductDetailClient({
     setCartOpen(true);
   }
 
+  function handleDesktopSearchSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const query = desktopSearch.trim();
+    if (!query) {
+      window.location.assign("/");
+      return;
+    }
+
+    window.location.assign(`/?search=${encodeURIComponent(query)}`);
+  }
+
   function toggleCartSelection(cartKey: string) {
     setSelectedCartKeys((currentKeys) =>
       currentKeys.includes(cartKey)
@@ -1429,10 +1446,8 @@ function ProductDetailClient({
           <div className="meteor m3" />
         </div>
       </div>
-      <header
-        className={`client-sticky-header z-50 border-b border-slate-800/80 bg-[#030611]/85 backdrop-blur-xl ${compact ? "sticky top-0" : "sticky top-0"}`}
-      >
-        <div className="flex w-full items-center justify-between gap-3 px-4 py-3 lg:px-6 2xl:px-8">
+      <header className="client-sticky-header sticky top-0 z-50 border-b border-slate-800/80 bg-[#030611]/85 backdrop-blur-xl lg:hidden">
+        <div className="flex w-full items-center justify-between gap-3 px-4 py-3">
           <button
             type="button"
             onClick={handleBack}
@@ -1513,6 +1528,115 @@ function ProductDetailClient({
                 <span className="storefront-cosmic-button__circle" />
               </span>
             </button>
+          </div>
+        </div>
+      </header>
+
+      <header className="client-sticky-header sticky top-0 z-50 hidden border-b border-slate-800/80 bg-[#030611]/92 backdrop-blur-xl lg:block">
+        <div className="w-full px-4 py-3 lg:px-6 2xl:px-8">
+          <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-4">
+            <button
+              type="button"
+              onClick={() => window.location.assign("/")}
+              className="zorvya-shop-button justify-self-start"
+              aria-label="ZorvyA Shop"
+            >
+              <h1 className="zorvya-shop-title">
+                <span className="zorvya-shop-brand">ZorvyA</span>
+                <span className="zorvya-shop-inline">Shop</span>
+              </h1>
+            </button>
+
+            <div className="flex min-w-0 justify-center px-2">
+              <form
+                onSubmit={handleDesktopSearchSubmit}
+                className="relative w-full min-w-0 max-w-[30rem]"
+              >
+                <div className="header-search-shell">
+                  <svg
+                    className="header-search-icon h-3.5 w-3.5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M21 21l-4.35-4.35m1.85-5.15a7 7 0 11-14 0 7 7 0 0114 0z"
+                    />
+                  </svg>
+                  <input
+                    type="text"
+                    value={desktopSearch}
+                    onChange={(event) => setDesktopSearch(event.target.value)}
+                    placeholder="Buscar articulos, categorias o etiquetas"
+                    className="header-search-input"
+                  />
+                </div>
+              </form>
+            </div>
+
+            <div className="flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={handleBack}
+                className="storefront-cosmic-button relative inline-flex h-[2.95rem] min-w-[8.5rem] items-center justify-center overflow-hidden rounded-[12px] px-4 text-center text-[11px] font-semibold leading-none"
+              >
+                <span className="storefront-cosmic-button__text whitespace-nowrap">
+                  <strong>{t.back}</strong>
+                </span>
+                <span className="storefront-cosmic-button__stars-container" aria-hidden="true">
+                  <span className="storefront-cosmic-button__stars" />
+                </span>
+                <span className="storefront-cosmic-button__glow" aria-hidden="true">
+                  <span className="storefront-cosmic-button__circle" />
+                  <span className="storefront-cosmic-button__circle" />
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setCartOpen(true)}
+                className="storefront-cosmic-button relative inline-flex h-[2.95rem] min-w-[8.5rem] items-center justify-center overflow-hidden rounded-[12px] px-4 text-center text-[11px] font-semibold leading-none"
+              >
+                <span className="storefront-cosmic-button__text whitespace-nowrap">
+                  <strong>{t.cart}</strong>
+                </span>
+                <span className="storefront-cosmic-button__stars-container" aria-hidden="true">
+                  <span className="storefront-cosmic-button__stars" />
+                </span>
+                <span className="storefront-cosmic-button__glow" aria-hidden="true">
+                  <span className="storefront-cosmic-button__circle" />
+                  <span className="storefront-cosmic-button__circle" />
+                </span>
+                {cart.length > 0 ? (
+                  <span className="storefront-cosmic-button__badge storefront-cosmic-button__badge--cart">
+                    {cartItemsCount}
+                  </span>
+                ) : null}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setSupportMode("menu");
+                  setSupportOpen(true);
+                }}
+                className="storefront-cosmic-button relative inline-flex h-[2.95rem] min-w-[8.5rem] items-center justify-center overflow-hidden rounded-[12px] px-4 text-center text-[11px] font-semibold leading-none"
+              >
+                <span className="storefront-cosmic-button__text whitespace-nowrap">
+                  <strong>{t.support}</strong>
+                </span>
+                <span className="storefront-cosmic-button__stars-container" aria-hidden="true">
+                  <span className="storefront-cosmic-button__stars" />
+                </span>
+                <span className="storefront-cosmic-button__glow" aria-hidden="true">
+                  <span className="storefront-cosmic-button__circle" />
+                  <span className="storefront-cosmic-button__circle" />
+                </span>
+              </button>
+            </div>
           </div>
         </div>
       </header>
