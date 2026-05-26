@@ -67,6 +67,19 @@ const texts = {
     recommendedSearchPlaceholder: "Buscar entre recomendados...",
     recommendedEmpty: "No encontramos recomendados para esa busqueda.",
     loadingMoreRecommended: "Cargando mas productos...",
+    buyNow: "Comprar ahora",
+    quantity: "Cantidad",
+    available: "Disponible",
+    unavailable: "Sin stock",
+    storeBrand: "Visita la tienda de ZorvyA Shop",
+    soldRecently: "comprados recientemente",
+    highlights: "Mas destacados",
+    productDetailsTitle: "Detalles del producto",
+    featureTitle: "Caracteristicas",
+    securePayment: "Transaccion segura",
+    seller: "Vendedor",
+    payment: "Pago",
+    returns: "Devoluciones",
   },
   nl: {
     back: "Terug",
@@ -102,6 +115,19 @@ const texts = {
     recommendedSearchPlaceholder: "Zoek in aanbevolen producten...",
     recommendedEmpty: "Geen aanbevolen producten gevonden voor die zoekopdracht.",
     loadingMoreRecommended: "Meer producten laden...",
+    buyNow: "Nu kopen",
+    quantity: "Aantal",
+    available: "Beschikbaar",
+    unavailable: "Geen voorraad",
+    storeBrand: "Bezoek de winkel van ZorvyA Shop",
+    soldRecently: "recent gekocht",
+    highlights: "Hoogtepunten",
+    productDetailsTitle: "Productdetails",
+    featureTitle: "Kenmerken",
+    securePayment: "Veilige betaling",
+    seller: "Verkoper",
+    payment: "Betaling",
+    returns: "Retouren",
   },
   en: {
     back: "Back",
@@ -137,6 +163,19 @@ const texts = {
     recommendedSearchPlaceholder: "Search within recommended products...",
     recommendedEmpty: "We could not find recommended products for that search.",
     loadingMoreRecommended: "Loading more products...",
+    buyNow: "Buy now",
+    quantity: "Quantity",
+    available: "Available",
+    unavailable: "Out of stock",
+    storeBrand: "Visit the ZorvyA Shop store",
+    soldRecently: "bought recently",
+    highlights: "Highlights",
+    productDetailsTitle: "Product details",
+    featureTitle: "Features",
+    securePayment: "Secure transaction",
+    seller: "Seller",
+    payment: "Payment",
+    returns: "Returns",
   },
   pt: {
     back: "Voltar",
@@ -172,6 +211,19 @@ const texts = {
     recommendedSearchPlaceholder: "Buscar entre recomendados...",
     recommendedEmpty: "Nao encontramos recomendados para essa busca.",
     loadingMoreRecommended: "Carregando mais produtos...",
+    buyNow: "Comprar agora",
+    quantity: "Quantidade",
+    available: "Disponivel",
+    unavailable: "Sem estoque",
+    storeBrand: "Visite a loja da ZorvyA Shop",
+    soldRecently: "comprados recentemente",
+    highlights: "Mais destacados",
+    productDetailsTitle: "Detalhes do produto",
+    featureTitle: "Caracteristicas",
+    securePayment: "Transacao segura",
+    seller: "Vendedor",
+    payment: "Pagamento",
+    returns: "Devolucoes",
   },
 } as const;
 
@@ -329,6 +381,7 @@ function ProductDetailClient({
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [notice, setNotice] = useState("");
   const [showSecondaryContent, setShowSecondaryContent] = useState(false);
+  const [purchaseQuantity, setPurchaseQuantity] = useState(1);
   const reviewSectionRef = useRef<HTMLDivElement | null>(null);
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
   const handleClientThemeChange = useCallback(
@@ -626,6 +679,25 @@ function ProductDetailClient({
       : product.rating;
   const activePrice = selectedModel?.price ?? product.price;
   const activeImage = selectedImage || colorImage || selectedModel?.imageUrl || product.image;
+  const availableStock = getProductAvailableStock(product);
+  const hasStock = availableStock > 0;
+  const purchaseOptions = useMemo(
+    () => Array.from({ length: Math.max(1, Math.min(availableStock || 1, 10)) }, (_, index) => index + 1),
+    [availableStock]
+  );
+  const boughtRecentlyCount = Math.max(12, reviewCount * 3);
+  const highlightBadges = [product.deliveryLabel, product.inventoryLabel, ...product.tags]
+    .map((item) => item?.trim())
+    .filter(Boolean)
+    .slice(0, 4);
+  const productDetailsSummary = [
+    product.brand ? `Brand: ${product.brand}` : "",
+    product.category ? `Category: ${product.category}` : "",
+    selectedModel?.name && !selectedModel.isBase ? `Model: ${selectedModel.name}` : "",
+    selectedColor ? `Color: ${selectedColor}` : "",
+  ]
+    .filter(Boolean)
+    .join(" · ");
   const gallery = useMemo(() => {
     const nextGallery = [selectedImage, colorImage, selectedModel?.imageUrl, ...product.images].filter(
       (image): image is string => Boolean(image)
@@ -638,6 +710,12 @@ function ProductDetailClient({
   useEffect(() => {
     setVisibleRecommendedCount(8);
   }, [product.id, recommendedSearch]);
+
+  useEffect(() => {
+    setPurchaseQuantity((current) =>
+      Math.max(1, Math.min(current, purchaseOptions[purchaseOptions.length - 1] || 1))
+    );
+  }, [purchaseOptions]);
 
   useEffect(() => {
     if (!loadMoreRef.current || visibleRecommendedCount >= filteredRecommended.length) {
@@ -689,7 +767,7 @@ function ProductDetailClient({
     );
   }
 
-  function addToCart(productToAdd: StorefrontProduct) {
+  function addToCart(productToAdd: StorefrontProduct, quantityToAdd: number = 1) {
     const cartKey = buildCartKey(
       productToAdd.id,
       selectedModel.isBase ? undefined : selectedModel.id,
@@ -697,11 +775,12 @@ function ProductDetailClient({
     );
     const existing = cart.find((entry) => entry.cartKey === cartKey);
     const maxQuantity = Math.max(1, getProductAvailableStock(productToAdd));
+    const safeQuantityToAdd = Math.max(1, Math.min(maxQuantity, Math.trunc(quantityToAdd) || 1));
 
     const nextCart = existing
       ? cart.map((entry) =>
           entry.cartKey === cartKey
-            ? { ...entry, quantity: Math.min(maxQuantity, entry.quantity + 1) }
+            ? { ...entry, quantity: Math.min(maxQuantity, entry.quantity + safeQuantityToAdd) }
             : entry
         )
       : [
@@ -709,7 +788,7 @@ function ProductDetailClient({
           {
             cartKey,
             product: productToAdd,
-            quantity: clampCartQuantityToStock(productToAdd, 1),
+            quantity: clampCartQuantityToStock(productToAdd, safeQuantityToAdd),
             selectedVariantId: selectedModel.isBase ? undefined : selectedModel.id,
             selectedVariantName: selectedModel.isBase ? undefined : selectedModel.name,
             selectedColor: selectedColor || selectedModel.color,
@@ -814,6 +893,11 @@ function ProductDetailClient({
     }
 
     router.push("/");
+  }
+
+  function handleBuyNow() {
+    addToCart(product, purchaseQuantity);
+    setCartOpen(true);
   }
 
   return (
@@ -947,7 +1031,267 @@ function ProductDetailClient({
           </div>
         </div>
 
-        <section className={`grid min-w-0 items-start gap-5 lg:grid-cols-[minmax(0,1.18fr)_minmax(22rem,0.82fr)] xl:grid-cols-[minmax(0,1.24fr)_minmax(24rem,0.76fr)] ${compact ? "mt-3" : "mt-5 lg:mt-6"}`}>
+        <section
+          className={`hidden min-w-0 gap-6 lg:grid lg:grid-cols-[5.5rem_minmax(0,1.05fr)_minmax(0,0.95fr)_18rem] xl:grid-cols-[6rem_minmax(0,1.1fr)_minmax(0,1fr)_19rem] ${compact ? "mt-3" : "mt-5 lg:mt-6"}`}
+        >
+          <div className="space-y-3">
+            {gallery.map((image) => (
+              <button
+                key={`desktop-thumb-${image}`}
+                type="button"
+                onClick={() => setSelectedImage(image)}
+                className={`relative block overflow-hidden rounded-[1.1rem] border bg-[#08101e] transition ${
+                  selectedImage === image
+                    ? "border-cyan-400 shadow-[0_0_0_1px_rgba(34,211,238,0.2)]"
+                    : "border-slate-800 hover:border-cyan-500/40"
+                }`}
+              >
+                <div className="relative aspect-square w-full">
+                  <StorefrontImage
+                    src={image}
+                    alt={product.name}
+                    sizes="96px"
+                    className="product-media product-media--cover"
+                  />
+                </div>
+              </button>
+            ))}
+          </div>
+
+          <div className="min-w-0">
+            <div className="relative overflow-hidden rounded-[2rem] border border-slate-800 bg-[#050816] shadow-[0_24px_80px_rgba(0,0,0,0.35)]">
+              {product.badge ? (
+                <span className="absolute left-4 top-4 z-10 rounded-full bg-rose-500 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-white">
+                  {product.badge}
+                </span>
+              ) : null}
+              {activeImage ? (
+                <button type="button" onClick={() => setLightboxOpen(true)} className="block w-full">
+                  <div className="relative aspect-square min-h-[34rem] w-full xl:min-h-[38rem]">
+                    <StorefrontImage
+                      src={activeImage}
+                      alt={product.name}
+                      priority
+                      sizes="(max-width: 1536px) 42vw, 36vw"
+                      className="product-media product-media--detail"
+                    />
+                  </div>
+                </button>
+              ) : null}
+              <button
+                type="button"
+                onClick={() => setLightboxOpen(true)}
+                className="absolute bottom-4 right-4 rounded-full border border-slate-700 bg-black/60 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-white backdrop-blur"
+              >
+                {t.fullscreen}
+              </button>
+            </div>
+          </div>
+
+          <div className="min-w-0 space-y-5">
+            <div>
+              <p className="text-sm font-medium text-cyan-300">{t.storeBrand}</p>
+              <h1 className="mt-2 break-words text-[2rem] font-semibold leading-tight text-white xl:text-[2.25rem]">
+                {product.name}
+              </h1>
+              <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm text-slate-300">
+                <span className="text-amber-300">{createStars(averageRating)}</span>
+                <span>
+                  {formatGroupedNumber(averageRating, 1)} Â· {reviewCount} {t.reviews}
+                </span>
+                <span className="text-slate-500">|</span>
+                <span>
+                  {formatGroupedNumber(boughtRecentlyCount)} {t.soldRecently}
+                </span>
+              </div>
+              {product.badge ? (
+                <span className="mt-3 inline-flex rounded-full border border-cyan-500/30 bg-cyan-500/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-cyan-200">
+                  {product.badge}
+                </span>
+              ) : null}
+            </div>
+
+            <div className="border-t border-slate-800 pt-5">
+              <div className="flex flex-wrap items-end gap-x-4 gap-y-2">
+                <p className="text-[2.4rem] font-semibold leading-none text-white">{formatCurrency(activePrice)}</p>
+                {product.originalPrice ? (
+                  <p className="text-base text-slate-500 line-through">
+                    {formatCurrency(product.originalPrice)}
+                  </p>
+                ) : null}
+              </div>
+              {product.originalPrice && product.originalPrice > activePrice ? (
+                <p className="mt-2 text-sm font-medium text-rose-300">
+                  -
+                  {Math.max(
+                    1,
+                    Math.round(((product.originalPrice - activePrice) / product.originalPrice) * 100)
+                  )}
+                  %
+                </p>
+              ) : null}
+              <div className="mt-4 rounded-[1.25rem] border border-cyan-500/20 bg-cyan-500/10 px-4 py-3 text-sm leading-6 text-cyan-100">
+                <span className="font-semibold">{product.deliveryLabel}</span>
+                {hasStock ? ` · ${t.available}` : ` · ${t.unavailable}`}
+              </div>
+            </div>
+
+            {displayModelOptions.length > 0 ? (
+              <div>
+                <p className="mb-3 text-sm text-slate-400">
+                  {t.modelLabel}: <span className="font-semibold text-white">{selectedModel?.name}</span>
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {displayModelOptions.map((model) => (
+                    <button
+                      key={`desktop-model-${model.id}`}
+                      type="button"
+                      onClick={() => setSelectedModelId(model.id)}
+                      className={`min-w-[8rem] rounded-[1rem] border px-4 py-3 text-left transition ${
+                        selectedModelId === model.id
+                          ? "border-cyan-400 bg-cyan-500/10"
+                          : "border-slate-800 bg-[#08101e] hover:border-cyan-500/40"
+                      }`}
+                    >
+                      <p className="text-sm font-semibold text-white">{model.name}</p>
+                      <p className="mt-1 text-xs text-cyan-300">{formatCurrency(model.price)}</p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
+            {displayColors.length > 0 ? (
+              <div>
+                <p className="mb-3 text-sm text-slate-400">
+                  {t.colorLabel}: <span className="font-semibold text-white">{selectedColor}</span>
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {displayColors.map((color) => (
+                    <button
+                      key={`desktop-color-${color}`}
+                      type="button"
+                      onClick={() => {
+                        setSelectedColor(color);
+                        setSelectedImage(
+                          product.colorImageMap?.[color] || selectedModel?.imageUrl || product.image
+                        );
+                      }}
+                      className={`rounded-full border px-3.5 py-2 text-xs font-semibold uppercase tracking-[0.12em] transition ${
+                        selectedColor === color
+                          ? "border-cyan-400 bg-cyan-500 text-slate-950"
+                          : "border-slate-700 bg-[#08101e] text-slate-300 hover:border-cyan-500/50"
+                      }`}
+                    >
+                      {color}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
+            {highlightBadges.length > 0 ? (
+              <div>
+                <p className="mb-3 text-sm font-medium text-white">{t.highlights}</p>
+                <div className="flex flex-wrap gap-2">
+                  {highlightBadges.map((badge) => (
+                    <span
+                      key={`desktop-highlight-${badge}`}
+                      className="rounded-full border border-emerald-400/20 bg-emerald-500/10 px-3 py-1.5 text-xs text-emerald-100"
+                    >
+                      {badge}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
+            <div className="space-y-3">
+              <details open className="rounded-[1.35rem] border border-slate-800 bg-[#08101e] px-4 py-3">
+                <summary className="cursor-pointer list-none text-sm font-semibold text-white">
+                  {t.featureTitle}
+                </summary>
+                <p className="mt-3 break-words text-sm leading-7 text-slate-300">
+                  {selectedModel?.details || product.shortDescription}
+                </p>
+              </details>
+              <details className="rounded-[1.35rem] border border-slate-800 bg-[#08101e] px-4 py-3">
+                <summary className="cursor-pointer list-none text-sm font-semibold text-white">
+                  {t.productDetailsTitle}
+                </summary>
+                <div className="mt-3 space-y-3 text-sm leading-7 text-slate-300">
+                  {product.longDescription ? <p className="break-words">{product.longDescription}</p> : null}
+                  {productDetailsSummary ? <p className="text-slate-400">{productDetailsSummary}</p> : null}
+                </div>
+              </details>
+            </div>
+          </div>
+
+          <aside className="sticky top-24 space-y-4">
+            <div className="rounded-[2rem] border border-slate-800 bg-[#050816] p-5 shadow-[0_24px_80px_rgba(0,0,0,0.35)]">
+              <p className="text-[2rem] font-semibold leading-none text-white">{formatCurrency(activePrice)}</p>
+              <p className="mt-2 text-xs text-slate-400">
+                {product.hasFreeDelivery ? product.deliveryLabel : product.inventoryLabel}
+              </p>
+
+              <div className="mt-5 space-y-3 text-sm leading-6 text-slate-300">
+                <p>{product.deliveryLabel}</p>
+                <p>{hasStock ? `${t.available} · ${availableStock}` : t.unavailable}</p>
+              </div>
+
+              <div className="mt-5 flex items-center gap-3">
+                <label htmlFor="desktop-product-quantity" className="text-sm text-slate-400">
+                  {t.quantity}
+                </label>
+                <select
+                  id="desktop-product-quantity"
+                  value={purchaseQuantity}
+                  onChange={(event) => setPurchaseQuantity(Number(event.target.value) || 1)}
+                  className="rounded-full border border-slate-700 bg-[#0a1020] px-3 py-2 text-sm text-white outline-none"
+                >
+                  {purchaseOptions.map((value) => (
+                    <option key={`purchase-qty-${value}`} value={value}>
+                      {value}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="mt-5 space-y-3">
+                <button
+                  type="button"
+                  onClick={() => addToCart(product, purchaseQuantity)}
+                  className="w-full rounded-full bg-cyan-400 px-4 py-3 text-sm font-semibold text-slate-950 transition hover:bg-cyan-300"
+                >
+                  {t.addToCart}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleBuyNow}
+                  className="w-full rounded-full border border-cyan-400/40 bg-white/90 px-4 py-3 text-sm font-semibold text-slate-950 transition hover:bg-white"
+                >
+                  {t.buyNow}
+                </button>
+              </div>
+
+              <div className="mt-5 grid grid-cols-[auto_1fr] gap-x-3 gap-y-2 border-t border-slate-800 pt-4 text-xs text-slate-400">
+                <span>{t.seller}</span>
+                <span className="text-white">ZorvyA Shop</span>
+                <span>{t.returns}</span>
+                <span className="text-white">{product.hasFreeDelivery ? product.deliveryLabel : t.available}</span>
+                <span>{t.payment}</span>
+                <span className="text-white">{t.securePayment}</span>
+              </div>
+            </div>
+
+            <div className="rounded-[1.5rem] border border-slate-800 bg-[#08101e] p-4 text-sm leading-6 text-slate-300">
+              <p className="font-semibold text-cyan-200">{t.securePayment}</p>
+              <p className="mt-2">{product.shortDescription}</p>
+            </div>
+          </aside>
+        </section>
+
+        <section className={`grid min-w-0 items-start gap-5 lg:hidden ${compact ? "mt-3" : "mt-5 lg:mt-6"}`}>
           {/* Panel lateral izquierdo - Productos similares */}
           {filteredRecommended.length > 0 || recommendedSearch ? (
             <div className="order-3 min-w-0 h-fit rounded-[2.25rem] border border-slate-800 bg-[#050816] p-4 shadow-[0_24px_80px_rgba(0,0,0,0.35)] lg:order-3 lg:col-span-2">
@@ -1237,14 +1581,74 @@ function ProductDetailClient({
           </div>
         </section>
 
-        {selectedModel?.details ? (
-          <section className="hidden rounded-[2rem] border border-slate-800 bg-[#050816] p-5 shadow-[0_24px_80px_rgba(0,0,0,0.35)] lg:block lg:p-6">
-            <h2 className="text-xs font-semibold uppercase tracking-[0.28em] text-cyan-300">
-              Detalles
-            </h2>
-            <p className="mt-4 break-words text-sm leading-7 text-slate-300 whitespace-pre-line lg:text-[15px]">
-              {selectedModel.details}
-            </p>
+        {filteredRecommended.length > 0 || recommendedSearch ? (
+          <section className={`hidden rounded-[2rem] border border-slate-800 bg-[#050816] p-5 shadow-[0_24px_80px_rgba(0,0,0,0.35)] lg:block ${compact ? "mt-6" : "mt-8"}`}>
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.28em] text-cyan-300">
+                  {t.recommended}
+                </p>
+                <h2 className="mt-2 text-2xl font-semibold text-white">{t.recommended}</h2>
+              </div>
+              <div className="w-full max-w-sm rounded-full border border-slate-800 bg-[#0a1020] px-3 py-2">
+                <div className="flex items-center gap-2.5">
+                  <svg
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                    className="h-4 w-4 shrink-0 text-slate-500"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                  >
+                    <circle cx="11" cy="11" r="7" />
+                    <path strokeLinecap="round" d="m20 20-3.5-3.5" />
+                  </svg>
+                  <input
+                    type="search"
+                    value={recommendedSearch}
+                    onChange={(event) => setRecommendedSearch(event.target.value)}
+                    placeholder={t.recommendedSearchPlaceholder}
+                    className="min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-slate-500"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-5 grid gap-4 xl:grid-cols-4 lg:grid-cols-3">
+              {visibleRecommended.map((item) => (
+                <button
+                  key={`desktop-rec-${item.id}`}
+                  onClick={() => router.push(`/products/${item.id}`)}
+                  type="button"
+                  className="rounded-[1.4rem] border border-slate-800 bg-[#08101e] p-3 text-left transition hover:border-cyan-500/40"
+                >
+                  <div className="relative aspect-[4/3] overflow-hidden rounded-[1rem]">
+                    <StorefrontImage
+                      src={item.image}
+                      alt={item.name}
+                      sizes="320px"
+                      className="product-media product-media--cover"
+                    />
+                  </div>
+                  <p className="mt-3 line-clamp-2 text-sm font-semibold leading-6 text-white">{item.name}</p>
+                  <p className="mt-2 text-base font-bold text-cyan-300">{formatCurrency(item.price)}</p>
+                </button>
+              ))}
+              {visibleRecommended.length === 0 ? (
+                <div className="rounded-[1.5rem] border border-dashed border-slate-700 bg-[#0a1020] px-4 py-5 text-sm text-slate-400">
+                  {t.recommendedEmpty}
+                </div>
+              ) : null}
+            </div>
+
+            {visibleRecommendedCount < filteredRecommended.length ? (
+              <div
+                ref={loadMoreRef}
+                className="px-1 py-4 text-center text-xs uppercase tracking-[0.16em] text-slate-500"
+              >
+                {t.loadingMoreRecommended}
+              </div>
+            ) : null}
           </section>
         ) : null}
 
