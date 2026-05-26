@@ -296,6 +296,11 @@ type SupportResponse = {
   error?: string;
 };
 
+type SessionResponse = {
+  authenticated?: boolean;
+  user?: SessionUser | null;
+};
+
 type OrderMutationResponse = {
   success?: boolean;
   order?: OrderSummary;
@@ -480,6 +485,7 @@ function ProductDetailClient({
   const router = useRouter();
   const [locale, setLocale] = useState<Locale>("es");
   const [clientTheme, setClientTheme] = useState<ClientTheme>(initialClientTheme);
+  const [currentSessionUser, setCurrentSessionUser] = useState<SessionUser | null>(sessionUser);
   const [preferencesHydrated, setPreferencesHydrated] = useState(false);
   const [reviews, setReviews] = useState<ProductReview[]>(initialReviews);
   const [recommended, setRecommended] = useState<StorefrontProduct[]>(initialRecommended);
@@ -560,6 +566,40 @@ function ProductDetailClient({
     };
   }, []);
 
+  useEffect(() => {
+    let isActive = true;
+
+    async function loadSession() {
+      try {
+        const response = await fetch("/api/auth/session", { cache: "no-store" });
+        const payload = (await response.json()) as SessionResponse;
+
+        if (!isActive) {
+          return;
+        }
+
+        setCurrentSessionUser(payload.user ?? null);
+        if (payload.user?.name) {
+          setName(payload.user.name);
+        }
+        if (payload.user?.email) {
+          setEmail(payload.user.email);
+          setSupportContactEmail(payload.user.email);
+        }
+      } catch {
+        if (isActive) {
+          setCurrentSessionUser(null);
+        }
+      }
+    }
+
+    void loadSession();
+
+    return () => {
+      isActive = false;
+    };
+  }, []);
+
   const readSupportToken = useCallback(() => {
     if (typeof window === "undefined") {
       return "";
@@ -587,9 +627,9 @@ function ProductDetailClient({
 
   const loadSupportConversation = useCallback(
     async (showLoading: boolean = false) => {
-      const customerToken = sessionUser ? "" : supportToken.trim();
+      const customerToken = currentSessionUser ? "" : supportToken.trim();
 
-      if (!sessionUser && !customerToken) {
+      if (!currentSessionUser && !customerToken) {
         setSupportConversation(null);
         if (showLoading) {
           setSupportLoading(false);
@@ -619,7 +659,7 @@ function ProductDetailClient({
         }
       }
     },
-    [sessionUser, supportToken]
+    [currentSessionUser, supportToken]
   );
 
   useEffect(() => {
@@ -1019,7 +1059,7 @@ function ProductDetailClient({
       return;
     }
 
-    if (!sessionUser && !supportToken) {
+    if (!currentSessionUser && !supportToken) {
       return;
     }
 
@@ -1058,7 +1098,7 @@ function ProductDetailClient({
       window.removeEventListener("focus", handleFocus);
       document.removeEventListener("visibilitychange", handleVisibility);
     };
-  }, [loadSupportConversation, sessionUser, supportMode, supportOpen, supportToken]);
+  }, [currentSessionUser, loadSupportConversation, supportMode, supportOpen, supportToken]);
 
   useEffect(() => {
     if (!supportMessagesRef.current || !supportOpen || supportMode !== "chat") {
@@ -1235,7 +1275,7 @@ function ProductDetailClient({
 
   async function submitSupportMessage() {
     const message = supportMessage.trim();
-    const email = supportContactEmail.trim() || sessionUser?.email || "";
+    const email = supportContactEmail.trim() || currentSessionUser?.email || "";
 
     if (!message || !email) {
       setSupportError(t.supportMessageRequired);
@@ -1246,7 +1286,7 @@ function ProductDetailClient({
     setSupportError("");
 
     try {
-      const customerToken = sessionUser ? "" : ensureSupportToken();
+      const customerToken = currentSessionUser ? "" : ensureSupportToken();
       const response = await fetch("/api/support", {
         method: "POST",
         headers: {
@@ -1258,9 +1298,9 @@ function ProductDetailClient({
           subject: `${t.supportChatTitle} - ${new Date().toLocaleDateString()}`,
           message,
           attachments: [],
-          name: sessionUser?.name ?? "Cliente",
+          name: currentSessionUser?.name ?? "Cliente",
           email,
-          phone: sessionUser?.phone ?? "",
+          phone: currentSessionUser?.phone ?? "",
           source: "chatbot",
         }),
       });
@@ -2182,10 +2222,10 @@ function ProductDetailClient({
           containsHeavyItems={selectedCart.some((entry) => entry.product.isHeavy)}
           initialData={
             checkoutData ?? {
-              name: sessionUser?.name ?? "",
-              phone: sessionUser?.phone ?? "",
-              email: sessionUser?.email ?? supportContactEmail,
-              address: sessionUser?.address ?? "",
+              name: currentSessionUser?.name ?? "",
+              phone: currentSessionUser?.phone ?? "",
+              email: currentSessionUser?.email ?? supportContactEmail,
+              address: currentSessionUser?.address ?? "",
               deliveryType: "delivery",
               requestedAgentCall: false,
               paymentMethod: "cash",
@@ -2243,7 +2283,7 @@ function ProductDetailClient({
                 <button
                   type="button"
                   onClick={() => {
-                    if (!sessionUser && !supportToken) {
+                    if (!currentSessionUser && !supportToken) {
                       ensureSupportToken();
                     }
                     setSupportMode("chat");
