@@ -1151,7 +1151,7 @@ function ProductDetailClient({
             {t.back}
           </button>
 
-          <div className="header-search-shell relative w-auto max-w-none gap-2 px-2 py-1.5">
+          <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={() => window.location.assign("/")}
