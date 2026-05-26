@@ -453,6 +453,7 @@ function ProductDetailClient({
   const [notice, setNotice] = useState("");
   const [showSecondaryContent, setShowSecondaryContent] = useState(false);
   const [purchaseQuantity, setPurchaseQuantity] = useState(1);
+  const [selectedCartKeys, setSelectedCartKeys] = useState<string[]>([]);
   const reviewSectionRef = useRef<HTMLDivElement | null>(null);
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
   const supportMessagesRef = useRef<HTMLDivElement | null>(null);
@@ -714,6 +715,13 @@ function ProductDetailClient({
     setSupportToken(readSupportToken());
   }, [readSupportToken]);
 
+  useEffect(() => {
+    setSelectedModelId("base");
+    setSelectedColor("");
+    setSelectedImage(initialProduct.images[0] ?? initialProduct.image);
+    setPurchaseQuantity(1);
+  }, [initialProduct.id, initialProduct.image, initialProduct.images]);
+
   const t = texts[locale];
   const product = useMemo(() => localizeProduct(initialProduct, locale), [initialProduct, locale]);
   const localizedRecommended = useMemo(
@@ -823,12 +831,12 @@ function ProductDetailClient({
     .filter(Boolean)
     .join(" · ");
   const gallery = useMemo(() => {
-    const nextGallery = [selectedImage, colorImage, selectedModel?.imageUrl, ...product.images].filter(
+    const nextGallery = [product.image, selectedImage, colorImage, selectedModel?.imageUrl, ...product.images].filter(
       (image): image is string => Boolean(image)
     );
 
     return Array.from(new Set(nextGallery));
-  }, [colorImage, product.images, selectedImage, selectedModel?.imageUrl]);
+  }, [colorImage, product.image, product.images, selectedImage, selectedModel?.imageUrl]);
   const cartItemsCount = cart.reduce((sum, entry) => sum + entry.quantity, 0);
 
   useEffect(() => {
@@ -840,6 +848,19 @@ function ProductDetailClient({
       Math.max(1, Math.min(current, purchaseOptions[purchaseOptions.length - 1] || 1))
     );
   }, [purchaseOptions]);
+
+  useEffect(() => {
+    const cartKeys = cart.map((entry) => entry.cartKey);
+    setSelectedCartKeys((currentKeys) => {
+      const nextSet = new Set(currentKeys.filter((key) => cartKeys.includes(key)));
+
+      for (const key of cartKeys) {
+        nextSet.add(key);
+      }
+
+      return Array.from(nextSet);
+    });
+  }, [cart]);
 
   useEffect(() => {
     if (!loadMoreRef.current || visibleRecommendedCount >= filteredRecommended.length) {
@@ -984,6 +1005,7 @@ function ProductDetailClient({
 
   function removeFromCart(cartKey: string) {
     persistCart(cart.filter((entry) => entry.cartKey !== cartKey));
+    setSelectedCartKeys((currentKeys) => currentKeys.filter((key) => key !== cartKey));
   }
 
   function changeQuantity(cartKey: string, quantity: number) {
@@ -1076,6 +1098,14 @@ function ProductDetailClient({
   function handleBuyNow() {
     addToCart(product, purchaseQuantity);
     setCartOpen(true);
+  }
+
+  function toggleCartSelection(cartKey: string) {
+    setSelectedCartKeys((currentKeys) =>
+      currentKeys.includes(cartKey)
+        ? currentKeys.filter((key) => key !== cartKey)
+        : [...currentKeys, cartKey]
+    );
   }
 
   async function submitSupportMessage() {
@@ -1975,6 +2005,9 @@ function ProductDetailClient({
           cart={cart}
           locale={locale}
           onClose={() => setCartOpen(false)}
+          selectedCartKeys={selectedCartKeys}
+          selectedEntryCount={selectedCartKeys.length}
+          onToggleSelection={toggleCartSelection}
           onRemove={removeFromCart}
           onChangeQuantity={changeQuantity}
           onProceed={() => setCartOpen(false)}
