@@ -448,7 +448,7 @@ function ProductDetailClient({
   const [supportError, setSupportError] = useState("");
   const [selectedModelId, setSelectedModelId] = useState("base");
   const [selectedColor, setSelectedColor] = useState("");
-  const [selectedImage, setSelectedImage] = useState(initialProduct.images[0] ?? initialProduct.image);
+  const [selectedImage, setSelectedImage] = useState(initialProduct.image || initialProduct.images[0] || "");
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [notice, setNotice] = useState("");
   const [showSecondaryContent, setShowSecondaryContent] = useState(false);
@@ -718,7 +718,7 @@ function ProductDetailClient({
   useEffect(() => {
     setSelectedModelId("base");
     setSelectedColor("");
-    setSelectedImage(initialProduct.images[0] ?? initialProduct.image);
+    setSelectedImage(initialProduct.image || initialProduct.images[0] || "");
     setPurchaseQuantity(1);
   }, [initialProduct.id, initialProduct.image, initialProduct.images]);
 
@@ -830,13 +830,29 @@ function ProductDetailClient({
   ]
     .filter(Boolean)
     .join(" · ");
-  const gallery = useMemo(() => {
-    const nextGallery = [product.image, selectedImage, colorImage, selectedModel?.imageUrl, ...product.images].filter(
-      (image): image is string => Boolean(image)
-    );
+  const galleryBaseImages = useMemo(() => {
+    const variantImages = product.variants.map((variant) => variant.imageUrl);
+    const colorImages = Object.values(product.colorImageMap ?? {});
 
-    return Array.from(new Set(nextGallery));
-  }, [colorImage, product.image, product.images, selectedImage, selectedModel?.imageUrl]);
+    return Array.from(
+      new Set(
+        [product.image, ...product.images, ...variantImages, ...colorImages].filter(
+          (image): image is string => Boolean(image)
+        )
+      )
+    );
+  }, [product.colorImageMap, product.image, product.images, product.variants]);
+
+  const gallery = useMemo(() => {
+    const prioritizedGallery = [
+      selectedImage,
+      colorImage,
+      selectedModel?.imageUrl,
+      ...galleryBaseImages,
+    ].filter((image): image is string => Boolean(image));
+
+    return Array.from(new Set(prioritizedGallery));
+  }, [colorImage, galleryBaseImages, selectedImage, selectedModel?.imageUrl]);
   const cartItemsCount = cart.reduce((sum, entry) => sum + entry.quantity, 0);
 
   useEffect(() => {
@@ -1275,33 +1291,9 @@ function ProductDetailClient({
         </div>
 
         <section
-          className={`hidden min-w-0 gap-6 lg:grid lg:grid-cols-[5.5rem_minmax(0,1.05fr)_minmax(0,0.95fr)_18rem] xl:grid-cols-[6rem_minmax(0,1.1fr)_minmax(0,1fr)_19rem] ${compact ? "mt-3" : "mt-5 lg:mt-6"}`}
+          className={`hidden min-w-0 gap-6 lg:grid lg:grid-cols-[minmax(0,1.08fr)_minmax(0,0.92fr)_18rem] xl:grid-cols-[minmax(0,1.15fr)_minmax(0,0.95fr)_19rem] ${compact ? "mt-3" : "mt-5 lg:mt-6"}`}
         >
-          <div className="space-y-3">
-            {gallery.map((image) => (
-              <button
-                key={`desktop-thumb-${image}`}
-                type="button"
-                onClick={() => setSelectedImage(image)}
-                className={`relative block overflow-hidden rounded-[1.1rem] border bg-[#08101e] transition ${
-                  selectedImage === image
-                    ? "border-cyan-400 shadow-[0_0_0_1px_rgba(34,211,238,0.2)]"
-                    : "border-slate-800 hover:border-cyan-500/40"
-                }`}
-              >
-                <div className="relative aspect-square w-full">
-                  <StorefrontImage
-                    src={image}
-                    alt={product.name}
-                    sizes="96px"
-                    className="product-media product-media--cover"
-                  />
-                </div>
-              </button>
-            ))}
-          </div>
-
-          <div className="min-w-0">
+          <div className="min-w-0 space-y-4">
             <div className="relative overflow-hidden rounded-[2rem] border border-slate-800 bg-[#050816] shadow-[0_24px_80px_rgba(0,0,0,0.35)]">
               {product.badge ? (
                 <span className="absolute left-4 top-4 z-10 rounded-full bg-rose-500 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-white">
@@ -1329,6 +1321,32 @@ function ProductDetailClient({
                 {t.fullscreen}
               </button>
             </div>
+
+            {gallery.length > 1 ? (
+              <div className="flex flex-wrap gap-3">
+                {gallery.map((image) => (
+                  <button
+                    key={`desktop-thumb-${image}`}
+                    type="button"
+                    onClick={() => setSelectedImage(image)}
+                    className={`relative block w-[5.75rem] overflow-hidden rounded-[1.1rem] border bg-[#08101e] transition ${
+                      selectedImage === image
+                        ? "border-cyan-400 shadow-[0_0_0_1px_rgba(34,211,238,0.2)]"
+                        : "border-slate-800 hover:border-cyan-500/40"
+                    }`}
+                  >
+                    <div className="relative aspect-square w-full">
+                      <StorefrontImage
+                        src={image}
+                        alt={product.name}
+                        sizes="92px"
+                        className="product-media product-media--cover"
+                      />
+                    </div>
+                  </button>
+                ))}
+              </div>
+            ) : null}
           </div>
 
           <div className="min-w-0 space-y-5">
