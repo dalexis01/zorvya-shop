@@ -885,15 +885,12 @@ function ProductDetailClient({
   }, [product.colorImageMap, product.image, product.images, product.variants]);
 
   const gallery = useMemo(() => {
-    const prioritizedGallery = [
-      selectedImage,
-      colorImage,
-      selectedModel?.imageUrl,
-      ...galleryBaseImages,
-    ].filter((image): image is string => Boolean(image));
+    const prioritizedGallery = [colorImage, selectedModel?.imageUrl, ...galleryBaseImages].filter(
+      (image): image is string => Boolean(image)
+    );
 
     return Array.from(new Set(prioritizedGallery));
-  }, [colorImage, galleryBaseImages, selectedImage, selectedModel?.imageUrl]);
+  }, [colorImage, galleryBaseImages, selectedModel?.imageUrl]);
   const cartItemsCount = cart.reduce((sum, entry) => sum + entry.quantity, 0);
 
   useEffect(() => {
