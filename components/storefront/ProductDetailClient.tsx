@@ -574,17 +574,58 @@ function ProductDetailClient({
   useEffect(() => {
     let cancelled = false;
 
-    const hydrateCart = () => {
+    const hydrateCart = async () => {
+      const storedEntries = readStoredCart();
+      const productMap = new Map<string, StorefrontProduct>();
+      const seedProducts = [initialProduct, ...initialRecommended];
+
+      for (const entryProduct of seedProducts) {
+        productMap.set(String(entryProduct.id), entryProduct);
+      }
+
+      const missingProductIds = Array.from(
+        new Set(
+          storedEntries
+            .map((entry) => String(entry.productId))
+            .filter((productId) => !productMap.has(productId))
+        )
+      );
+
+      if (missingProductIds.length > 0) {
+        await Promise.all(
+          missingProductIds.map(async (productId) => {
+            try {
+              const response = await fetch(`/api/products/${productId}?includeExtras=false`, {
+                cache: "force-cache",
+              });
+
+              if (!response.ok) {
+                return;
+              }
+
+              const payload = (await response.json()) as {
+                success?: boolean;
+                product?: StorefrontProduct;
+              };
+
+              if (payload.success && payload.product) {
+                productMap.set(String(payload.product.id), payload.product);
+              }
+            } catch {
+              // Ignore missing product hydration for stale cart entries.
+            }
+          })
+        );
+      }
+
       if (cancelled) {
         return;
       }
 
-      const storedEntries = readStoredCart();
       const hydratedCart: CartEntry[] = [];
 
       for (const entry of storedEntries) {
-        const product =
-          String(initialProduct.id) === String(entry.productId) ? initialProduct : null;
+        const product = productMap.get(String(entry.productId));
 
         if (!product) {
           continue;
@@ -614,7 +655,7 @@ function ProductDetailClient({
 
     if (typeof window !== "undefined" && "requestIdleCallback" in window) {
       const idleId = window.requestIdleCallback(() => {
-        hydrateCart();
+        void hydrateCart();
         setShowSecondaryContent(true);
       });
 
@@ -625,7 +666,7 @@ function ProductDetailClient({
     }
 
     const timeoutId = globalThis.setTimeout(() => {
-      hydrateCart();
+      void hydrateCart();
       setShowSecondaryContent(true);
     }, 16);
 
@@ -633,7 +674,7 @@ function ProductDetailClient({
       cancelled = true;
       globalThis.clearTimeout(timeoutId);
     };
-  }, [initialProduct, locale]);
+  }, [initialProduct, initialRecommended, locale]);
 
   useEffect(() => {
     router.prefetch("/");
