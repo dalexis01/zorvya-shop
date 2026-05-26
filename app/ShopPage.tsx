@@ -2588,13 +2588,11 @@ export default function ShopPage({
                       product={product}
                       deliveryEstimateText={deliveryEstimateText}
                       onAdd={addToCart}
-                      onOpen={isCompactViewport ? undefined : openProduct}
                     />
                     {mobilePromoInsertionIndexes.has(index) && catalogPromoProducts.length > 0 ? (
                       <div className="col-span-2 md:hidden">
                         <CatalogPromoBanner
                           products={catalogPromoProducts}
-                          onOpen={isCompactViewport ? undefined : openProduct}
                           initialIndex={index}
                         />
                       </div>
@@ -2603,7 +2601,6 @@ export default function ShopPage({
                       <div className="hidden md:block md:col-span-2 lg:col-span-2 xl:col-span-2">
                         <CatalogPromoBanner
                           products={catalogPromoProducts}
-                          onOpen={openProduct}
                           initialIndex={0}
                         />
                       </div>
