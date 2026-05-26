@@ -947,10 +947,10 @@ function ProductDetailClient({
           </div>
         </div>
 
-        <section className={`grid min-w-0 items-start gap-5 lg:grid-cols-[0.35fr_1.18fr_0.82fr] ${compact ? "mt-3" : "mt-5 lg:mt-6"}`}>
+        <section className={`grid min-w-0 items-start gap-5 lg:grid-cols-[minmax(0,1.18fr)_minmax(22rem,0.82fr)] xl:grid-cols-[minmax(0,1.24fr)_minmax(24rem,0.76fr)] ${compact ? "mt-3" : "mt-5 lg:mt-6"}`}>
           {/* Panel lateral izquierdo - Productos similares */}
           {filteredRecommended.length > 0 || recommendedSearch ? (
-            <div className="order-3 min-w-0 h-fit rounded-[2.25rem] border border-slate-800 bg-[#050816] p-4 shadow-[0_24px_80px_rgba(0,0,0,0.35)] lg:order-1">
+            <div className="order-3 min-w-0 h-fit rounded-[2.25rem] border border-slate-800 bg-[#050816] p-4 shadow-[0_24px_80px_rgba(0,0,0,0.35)] lg:order-3 lg:col-span-2">
               <p className="text-xs uppercase tracking-[0.3em] text-cyan-300 font-semibold">{t.recommended}</p>
               <div className="mt-4 rounded-full border border-slate-800 bg-[#0a1020] px-3 py-2">
                 <div className="flex items-center gap-2.5">
@@ -974,24 +974,24 @@ function ProductDetailClient({
                   />
                 </div>
               </div>
-              <div className="mt-4 flex flex-col gap-3">
+              <div className="mt-4 flex flex-col gap-3 lg:grid lg:grid-cols-3 xl:grid-cols-4">
                 {visibleRecommended.map((item) => (
                   <button
                     key={String(item.id)}
                     onClick={() => router.push(`/products/${item.id}`)}
                     type="button"
-                    className="text-left rounded-lg border border-slate-800 bg-[#0a1020] p-2 hover:border-cyan-500/40 transition group"
+                    className="text-left rounded-[1.2rem] border border-slate-800 bg-[#0a1020] p-2.5 transition hover:border-cyan-500/40 group"
                   >
-                    <div className="relative aspect-square overflow-hidden rounded-lg mb-2">
+                    <div className="relative mb-3 aspect-[5/4] overflow-hidden rounded-[1rem]">
                       <StorefrontImage
                         src={item.image}
                         alt={item.name}
-                        sizes="120px"
+                        sizes="240px"
                         className="product-media product-media--cover group-hover:scale-105 transition"
                       />
                     </div>
-                    <p className="text-[10px] font-semibold text-white line-clamp-2 leading-tight">{item.name}</p>
-                    <p className="text-xs text-cyan-300 font-bold mt-1">{formatCurrency(item.price)}</p>
+                    <p className="line-clamp-2 text-xs font-semibold leading-5 text-white sm:text-[13px]">{item.name}</p>
+                    <p className="mt-1.5 text-sm font-bold text-cyan-300">{formatCurrency(item.price)}</p>
                   </button>
                 ))}
                 {visibleRecommended.length === 0 ? (
@@ -1016,12 +1016,12 @@ function ProductDetailClient({
             <div className="relative overflow-hidden rounded-[2.25rem] border border-slate-800 bg-[#050816] shadow-[0_24px_80px_rgba(0,0,0,0.35)]">
               {activeImage ? (
                 <button type="button" onClick={() => setLightboxOpen(true)} className="block w-full">
-                    <div className="relative aspect-[5/4] min-h-[16.5rem] w-full sm:min-h-[24rem] lg:min-h-[31rem]">
+                    <div className="relative aspect-[5/4] min-h-[16.5rem] w-full sm:min-h-[24rem] lg:min-h-[34rem] xl:min-h-[38rem]">
                       <StorefrontImage
                         src={activeImage}
                         alt={product.name}
                         priority
-                        sizes="(max-width: 1024px) 100vw, 58vw"
+                        sizes="(max-width: 1024px) 100vw, 64vw"
                         className="product-media product-media--detail"
                       />
                     </div>
@@ -1065,9 +1065,12 @@ function ProductDetailClient({
           <div className="order-2 min-w-0 space-y-4 rounded-[2.25rem] border border-transparent bg-transparent p-0 shadow-none lg:order-3 lg:border-slate-800 lg:bg-[#050816] lg:p-5 lg:shadow-[0_24px_80px_rgba(0,0,0,0.35)]">
             <div className="min-w-0">
               <h1 className="hidden text-3xl font-semibold tracking-tight text-white lg:block">{product.name}</h1>
-              {selectedModel?.details ? (
-                <p className="mt-2 hidden break-words text-sm leading-6 text-slate-300 lg:block">{selectedModel.details}</p>
-              ) : null}
+              <div className="mt-2 hidden items-center gap-2 text-sm text-slate-300 lg:flex">
+                <span className="text-amber-300">{createStars(averageRating)}</span>
+                <span>
+                  {formatGroupedNumber(averageRating, 1)} · {reviewCount} {t.reviews}
+                </span>
+              </div>
             </div>
 
             <div className="space-y-3 lg:hidden">
@@ -1233,6 +1236,17 @@ function ProductDetailClient({
             ) : null}
           </div>
         </section>
+
+        {selectedModel?.details ? (
+          <section className="hidden rounded-[2rem] border border-slate-800 bg-[#050816] p-5 shadow-[0_24px_80px_rgba(0,0,0,0.35)] lg:block lg:p-6">
+            <h2 className="text-xs font-semibold uppercase tracking-[0.28em] text-cyan-300">
+              Detalles
+            </h2>
+            <p className="mt-4 break-words text-sm leading-7 text-slate-300 whitespace-pre-line lg:text-[15px]">
+              {selectedModel.details}
+            </p>
+          </section>
+        ) : null}
 
         {showSecondaryContent ? (
           <section className={`grid gap-6 xl:grid-cols-[1fr_0.95fr] ${compact ? "mt-6" : "mt-8"}`}>
