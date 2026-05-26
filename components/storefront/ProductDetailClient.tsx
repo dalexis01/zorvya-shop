@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import CheckoutModal from "@/components/CheckoutModal";
+import OrderConfirmationModal from "@/components/OrderConfirmationModal";
 import { readStoredCart, writeStoredCart, type HydratedCartEntry } from "@/lib/shop/cart-storage";
 import { toPickupDateKey } from "@/lib/shop/checkout";
 import { buildCartKey, createStars } from "@/lib/shop/display-utils";
@@ -473,6 +474,7 @@ function ProductDetailClient({
   initialRecommended,
   sessionUser,
   initialClientTheme,
+  paypalClientId,
   compact = false,
 }: {
   initialProduct: StorefrontProduct;
@@ -480,6 +482,7 @@ function ProductDetailClient({
   initialRecommended: StorefrontProduct[];
   sessionUser: SessionUser | null;
   initialClientTheme: ClientTheme;
+  paypalClientId: string | null;
   compact?: boolean;
 }) {
   const router = useRouter();
@@ -518,6 +521,7 @@ function ProductDetailClient({
   const [purchaseQuantity, setPurchaseQuantity] = useState(1);
   const [selectedCartKeys, setSelectedCartKeys] = useState<string[]>([]);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
+  const [confirmationOpen, setConfirmationOpen] = useState(false);
   const [checkoutData, setCheckoutData] = useState<CheckoutCustomerData | null>(null);
   const reviewSectionRef = useRef<HTMLDivElement | null>(null);
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
@@ -1320,30 +1324,95 @@ function ProductDetailClient({
     }
   }
 
-  async function submitCheckout(data: CheckoutCustomerData) {
-    setCheckoutData(data);
-
+  async function submitOrder() {
+    if (!checkoutData || selectedCart.length === 0) {
+      return false;
+    }
     const response = await fetch("/api/place-order", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify(buildOrderPayload(selectedCart, data)),
+      body: JSON.stringify(buildOrderPayload(selectedCart, checkoutData)),
     });
     const payload = (await response.json()) as OrderMutationResponse;
 
     if (!payload.success || !payload.order) {
       setNotice(payload.error || "No se pudo confirmar tu pedido.");
-      return;
+      return false;
     }
 
     const selectedKeysSet = new Set(selectedCart.map((entry) => entry.cartKey));
     setCart((currentCart) => currentCart.filter((entry) => !selectedKeysSet.has(entry.cartKey)));
     setSelectedCartKeys((currentKeys) => currentKeys.filter((key) => !selectedKeysSet.has(key)));
+    setCheckoutData(null);
+    setConfirmationOpen(false);
     setCheckoutOpen(false);
     setCartOpen(false);
-    setCheckoutData(null);
     setNotice(`Pedido ${payload.order.id} confirmado.`);
+    return true;
+  }
+
+  async function createPayPalOrder() {
+    if (!checkoutData || selectedCart.length === 0) {
+      throw new Error("Faltan datos para iniciar PayPal.");
+    }
+
+    const response = await fetch("/api/paypal/create-order", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(buildOrderPayload(selectedCart, checkoutData)),
+    });
+    const payload = (await response.json()) as {
+      success?: boolean;
+      paypalOrderId?: string;
+      error?: string;
+    };
+
+    if (!payload.success || !payload.paypalOrderId) {
+      throw new Error(payload.error || "No se pudo crear la orden PayPal.");
+    }
+
+    return payload.paypalOrderId;
+  }
+
+  async function approvePayPalOrder(paypalOrderId: string) {
+    if (!checkoutData || selectedCart.length === 0) {
+      return false;
+    }
+
+    const response = await fetch("/api/paypal/confirm-order", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        ...buildOrderPayload(selectedCart, checkoutData),
+        paypalOrderId,
+      }),
+    });
+    const payload = (await response.json()) as OrderMutationResponse;
+
+    if (!payload.success || !payload.order) {
+      setNotice(payload.error || "No se pudo completar el pago PayPal.");
+      return false;
+    }
+
+    const selectedKeysSet = new Set(selectedCart.map((entry) => entry.cartKey));
+    setCart((currentCart) => currentCart.filter((entry) => !selectedKeysSet.has(entry.cartKey)));
+    setSelectedCartKeys((currentKeys) => currentKeys.filter((key) => !selectedKeysSet.has(key)));
+    setCheckoutData(null);
+    setConfirmationOpen(false);
+    setCheckoutOpen(false);
+    setCartOpen(false);
+    setNotice(`Pedido ${payload.order.id} confirmado.`);
+    return true;
+  }
+
+  function handlePayPalError(message: string) {
+    setNotice(message);
   }
 
   return (
@@ -2234,8 +2303,34 @@ function ProductDetailClient({
           }
           onClose={() => setCheckoutOpen(false)}
           onSubmit={(data) => {
-            void submitCheckout(data);
+            setCheckoutData(data);
+            setCheckoutOpen(false);
+            setConfirmationOpen(true);
           }}
+        />
+      ) : null}
+
+      {confirmationOpen && checkoutData ? (
+        <OrderConfirmationModal
+          locale={locale}
+          cart={selectedCart}
+          customerData={checkoutData}
+          subtotal={selectedSubtotal}
+          deliveryFee={checkoutData.deliveryType === "delivery" ? checkoutData.deliveryFee ?? 0 : 0}
+          deliveryDistanceKm={checkoutData.deliveryDistanceKm}
+          total={selectedSubtotal + (checkoutData.deliveryType === "delivery" ? checkoutData.deliveryFee ?? 0 : 0)}
+          paypalClientId={paypalClientId}
+          onClose={() => setConfirmationOpen(false)}
+          onBack={() => {
+            setConfirmationOpen(false);
+            setCheckoutOpen(true);
+          }}
+          onConfirm={async () => {
+            await submitOrder();
+          }}
+          onCreatePayPalOrder={createPayPalOrder}
+          onApprovePayPalOrder={approvePayPalOrder}
+          onPayPalError={handlePayPalError}
         />
       ) : null}
 

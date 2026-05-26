@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 
 import ProductDetailClient from "@/components/storefront/ProductDetailClient";
 import { getStorefrontProductById } from "@/lib/server/catalog";
+import { getPayPalClientId } from "@/lib/server/paypal";
 import { CLIENT_THEME_COOKIE_KEY, normalizeClientTheme } from "@/lib/shop/client-theme";
 
 export const dynamic = "force-dynamic";
@@ -18,7 +19,10 @@ export default async function ProductDetailPage({
     cookieStore.get(CLIENT_THEME_COOKIE_KEY)?.value,
     "dark"
   );
-  const product = await getStorefrontProductById(id);
+  const [product, paypalClientId] = await Promise.all([
+    getStorefrontProductById(id),
+    getPayPalClientId(),
+  ]);
 
   if (!product) {
     notFound();
@@ -31,6 +35,7 @@ export default async function ProductDetailPage({
       initialRecommended={[]}
       sessionUser={null}
       initialClientTheme={initialClientTheme}
+      paypalClientId={paypalClientId}
     />
   );
 }
