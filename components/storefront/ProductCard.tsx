@@ -1,7 +1,6 @@
 "use client";
 
 import Image from "next/image";
-import Link from "next/link";
 import { memo, useState } from "react";
 
 import DeliveryEstimateBadge from "@/components/storefront/DeliveryEstimateBadge";
@@ -130,6 +129,7 @@ function ProductCard({
   const requiresSelection = product.variants.length > 0 || product.colors.length > 0;
   const useOverlay = Boolean(onOpen);
   const priceInUsd = formatCurrencyUsd(product.price / SRD_PER_USD);
+  const productHref = `/products/${product.id}`;
   const reviewStars = product.reviewCount > 0 ? createStars(product.rating || 0) : "☆☆☆☆☆";
 
   const openProduct = () => {
@@ -161,9 +161,8 @@ function ProductCard({
             </div>
           </button>
         ) : (
-          <Link
-            href={`/products/${product.id}`}
-            prefetch={false}
+          <a
+            href={productHref}
             className="block h-[62%] min-h-0 w-full shrink-0 sm:h-[60%]"
           >
             <div className={`relative h-full overflow-hidden border-b border-slate-800 ${styles.mediaShell}`}>
@@ -175,7 +174,7 @@ function ProductCard({
               </div>
               <ProductCardImage src={product.image} alt={product.name} />
             </div>
-          </Link>
+          </a>
         )}
 
         <div className="flex min-h-0 flex-1 flex-col gap-0 p-1.5 pt-0.5 sm:gap-1 sm:p-[0.55rem] sm:pt-1">
@@ -198,13 +197,13 @@ function ProductCard({
                     </h3>
                   </button>
                 ) : (
-                  <Link href={`/products/${product.id}`} prefetch={false} className="block">
+                  <a href={productHref} className="block">
                     <h3
                       className={`${styles.title} line-clamp-2 text-[11.5px] leading-[1.14] transition hover:text-cyan-100 sm:text-[13.5px]`}
                     >
                       {product.name}
                     </h3>
-                  </Link>
+                  </a>
                 )}
 
                 <div className="flex items-center gap-1.5 pt-0.5">
@@ -248,15 +247,14 @@ function ProductCard({
                 </div>
               ) : (
                 <div className="shrink-0 self-end">
-                  <Link
-                    href={`/products/${product.id}`}
-                    prefetch={false}
+                  <a
+                    href={productHref}
                     aria-label={t.chooseOptions}
                     title={t.chooseOptions}
                     className={styles.iconActionButton}
                   >
                     <ModelActionIcon />
-                  </Link>
+                  </a>
                 </div>
               )
             ) : (

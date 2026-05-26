@@ -1,7 +1,6 @@
 "use client";
 
 import Image from "next/image";
-import Link from "next/link";
 import {
   Fragment,
   useCallback,
@@ -235,13 +234,12 @@ function CatalogPromoBanner({
           {bannerContent}
         </button>
       ) : (
-        <Link
+        <a
           href={`/products/${activeProduct.id}`}
-          prefetch={false}
           className="relative block h-full min-h-[16.5rem] w-full overflow-hidden text-left sm:min-h-[19rem] lg:min-h-[20rem]"
         >
           {bannerContent}
-        </Link>
+        </a>
       )}
     </article>
   );
