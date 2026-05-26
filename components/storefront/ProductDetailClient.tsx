@@ -3,7 +3,7 @@
 import dynamic from "next/dynamic";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { memo, startTransition, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { readStoredCart, writeStoredCart, type HydratedCartEntry } from "@/lib/shop/cart-storage";
 import { buildCartKey, createStars } from "@/lib/shop/display-utils";
@@ -29,6 +29,7 @@ import type {
   SessionUser,
   StorefrontProduct,
 } from "@/lib/shop/types";
+import type { SupportMessage } from "@/lib/shop/admin-types";
 
 const CartPanel = dynamic(() => import("@/components/CartPanel"));
 
@@ -80,6 +81,20 @@ const texts = {
     seller: "Vendedor",
     payment: "Pago",
     returns: "Devoluciones",
+    estimatedDelivery: "Envio estimado",
+    estimatedDeliveryWindow: "Entrega estimada en 24 horas o el mismo dia si ya va en ruta.",
+    supportChooserTitle: "Como quieres hablar con soporte",
+    supportChooserSubtitle: "Elige la via mas comoda y seguimos desde ahi.",
+    supportChatOption: "Chat",
+    supportCallOption: "Llamada",
+    supportWhatsappOption: "WhatsApp",
+    supportWhatsappSoon: "Lo configuramos en breve.",
+    supportChatTitle: "Chat de soporte",
+    supportChatSubtitle: "Escribe y el mensaje llega directo a administracion.",
+    supportMessagePlaceholder: "Escribe tu mensaje...",
+    supportMessageRequired: "Necesito tu correo y un mensaje para abrir el chat.",
+    supportSendSuccess: "Tu mensaje ya fue enviado a soporte.",
+    contactEmail: "Correo de contacto",
   },
   nl: {
     back: "Terug",
@@ -128,6 +143,20 @@ const texts = {
     seller: "Verkoper",
     payment: "Betaling",
     returns: "Retouren",
+    estimatedDelivery: "Geschatte levering",
+    estimatedDeliveryWindow: "Geschatte levering binnen 24 uur of vandaag als het al onderweg is.",
+    supportChooserTitle: "Hoe wil je support spreken",
+    supportChooserSubtitle: "Kies de handigste optie en we gaan verder.",
+    supportChatOption: "Chat",
+    supportCallOption: "Bellen",
+    supportWhatsappOption: "WhatsApp",
+    supportWhatsappSoon: "We stellen dit binnenkort in.",
+    supportChatTitle: "Support chat",
+    supportChatSubtitle: "Schrijf en het bericht gaat direct naar het team.",
+    supportMessagePlaceholder: "Schrijf je bericht...",
+    supportMessageRequired: "Ik heb je e-mail en een bericht nodig om de chat te openen.",
+    supportSendSuccess: "Je bericht is naar support verzonden.",
+    contactEmail: "Contact e-mail",
   },
   en: {
     back: "Back",
@@ -176,6 +205,20 @@ const texts = {
     seller: "Seller",
     payment: "Payment",
     returns: "Returns",
+    estimatedDelivery: "Estimated delivery",
+    estimatedDeliveryWindow: "Estimated delivery within 24 hours, or same day once it is already on route.",
+    supportChooserTitle: "How do you want to contact support",
+    supportChooserSubtitle: "Pick the option that fits you best.",
+    supportChatOption: "Chat",
+    supportCallOption: "Call",
+    supportWhatsappOption: "WhatsApp",
+    supportWhatsappSoon: "We will configure this shortly.",
+    supportChatTitle: "Support chat",
+    supportChatSubtitle: "Type here and the message goes straight to the team.",
+    supportMessagePlaceholder: "Type your message...",
+    supportMessageRequired: "I need your email and a message to open the chat.",
+    supportSendSuccess: "Your message was sent to support.",
+    contactEmail: "Contact email",
   },
   pt: {
     back: "Voltar",
@@ -224,10 +267,30 @@ const texts = {
     seller: "Vendedor",
     payment: "Pagamento",
     returns: "Devolucoes",
+    estimatedDelivery: "Entrega estimada",
+    estimatedDeliveryWindow: "Entrega estimada em 24 horas ou no mesmo dia quando ja estiver em rota.",
+    supportChooserTitle: "Como voce quer falar com o suporte",
+    supportChooserSubtitle: "Escolha a opcao mais confortavel e seguimos por ai.",
+    supportChatOption: "Chat",
+    supportCallOption: "Ligacao",
+    supportWhatsappOption: "WhatsApp",
+    supportWhatsappSoon: "Vamos configurar isso em breve.",
+    supportChatTitle: "Chat de suporte",
+    supportChatSubtitle: "Escreva e a mensagem vai direto para a equipe.",
+    supportMessagePlaceholder: "Escreva sua mensagem...",
+    supportMessageRequired: "Preciso do seu e-mail e de uma mensagem para abrir o chat.",
+    supportSendSuccess: "Sua mensagem foi enviada ao suporte.",
+    contactEmail: "E-mail de contato",
   },
 } as const;
 
 type CartEntry = HydratedCartEntry;
+type SupportPanelMode = "menu" | "chat";
+type SupportResponse = {
+  success?: boolean;
+  conversation?: SupportMessage | null;
+  error?: string;
+};
 
 type ModelOption = {
   id: string;
@@ -375,6 +438,14 @@ function ProductDetailClient({
   const [cartPulseActive, setCartPulseActive] = useState(false);
   const [cartPulseVariant, setCartPulseVariant] = useState(0);
   const [supportOpen, setSupportOpen] = useState(false);
+  const [supportMode, setSupportMode] = useState<SupportPanelMode>("menu");
+  const [supportConversation, setSupportConversation] = useState<SupportMessage | null>(null);
+  const [supportToken, setSupportToken] = useState("");
+  const [supportContactEmail, setSupportContactEmail] = useState(sessionUser?.email ?? "");
+  const [supportMessage, setSupportMessage] = useState("");
+  const [supportLoading, setSupportLoading] = useState(false);
+  const [supportSending, setSupportSending] = useState(false);
+  const [supportError, setSupportError] = useState("");
   const [selectedModelId, setSelectedModelId] = useState("base");
   const [selectedColor, setSelectedColor] = useState("");
   const [selectedImage, setSelectedImage] = useState(initialProduct.images[0] ?? initialProduct.image);
@@ -384,20 +455,7 @@ function ProductDetailClient({
   const [purchaseQuantity, setPurchaseQuantity] = useState(1);
   const reviewSectionRef = useRef<HTMLDivElement | null>(null);
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
-  const handleClientThemeChange = useCallback(
-    (nextTheme: ClientTheme) => {
-      if (nextTheme === clientTheme) {
-        return;
-      }
-
-      applyClientTheme(nextTheme);
-      startTransition(() => {
-        setClientTheme(nextTheme);
-      });
-    },
-    [clientTheme]
-  );
-
+  const supportMessagesRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
     const storedLocale = readStoredLocale("es");
     const storedTheme = readStoredClientTheme(initialClientTheme);
@@ -441,6 +499,68 @@ function ProductDetailClient({
       window.removeEventListener(LOCALE_STORAGE_EVENT, handleLocaleEvent);
     };
   }, []);
+
+  const readSupportToken = useCallback(() => {
+    if (typeof window === "undefined") {
+      return "";
+    }
+
+    return window.localStorage.getItem("zorvya-support-token") ?? "";
+  }, []);
+
+  const ensureSupportToken = useCallback(() => {
+    if (typeof window === "undefined") {
+      return "";
+    }
+
+    const existingToken = readSupportToken();
+    if (existingToken) {
+      setSupportToken(existingToken);
+      return existingToken;
+    }
+
+    const nextToken = window.crypto?.randomUUID?.() ?? `support-${Date.now()}`;
+    window.localStorage.setItem("zorvya-support-token", nextToken);
+    setSupportToken(nextToken);
+    return nextToken;
+  }, [readSupportToken]);
+
+  const loadSupportConversation = useCallback(
+    async (showLoading: boolean = false) => {
+      const customerToken = sessionUser ? "" : supportToken.trim();
+
+      if (!sessionUser && !customerToken) {
+        setSupportConversation(null);
+        if (showLoading) {
+          setSupportLoading(false);
+        }
+        return;
+      }
+
+      if (showLoading) {
+        setSupportLoading(true);
+      }
+
+      try {
+        const query = customerToken ? `?customerToken=${encodeURIComponent(customerToken)}` : "";
+        const response = await fetch(`/api/support${query}`, { cache: "no-store" });
+        const payload = (await response.json()) as SupportResponse;
+
+        if (payload.success) {
+          setSupportConversation(payload.conversation ?? null);
+
+          if (payload.conversation?.customerEmail) {
+            setSupportContactEmail(payload.conversation.customerEmail);
+          }
+        }
+      } finally {
+        if (showLoading) {
+          setSupportLoading(false);
+        }
+      }
+    },
+    [sessionUser, supportToken]
+  );
 
   useEffect(() => {
     if (!notice) return;
@@ -589,6 +709,10 @@ function ProductDetailClient({
       cancelled = true;
     };
   }, [initialProduct.id]);
+
+  useEffect(() => {
+    setSupportToken(readSupportToken());
+  }, [readSupportToken]);
 
   const t = texts[locale];
   const product = useMemo(() => localizeProduct(initialProduct, locale), [initialProduct, locale]);
@@ -743,6 +867,60 @@ function ProductDetailClient({
       observer.disconnect();
     };
   }, [filteredRecommended.length, visibleRecommendedCount]);
+
+  useEffect(() => {
+    if (!supportOpen || supportMode !== "chat") {
+      return;
+    }
+
+    if (!sessionUser && !supportToken) {
+      return;
+    }
+
+    let active = true;
+
+    const refreshConversation = async (showLoading: boolean = false) => {
+      if (!active) {
+        return;
+      }
+
+      await loadSupportConversation(showLoading);
+    };
+
+    void refreshConversation(true);
+
+    const intervalId = window.setInterval(() => {
+      void refreshConversation(false);
+    }, 90000);
+
+    const handleFocus = () => {
+      void refreshConversation(false);
+    };
+
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") {
+        void refreshConversation(false);
+      }
+    };
+
+    window.addEventListener("focus", handleFocus);
+    document.addEventListener("visibilitychange", handleVisibility);
+
+    return () => {
+      active = false;
+      window.clearInterval(intervalId);
+      window.removeEventListener("focus", handleFocus);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
+  }, [loadSupportConversation, sessionUser, supportMode, supportOpen, supportToken]);
+
+  useEffect(() => {
+    if (!supportMessagesRef.current || !supportOpen || supportMode !== "chat") {
+      return;
+    }
+
+    supportMessagesRef.current.scrollTop = supportMessagesRef.current.scrollHeight;
+  }, [supportConversation?.chatEntries.length, supportMode, supportOpen]);
 
 
 
@@ -900,6 +1078,53 @@ function ProductDetailClient({
     setCartOpen(true);
   }
 
+  async function submitSupportMessage() {
+    const message = supportMessage.trim();
+    const email = supportContactEmail.trim() || sessionUser?.email || "";
+
+    if (!message || !email) {
+      setSupportError(t.supportMessageRequired);
+      return;
+    }
+
+    setSupportSending(true);
+    setSupportError("");
+
+    try {
+      const customerToken = sessionUser ? "" : ensureSupportToken();
+      const response = await fetch("/api/support", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          conversationId: supportConversation?.id,
+          customerToken: customerToken || undefined,
+          subject: `${t.supportChatTitle} - ${new Date().toLocaleDateString()}`,
+          message,
+          attachments: [],
+          name: sessionUser?.name ?? "Cliente",
+          email,
+          phone: sessionUser?.phone ?? "",
+          source: "chatbot",
+        }),
+      });
+      const payload = (await response.json()) as SupportResponse;
+
+      if (!payload.success) {
+        throw new Error(payload.error || t.supportMessageRequired);
+      }
+
+      setSupportConversation(payload.conversation ?? null);
+      setSupportMessage("");
+      setNotice(t.supportSendSuccess);
+    } catch (error) {
+      setSupportError(error instanceof Error ? error.message : t.supportMessageRequired);
+    } finally {
+      setSupportSending(false);
+    }
+  }
+
   return (
     <div
       className={`client-page-shell bg-[radial-gradient(circle_at_top,_rgba(6,182,212,0.16),_transparent_28%),linear-gradient(180deg,_#02030a_0%,_#050816_100%)] text-white ${compact ? "min-h-0" : "min-h-screen"}`}
@@ -926,90 +1151,78 @@ function ProductDetailClient({
             {t.back}
           </button>
 
-          <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => window.location.assign("/")}
-                className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-700 bg-[#0a1020] text-slate-300 transition hover:border-cyan-500 hover:text-white"
-                aria-label={t.home}
-                title={t.home}
-            >
-              <svg
-                viewBox="0 0 24 24"
-                aria-hidden="true"
-                className="h-4 w-4"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.9"
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" d="M3 10.5 12 3l9 7.5" />
-                <path strokeLinecap="round" strokeLinejoin="round" d="M5.5 9.5V20h13V9.5" />
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9.5 20v-5.5h5V20" />
-              </svg>
-            </button>
-            <div className="hidden items-center gap-2 lg:flex">
-            <label className="theme-switch" aria-label={t.themeAria}>
-              <span className="sun">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
-                  <g fill="#ffd43b">
-                    <circle r="5" cy="12" cx="12" />
-                    <path d="m21 13h-1a1 1 0 0 1 0-2h1a1 1 0 0 1 0 2zm-17 0h-1a1 1 0 0 1 0-2h1a1 1 0 0 1 0 2zm13.66-5.66a1 1 0 0 1 -.66-.29 1 1 0 0 1 0-1.41l.71-.71a1 1 0 1 1 1.41 1.41l-.71.71a1 1 0 0 1 -.75.29zm-12.02 12.02a1 1 0 0 1 -.71-.29 1 1 0 0 1 0-1.41l.71-.66a1 1 0 0 1 1.41 1.41l-.71.71a1 1 0 0 1 -.7.24zm6.36-14.36a1 1 0 0 1 -1-1v-1a1 1 0 0 1 2 0v1a1 1 0 0 1 -1 1zm0 17a1 1 0 0 1 -1-1v-1a1 1 0 0 1 2 0v1a1 1 0 0 1 -1 1zm-5.66-14.66a1 1 0 0 1 -.7-.29l-.71-.71a1 1 0 0 1 1.41-1.41l.71.71a1 1 0 0 1 0 1.41 1 1 0 0 1 -.71.29zm12.02 12.02a1 1 0 0 1 -.7-.29l-.66-.71a1 1 0 0 1 1.36-1.36l.71.71a1 1 0 0 1 0 1.41 1 1 0 0 1 -.71.24z" />
-                  </g>
-                </svg>
-              </span>
-              <span className="moon">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 384 512">
-                  <path d="m223.5 32c-123.5 0-223.5 100.3-223.5 224s100 224 223.5 224c60.6 0 115.5-24.2 155.8-63.4 5-4.9 6.3-12.5 3.1-18.7s-10.1-9.7-17-8.5c-9.8 1.7-19.8 2.6-30.1 2.6-96.9 0-175.5-78.8-175.5-176 0-65.8 36-123.1 89.3-153.3 6.1-3.5 9.2-10.5 7.7-17.3s-7.3-11.9-14.3-12.5c-6.3-.5-12.6-.8-19-.8z" />
-                </svg>
-              </span>
-              <input
-                type="checkbox"
-                className="input"
-                checked={clientTheme === "light"}
-                onChange={(event) =>
-                  handleClientThemeChange(event.target.checked ? "light" : "dark")
-                }
-              />
-              <span className="slider" />
-            </label>
+          <div className="header-search-shell relative w-auto max-w-none gap-2 px-2 py-1.5">
             <button
               type="button"
-              onClick={() => setCartOpen(true)}
-              className={`store-cart-btn ${
-                cartPulseActive ? `store-cart-btn--celebrate store-cart-btn--celebrate-${cartPulseVariant}` : ""
-              }`}
-              data-count={cartItemsCount}
-              aria-label={`${t.cart} (${cartItemsCount})`}
+              onClick={() => window.location.assign("/")}
+              className="storefront-cosmic-button relative inline-flex h-[2.55rem] min-w-[3.25rem] items-center justify-center overflow-hidden rounded-[12px] px-2 text-center text-[10px] font-semibold leading-none sm:h-[2.7rem] sm:text-[11px]"
+              aria-label={t.home}
+              title={t.home}
             >
-              {cartPulseActive ? (
-                <span className="store-cart-btn__tooltip" role="status" aria-live="polite">
-                  {t.cartAddedToast}
-                </span>
-              ) : null}
-              <span className="store-cart-btn__wrapper">
-                <span className="store-cart-btn__text">{t.cart}</span>
-                <span className="store-cart-btn__icon" aria-hidden="true">
-                  <svg
-                    viewBox="0 0 16 16"
-                    fill="currentColor"
-                    height="16"
-                    width="16"
-                    xmlns="http://www.w3.org/2000/svg"
-                  >
-                    <path d="M0 2.5A.5.5 0 0 1 .5 2H2a.5.5 0 0 1 .485.379L2.89 4H14.5a.5.5 0 0 1 .485.621l-1.5 6A.5.5 0 0 1 13 11H4a.5.5 0 0 1-.485-.379L1.61 3H.5a.5.5 0 0 1-.5-.5zM3.14 5l1.25 5h8.22l1.25-5H3.14zM5 13a1 1 0 1 0 0 2 1 1 0 0 0 0-2zm-2 1a2 2 0 1 1 4 0 2 2 0 0 1-4 0zm9-1a1 1 0 1 0 0 2 1 1 0 0 0 0-2zm-2 1a2 2 0 1 1 4 0 2 2 0 0 1-4 0z" />
-                  </svg>
-                </span>
+              <span className="storefront-cosmic-button__text whitespace-nowrap">
+                <svg
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                  className="h-4 w-4"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.9"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 10.5 12 3l9 7.5" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5.5 9.5V20h13V9.5" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9.5 20v-5.5h5V20" />
+                </svg>
+              </span>
+              <span className="storefront-cosmic-button__stars-container" aria-hidden="true">
+                <span className="storefront-cosmic-button__stars" />
+              </span>
+              <span className="storefront-cosmic-button__glow" aria-hidden="true">
+                <span className="storefront-cosmic-button__circle" />
+                <span className="storefront-cosmic-button__circle" />
               </span>
             </button>
 
             <button
               type="button"
-              onClick={() => setSupportOpen(true)}
-              className="rounded-full border border-rose-500/35 bg-[#0a1020] px-3.5 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-white transition hover:border-rose-400"
+              onClick={() => setCartOpen(true)}
+              className="storefront-cosmic-button relative inline-flex h-[2.55rem] min-w-[7.25rem] items-center justify-center overflow-hidden rounded-[12px] px-2 text-center text-[10px] font-semibold leading-none sm:h-[2.7rem] sm:text-[11px]"
             >
-              {t.support}
+              <span className="storefront-cosmic-button__text whitespace-nowrap">
+                <strong>{t.cart}</strong>
+              </span>
+              <span className="storefront-cosmic-button__stars-container" aria-hidden="true">
+                <span className="storefront-cosmic-button__stars" />
+              </span>
+              <span className="storefront-cosmic-button__glow" aria-hidden="true">
+                <span className="storefront-cosmic-button__circle" />
+                <span className="storefront-cosmic-button__circle" />
+              </span>
+              {cart.length > 0 ? (
+                <span className="storefront-cosmic-button__badge storefront-cosmic-button__badge--cart">
+                  {cartItemsCount}
+                </span>
+              ) : null}
             </button>
-            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                setSupportMode("menu");
+                setSupportOpen(true);
+              }}
+              className="storefront-cosmic-button relative inline-flex h-[2.55rem] min-w-[7.25rem] items-center justify-center overflow-hidden rounded-[12px] px-2 text-center text-[10px] font-semibold leading-none sm:h-[2.7rem] sm:text-[11px]"
+            >
+              <span className="storefront-cosmic-button__text whitespace-nowrap">
+                <strong>{t.support}</strong>
+              </span>
+              <span className="storefront-cosmic-button__stars-container" aria-hidden="true">
+                <span className="storefront-cosmic-button__stars" />
+              </span>
+              <span className="storefront-cosmic-button__glow" aria-hidden="true">
+                <span className="storefront-cosmic-button__circle" />
+                <span className="storefront-cosmic-button__circle" />
+              </span>
+            </button>
           </div>
         </div>
       </header>
@@ -1285,8 +1498,9 @@ function ProductDetailClient({
             </div>
 
             <div className="rounded-[1.5rem] border border-slate-800 bg-[#08101e] p-4 text-sm leading-6 text-slate-300">
-              <p className="font-semibold text-cyan-200">{t.securePayment}</p>
-              <p className="mt-2">{product.shortDescription}</p>
+              <p className="font-semibold text-cyan-200">{t.estimatedDelivery}</p>
+              <p className="mt-2">{t.estimatedDeliveryWindow}</p>
+              <p className="mt-2 text-cyan-100">{product.deliveryLabel}</p>
             </div>
           </aside>
         </section>
@@ -1768,26 +1982,152 @@ function ProductDetailClient({
       ) : null}
 
       {supportOpen ? (
-        <div className="fixed inset-0 z-[60] flex items-center justify-end bg-black/55">
-          <div className="flex h-full w-full max-w-md flex-col overflow-hidden border-l border-slate-800 bg-[#050816] text-white shadow-[0_20px_60px_rgba(0,0,0,0.45)]">
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 px-4"
+          onClick={() => {
+            setSupportOpen(false);
+            setSupportMode("menu");
+            setSupportError("");
+          }}
+        >
+          <div
+            className="client-panel flex w-full max-w-lg flex-col overflow-hidden rounded-[2rem] border border-slate-800 bg-[#050816] text-white shadow-[0_24px_80px_rgba(0,0,0,0.5)]"
+            onClick={(event) => event.stopPropagation()}
+          >
             <div className="flex items-center justify-between border-b border-slate-800 px-5 py-4">
-              <h2 className="text-base font-semibold text-white">{t.support}</h2>
+              <div>
+                <h2 className="text-base font-semibold text-white">
+                  {supportMode === "chat" ? t.supportChatTitle : t.supportChooserTitle}
+                </h2>
+                <p className="mt-1 text-sm text-slate-400">
+                  {supportMode === "chat" ? t.supportChatSubtitle : t.supportChooserSubtitle}
+                </p>
+              </div>
               <button
                 type="button"
-                onClick={() => setSupportOpen(false)}
+                onClick={() => {
+                  if (supportMode === "chat") {
+                    setSupportMode("menu");
+                    return;
+                  }
+
+                  setSupportOpen(false);
+                  setSupportError("");
+                }}
                 className="rounded-full border border-slate-700 bg-[#0a1020] px-3 py-2 text-xs font-semibold text-slate-300 transition hover:border-cyan-500 hover:text-white"
               >
-                {t.close}
+                {supportMode === "chat" ? t.back : t.close}
               </button>
             </div>
-            <div className="flex-1 space-y-4 px-5 py-5">
-              <div className="rounded-[1.5rem] border border-slate-800 bg-[#0a1020] p-5">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-                  {t.supportPhone}
-                </p>
-                <p className="mt-3 text-lg font-semibold text-white">+597 000 0000</p>
+
+            {supportMode === "menu" ? (
+              <div className="grid gap-3 p-5 sm:grid-cols-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!sessionUser && !supportToken) {
+                      ensureSupportToken();
+                    }
+                    setSupportMode("chat");
+                  }}
+                  className="rounded-[1.5rem] border border-slate-800 bg-[#08101e] px-4 py-5 text-left transition hover:border-cyan-500/40"
+                >
+                  <div className="mb-3 inline-flex h-11 w-11 items-center justify-center rounded-full bg-cyan-500/15 text-cyan-300">
+                    <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.9">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M7 10h10M7 14h6" />
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 6.5A2.5 2.5 0 0 1 7.5 4h9A2.5 2.5 0 0 1 19 6.5v6A2.5 2.5 0 0 1 16.5 15H11l-4 4v-4H7.5A2.5 2.5 0 0 1 5 12.5z" />
+                    </svg>
+                  </div>
+                  <p className="text-sm font-semibold text-white">{t.supportChatOption}</p>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    window.location.href = "tel:+5970000000";
+                  }}
+                  className="rounded-[1.5rem] border border-slate-800 bg-[#08101e] px-4 py-5 text-left transition hover:border-cyan-500/40"
+                >
+                  <div className="mb-3 inline-flex h-11 w-11 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-300">
+                    <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.9">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6A19.79 19.79 0 0 1 2.12 4.18 2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72l.34 2.71a2 2 0 0 1-.57 1.73l-1.27 1.27a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 1.73-.57l2.71.34A2 2 0 0 1 22 16.92z" />
+                    </svg>
+                  </div>
+                  <p className="text-sm font-semibold text-white">{t.supportCallOption}</p>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setNotice(t.supportWhatsappSoon)}
+                  className="rounded-[1.5rem] border border-slate-800 bg-[#08101e] px-4 py-5 text-left transition hover:border-cyan-500/40"
+                >
+                  <div className="mb-3 inline-flex h-11 w-11 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-300">
+                    <svg viewBox="0 0 24 24" className="h-5 w-5" fill="currentColor">
+                      <path d="M16.75 13.96c.25.13 1.47.72 1.7.8.23.08.4.13.57-.13.17-.25.65-.8.8-.96.15-.17.3-.18.55-.06.25.13 1.07.39 2.04 1.23.75.67 1.26 1.5 1.4 1.75.15.25.02.39-.11.52-.12.12-.25.3-.37.44-.12.15-.25.25-.37.42-.12.17-.06.32.03.45.1.13.44.72.6.98.16.27.31.22.43.13.12-.08.5-.58.7-.78.2-.2.4-.17.67-.1.28.06 1.76.83 2.07.98.31.15.52.22.6.35.08.13.08.77-.18 1.5-.26.73-1.5 1.44-2.06 1.5-.53.06-1.2.09-1.94-.15-.45-.15-1.03-.34-1.77-.66-3.12-1.34-5.16-4.47-5.32-4.69-.16-.22-1.27-1.69-1.27-3.22 0-1.53.8-2.28 1.08-2.6.28-.32.61-.4.8-.4.2 0 .4 0 .57.01.18 0 .42-.06.65.5.25.6.86 2.08.93 2.23.08.15.13.32.03.52-.1.2-.15.32-.3.49-.15.17-.32.37-.45.5-.15.15-.3.31-.13.6.17.29.76 1.25 1.62 2.02 1.11 1 2.05 1.31 2.34 1.46.29.15.46.13.63-.08.17-.2.74-.86.94-1.15.2-.29.4-.24.67-.14z" />
+                      <path d="M20.52 3.48A11.86 11.86 0 0 0 12.07 0C5.48 0 .12 5.36.12 11.95c0 2.1.55 4.16 1.59 5.97L0 24l6.24-1.64a11.9 11.9 0 0 0 5.7 1.45h.01c6.58 0 11.94-5.36 11.94-11.95 0-3.19-1.24-6.19-3.37-8.38zM12.08 21.8h-.01a9.86 9.86 0 0 1-5.03-1.38l-.36-.21-3.7.97.99-3.61-.23-.37a9.87 9.87 0 0 1-1.51-5.25c0-5.46 4.44-9.9 9.9-9.9 2.64 0 5.12 1.03 6.98 2.9a9.83 9.83 0 0 1 2.9 6.99c0 5.46-4.45 9.9-9.91 9.9z" />
+                    </svg>
+                  </div>
+                  <p className="text-sm font-semibold text-white">{t.supportWhatsappOption}</p>
+                </button>
               </div>
-            </div>
+            ) : (
+              <div className="flex h-[32rem] flex-col">
+                <div ref={supportMessagesRef} className="flex-1 space-y-3 overflow-y-auto px-5 py-4">
+                  {supportLoading ? (
+                    <div className="rounded-[1.25rem] border border-slate-800 bg-[#08101e] px-4 py-3 text-sm text-slate-400">
+                      {t.sending}
+                    </div>
+                  ) : null}
+
+                  {supportConversation?.chatEntries?.length ? (
+                    supportConversation.chatEntries.map((entry) => (
+                      <div
+                        key={entry.id}
+                        className={`max-w-[85%] rounded-[1.25rem] px-4 py-3 text-sm leading-6 ${
+                          entry.sender === "support"
+                            ? "mr-auto border border-cyan-500/25 bg-cyan-500/10 text-cyan-50"
+                            : "ml-auto border border-slate-700 bg-[#0a1020] text-white"
+                        }`}
+                      >
+                        <p>{entry.message}</p>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="rounded-[1.25rem] border border-slate-800 bg-[#08101e] px-4 py-3 text-sm text-slate-400">
+                      {t.supportChatSubtitle}
+                    </div>
+                  )}
+                </div>
+
+                <div className="space-y-3 border-t border-slate-800 px-5 py-4">
+                  <input
+                    type="email"
+                    value={supportContactEmail}
+                    onChange={(event) => setSupportContactEmail(event.target.value)}
+                    placeholder={t.contactEmail}
+                    className="w-full rounded-2xl border border-slate-700 bg-[#0a1020] px-4 py-3 text-sm text-white outline-none transition focus:border-cyan-400"
+                  />
+                  <textarea
+                    value={supportMessage}
+                    onChange={(event) => setSupportMessage(event.target.value)}
+                    placeholder={t.supportMessagePlaceholder}
+                    rows={3}
+                    className="w-full rounded-2xl border border-slate-700 bg-[#0a1020] px-4 py-3 text-sm text-white outline-none transition focus:border-cyan-400"
+                  />
+                  {supportError ? <p className="text-sm text-rose-300">{supportError}</p> : null}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void submitSupportMessage();
+                    }}
+                    disabled={supportSending}
+                    className="w-full rounded-full bg-cyan-400 px-4 py-3 text-sm font-semibold text-slate-950 transition hover:bg-cyan-300 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-300"
+                  >
+                    {supportSending ? t.sending : t.send}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       ) : null}
