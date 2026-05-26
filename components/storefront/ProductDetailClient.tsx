@@ -5,7 +5,9 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import CheckoutModal from "@/components/CheckoutModal";
 import { readStoredCart, writeStoredCart, type HydratedCartEntry } from "@/lib/shop/cart-storage";
+import { toPickupDateKey } from "@/lib/shop/checkout";
 import { buildCartKey, createStars } from "@/lib/shop/display-utils";
 import {
   applyClientTheme,
@@ -24,7 +26,9 @@ import {
 import { formatCurrencySrd as formatCurrency, formatGroupedNumber } from "@/lib/shop/number-format";
 import { localizeProduct } from "@/lib/shop/product-localization";
 import type {
+  CheckoutCustomerData,
   Locale,
+  OrderSummary,
   ProductReview,
   SessionUser,
   StorefrontProduct,
@@ -292,6 +296,13 @@ type SupportResponse = {
   error?: string;
 };
 
+type OrderMutationResponse = {
+  success?: boolean;
+  order?: OrderSummary;
+  error?: string;
+  errors?: Record<string, string[]>;
+};
+
 type ModelOption = {
   id: string;
   name: string;
@@ -331,6 +342,52 @@ function buildRecommendedSearchBlob(product: StorefrontProduct) {
       ...product.variants.flatMap((variant) => [variant.name, variant.details, variant.color]),
     ].join(" ")
   );
+}
+
+function buildOrderPayload(cart: HydratedCartEntry[], customerData: CheckoutCustomerData) {
+  const subtotal = cart.reduce(
+    (sum, entry) => sum + (entry.unitPrice ?? entry.product.price) * entry.quantity,
+    0
+  );
+  const deliveryFee = customerData.deliveryType === "delivery" ? customerData.deliveryFee ?? 0 : 0;
+  const total = subtotal + deliveryFee;
+
+  return {
+    name: customerData.name,
+    phone: customerData.phone,
+    email: customerData.email,
+    address: customerData.address,
+    deliveryType: customerData.deliveryType,
+    pickupDate:
+      customerData.deliveryType === "pickup" && customerData.pickupDate
+        ? toPickupDateKey(customerData.pickupDate)
+        : undefined,
+    pickupTime: customerData.deliveryType === "pickup" ? customerData.pickupTime : undefined,
+    requestedAgentCall: customerData.requestedAgentCall,
+    containsHeavyItems: customerData.containsHeavyItems,
+    paymentMethod: customerData.paymentMethod,
+    paypalDisplayCurrency:
+      customerData.paymentMethod === "paypal" ? customerData.paypalDisplayCurrency : null,
+    paymentFeeRate: customerData.paymentFeeRate,
+    paymentFeeAmountSrd: customerData.paymentFeeAmountSrd,
+    paymentGrandTotalSrd: customerData.paymentGrandTotalSrd,
+    paymentPayableUsd: customerData.paymentPayableUsd,
+    exchangeRateSrdPerUsd: customerData.exchangeRateSrdPerUsd,
+    products: cart.map((entry) => ({
+      productId: entry.product.id,
+      name: entry.product.name,
+      price: entry.unitPrice ?? entry.product.price,
+      quantity: entry.quantity,
+      image: entry.selectedImage || entry.product.image,
+      selectedVariantId: entry.selectedVariantId,
+      selectedVariantName: entry.selectedVariantName,
+      selectedColor: entry.selectedColor,
+    })),
+    subtotal,
+    deliveryDistanceKm: customerData.deliveryDistanceKm,
+    deliveryFee,
+    total,
+  };
 }
 
 function scoreRecommendedProduct(base: StorefrontProduct, candidate: StorefrontProduct) {
@@ -454,6 +511,8 @@ function ProductDetailClient({
   const [showSecondaryContent, setShowSecondaryContent] = useState(false);
   const [purchaseQuantity, setPurchaseQuantity] = useState(1);
   const [selectedCartKeys, setSelectedCartKeys] = useState<string[]>([]);
+  const [checkoutOpen, setCheckoutOpen] = useState(false);
+  const [checkoutData, setCheckoutData] = useState<CheckoutCustomerData | null>(null);
   const reviewSectionRef = useRef<HTMLDivElement | null>(null);
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
   const supportMessagesRef = useRef<HTMLDivElement | null>(null);
@@ -892,6 +951,18 @@ function ProductDetailClient({
     return Array.from(new Set(prioritizedGallery));
   }, [colorImage, galleryBaseImages, selectedModel?.imageUrl]);
   const cartItemsCount = cart.reduce((sum, entry) => sum + entry.quantity, 0);
+  const selectedCart = useMemo(
+    () => cart.filter((entry) => selectedCartKeys.includes(entry.cartKey)),
+    [cart, selectedCartKeys]
+  );
+  const selectedSubtotal = useMemo(
+    () =>
+      selectedCart.reduce(
+        (sum, entry) => sum + (entry.unitPrice ?? entry.product.price) * entry.quantity,
+        0
+      ),
+    [selectedCart]
+  );
 
   useEffect(() => {
     setVisibleRecommendedCount(8);
@@ -1207,6 +1278,32 @@ function ProductDetailClient({
     } finally {
       setSupportSending(false);
     }
+  }
+
+  async function submitCheckout(data: CheckoutCustomerData) {
+    setCheckoutData(data);
+
+    const response = await fetch("/api/place-order", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(buildOrderPayload(selectedCart, data)),
+    });
+    const payload = (await response.json()) as OrderMutationResponse;
+
+    if (!payload.success || !payload.order) {
+      setNotice(payload.error || "No se pudo confirmar tu pedido.");
+      return;
+    }
+
+    const selectedKeysSet = new Set(selectedCart.map((entry) => entry.cartKey));
+    setCart((currentCart) => currentCart.filter((entry) => !selectedKeysSet.has(entry.cartKey)));
+    setSelectedCartKeys((currentKeys) => currentKeys.filter((key) => !selectedKeysSet.has(key)));
+    setCheckoutOpen(false);
+    setCartOpen(false);
+    setCheckoutData(null);
+    setNotice(`Pedido ${payload.order.id} confirmado.`);
   }
 
   return (
@@ -2066,7 +2163,39 @@ function ProductDetailClient({
           onToggleSelection={toggleCartSelection}
           onRemove={removeFromCart}
           onChangeQuantity={changeQuantity}
-          onProceed={() => setCartOpen(false)}
+          onProceed={() => {
+            if (selectedCart.length === 0) {
+              setNotice("Selecciona al menos un articulo para pagar.");
+              return;
+            }
+
+            setCartOpen(false);
+            setCheckoutOpen(true);
+          }}
+        />
+      ) : null}
+
+      {checkoutOpen ? (
+        <CheckoutModal
+          locale={locale}
+          subtotal={selectedSubtotal}
+          containsHeavyItems={selectedCart.some((entry) => entry.product.isHeavy)}
+          initialData={
+            checkoutData ?? {
+              name: sessionUser?.name ?? "",
+              phone: sessionUser?.phone ?? "",
+              email: sessionUser?.email ?? supportContactEmail,
+              address: sessionUser?.address ?? "",
+              deliveryType: "delivery",
+              requestedAgentCall: false,
+              paymentMethod: "cash",
+              paypalDisplayCurrency: "SRD",
+            }
+          }
+          onClose={() => setCheckoutOpen(false)}
+          onSubmit={(data) => {
+            void submitCheckout(data);
+          }}
         />
       ) : null}
 
