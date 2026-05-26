@@ -191,6 +191,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const menuItems = [
     { href: "/admin", label: "Dashboard", badge: "DB" },
     { href: "/admin/products", label: "Productos", badge: "PR" },
+    { href: "/admin/products/ai-pending", label: "Productos IA pendientes", badge: "AI" },
     { href: "/admin/orders", label: "Ordenes", badge: "OR" },
     { href: "/admin/support", label: "Soporte", badge: "SP" },
     { href: "/admin/providers", label: "Proveedores", badge: "PV" },

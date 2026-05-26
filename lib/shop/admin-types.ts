@@ -63,6 +63,7 @@ export interface ProductMetrics {
 
 export interface ProductInternalDetails {
   costPrice: number;
+  costUsd?: number;
   purchasePrice: number;
   shippingFee: number;
   isHeavy: boolean;
@@ -70,8 +71,11 @@ export interface ProductInternalDetails {
   supplier: string;
   supplierPhone: string;
   internalCode: string;
+  stockCode?: string;
   internalNotes: string;
   accountingImageUrl: string;
+  accountingOriginalImageUrl?: string;
+  originalSlackImageUrl?: string;
 }
 
 export interface SupplierChoice {
@@ -191,6 +195,15 @@ export interface Product {
   saleDates: string[];
   updatedAt: string;
   updatedBy: string;
+  supplierId?: string;
+  costUsd?: number;
+  stockCode?: string;
+  accountingOriginalImageUrl?: string;
+  originalSlackImageUrl?: string;
+  aiBatchId?: string | null;
+  reviewStatus?: "approved" | "draft" | "rejected" | "pending_review";
+  createdByAi?: boolean;
+  aiConfidenceScore?: number | null;
   translations?: ProductTranslationMap;
   ai?: {
     draftId: string | null;
@@ -204,6 +217,40 @@ export interface Product {
     suggestedCategory?: string;
     suggestedTags?: string[];
   };
+}
+
+export interface AiProductBatch {
+  id: string;
+  source: string;
+  supplierId: string | null;
+  batchName: string;
+  status: string;
+  metadata: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AiProductPendingItem {
+  id: string;
+  batchId: string;
+  productId: string | null;
+  supplierId: string | null;
+  supplierName: string;
+  publicImageUrl: string;
+  originalImageUrl: string;
+  originalSlackImageUrl: string;
+  costUsd: number;
+  stockCode: string;
+  priceSrd: number;
+  title: string;
+  description: string;
+  category: string;
+  tags: string[];
+  reviewStatus: "approved" | "draft" | "rejected" | "pending_review";
+  aiConfidenceScore: number | null;
+  createdByAi: boolean;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface HomepageBanner {

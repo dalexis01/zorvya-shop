@@ -51,6 +51,15 @@ CREATE TABLE IF NOT EXISTS products (
   sale_dates_json JSONB NOT NULL DEFAULT '[]'::jsonb,
   updated_at TIMESTAMPTZ NOT NULL,
   updated_by TEXT NOT NULL DEFAULT '',
+  supplier_id TEXT NULL,
+  cost_usd NUMERIC(12, 2) NOT NULL DEFAULT 0,
+  stock_code TEXT NOT NULL DEFAULT '',
+  accounting_original_image_url TEXT NOT NULL DEFAULT '',
+  original_slack_image_url TEXT NOT NULL DEFAULT '',
+  ai_batch_id TEXT NULL,
+  review_status TEXT NOT NULL DEFAULT 'approved',
+  created_by_ai BOOLEAN NOT NULL DEFAULT FALSE,
+  ai_confidence_score NUMERIC(5, 2) NULL,
   translations_json JSONB NULL,
   ai_json JSONB NULL
 );
@@ -99,6 +108,15 @@ type ProductRow = QueryResultRow & {
   sale_dates_json: string[] | null;
   updated_at: Date | string;
   updated_by: string;
+  supplier_id: string | null;
+  cost_usd: number | string | null;
+  stock_code: string | null;
+  accounting_original_image_url: string | null;
+  original_slack_image_url: string | null;
+  ai_batch_id: string | null;
+  review_status: string | null;
+  created_by_ai: boolean | null;
+  ai_confidence_score: number | string | null;
   translations_json: Product["translations"] | null;
   ai_json: Product["ai"] | null;
 };
@@ -143,6 +161,15 @@ type ProductSummaryRow = QueryResultRow & {
   last_sold_at: Date | string | null;
   updated_at: Date | string;
   updated_by: string;
+  supplier_id: string | null;
+  cost_usd: number | string | null;
+  stock_code: string | null;
+  accounting_original_image_url: string | null;
+  original_slack_image_url: string | null;
+  ai_batch_id: string | null;
+  review_status: string | null;
+  created_by_ai: boolean | null;
+  ai_confidence_score: number | string | null;
   translations_json: Product["translations"] | null;
   first_image_url: string | null;
 };
@@ -372,6 +399,7 @@ function normalizeInternalDetails(
 ): ProductInternalDetails {
   return {
     costPrice: Number(internal?.costPrice ?? 0),
+    costUsd: Number(internal?.costUsd ?? 0),
     purchasePrice: Number(internal?.purchasePrice ?? 0),
     shippingFee: Number(internal?.shippingFee ?? 0),
     isHeavy: Boolean(internal?.isHeavy),
@@ -379,8 +407,11 @@ function normalizeInternalDetails(
     supplier: trimText(internal?.supplier),
     supplierPhone: trimText(internal?.supplierPhone),
     internalCode: trimText(internal?.internalCode),
+    stockCode: trimText(internal?.stockCode),
     internalNotes: trimText(internal?.internalNotes),
     accountingImageUrl: trimText(internal?.accountingImageUrl),
+    accountingOriginalImageUrl: trimText(internal?.accountingOriginalImageUrl),
+    originalSlackImageUrl: trimText(internal?.originalSlackImageUrl),
   };
 }
 
@@ -416,6 +447,27 @@ function normalizeProduct(product: Product): Product {
     attributes: product.attributes ?? {},
     internal,
     metrics: createProductMetrics(price, stock, internal.costPrice),
+    supplierId: trimText(product.supplierId ?? internal.supplierId),
+    costUsd: Number(product.costUsd ?? internal.costUsd ?? 0),
+    stockCode: trimText(product.stockCode ?? internal.stockCode),
+    accountingOriginalImageUrl: trimText(
+      product.accountingOriginalImageUrl ?? internal.accountingOriginalImageUrl
+    ),
+    originalSlackImageUrl: trimText(
+      product.originalSlackImageUrl ?? internal.originalSlackImageUrl
+    ),
+    aiBatchId: trimText(product.aiBatchId ?? "") || null,
+    reviewStatus:
+      product.reviewStatus === "draft" ||
+      product.reviewStatus === "rejected" ||
+      product.reviewStatus === "pending_review"
+        ? product.reviewStatus
+        : "approved",
+    createdByAi: Boolean(product.createdByAi),
+    aiConfidenceScore:
+      product.aiConfidenceScore === null || product.aiConfidenceScore === undefined
+        ? null
+        : Number(product.aiConfidenceScore),
     publishedAt: product.publishedAt ?? null,
     stockAddedAt: product.stockAddedAt ?? null,
     lastSoldAt: product.lastSoldAt ?? null,
@@ -601,6 +653,22 @@ function productRowToProduct(row: ProductRow): Product {
     saleDates: Array.isArray(row.sale_dates_json) ? row.sale_dates_json : [],
     updatedAt: toIsoString(row.updated_at) ?? new Date().toISOString(),
     updatedBy: row.updated_by,
+    supplierId: row.supplier_id ?? undefined,
+    costUsd: row.cost_usd === null ? undefined : Number(row.cost_usd),
+    stockCode: trimText(row.stock_code ?? "") || undefined,
+    accountingOriginalImageUrl:
+      trimText(row.accounting_original_image_url ?? "") || undefined,
+    originalSlackImageUrl: trimText(row.original_slack_image_url ?? "") || undefined,
+    aiBatchId: trimText(row.ai_batch_id ?? "") || null,
+    reviewStatus:
+      row.review_status === "draft" ||
+      row.review_status === "rejected" ||
+      row.review_status === "pending_review"
+        ? row.review_status
+        : "approved",
+    createdByAi: Boolean(row.created_by_ai),
+    aiConfidenceScore:
+      row.ai_confidence_score === null ? null : Number(row.ai_confidence_score),
     translations: row.translations_json ?? undefined,
     ai: row.ai_json ?? undefined,
   });
@@ -619,6 +687,9 @@ async function readProductsFromDatabase() {
             attributes_json, internal_json, metrics_json, images_json,
             created_at, published_at, stock_added_at, last_sold_at,
             sale_dates_json, updated_at, updated_by,
+            supplier_id, cost_usd, stock_code, accounting_original_image_url,
+            original_slack_image_url, ai_batch_id, review_status, created_by_ai,
+            ai_confidence_score,
             NULL::jsonb AS translations_json, NULL::jsonb AS ai_json
      FROM products
      ORDER BY published_at DESC NULLS LAST, created_at DESC, display_order ASC, updated_at DESC`
@@ -708,14 +779,19 @@ function productSummaryRowToProduct(row: ProductSummaryRow): Product {
 
   const images = firstImageUrl ? createSummaryImages(firstImageUrl) : [];
   const internal = normalizeInternalDetails({
+    supplierId: row.supplier_id ?? "",
     supplier: row.supplier_value ?? "",
     supplierPhone: row.supplier_phone_value ?? "",
     costPrice: Number(row.cost_price_value ?? 0),
+    costUsd: Number(row.cost_usd ?? 0),
     purchasePrice: Number(row.purchase_price_value ?? 0),
     shippingFee: Number(row.shipping_fee_value ?? 0),
     isHeavy: row.is_heavy_value === "true",
     internalCode: row.internal_code_value ?? "",
+    stockCode: row.stock_code ?? "",
     internalNotes: row.internal_notes_value ?? "",
+    accountingOriginalImageUrl: row.accounting_original_image_url ?? "",
+    originalSlackImageUrl: row.original_slack_image_url ?? "",
   });
 
   return normalizeProduct({
@@ -756,6 +832,22 @@ function productSummaryRowToProduct(row: ProductSummaryRow): Product {
     saleDates: [],
     updatedAt: toIsoString(row.updated_at) ?? new Date().toISOString(),
     updatedBy: row.updated_by,
+    supplierId: row.supplier_id ?? undefined,
+    costUsd: row.cost_usd === null ? undefined : Number(row.cost_usd),
+    stockCode: trimText(row.stock_code ?? "") || undefined,
+    accountingOriginalImageUrl:
+      trimText(row.accounting_original_image_url ?? "") || undefined,
+    originalSlackImageUrl: trimText(row.original_slack_image_url ?? "") || undefined,
+    aiBatchId: trimText(row.ai_batch_id ?? "") || null,
+    reviewStatus:
+      row.review_status === "draft" ||
+      row.review_status === "rejected" ||
+      row.review_status === "pending_review"
+        ? row.review_status
+        : "approved",
+    createdByAi: Boolean(row.created_by_ai),
+    aiConfidenceScore:
+      row.ai_confidence_score === null ? null : Number(row.ai_confidence_score),
     translations: row.translations_json ?? undefined,
   });
 }
@@ -866,6 +958,15 @@ async function readProductSummariesFromDatabase(options?: {
         internal_json ->> 'isHeavy' AS is_heavy_value,
         internal_json ->> 'internalCode' AS internal_code_value,
         internal_json ->> 'internalNotes' AS internal_notes_value,
+        supplier_id,
+        cost_usd,
+        stock_code,
+        accounting_original_image_url,
+        original_slack_image_url,
+        ai_batch_id,
+        review_status,
+        created_by_ai,
+        ai_confidence_score,
         created_at,
         published_at,
         stock_added_at,
@@ -949,6 +1050,8 @@ async function upsertProductRecord(client: PoolClient, product: Product) {
       inventory_label, delivery_label, show_stock, images_json, is_active, is_visible,
       is_featured, is_top, attributes_json, internal_json, metrics_json, created_at,
       published_at, stock_added_at, last_sold_at, sale_dates_json, updated_at, updated_by,
+      supplier_id, cost_usd, stock_code, accounting_original_image_url, original_slack_image_url,
+      ai_batch_id, review_status, created_by_ai, ai_confidence_score,
       translations_json, ai_json
     ) VALUES (
       $1, $2, $3, $4, $5, $6, $7, $8,
@@ -956,7 +1059,9 @@ async function upsertProductRecord(client: PoolClient, product: Product) {
       $16, $17, $18, $19::jsonb, $20, $21,
       $22, $23, $24::jsonb, $25::jsonb, $26::jsonb, $27::timestamptz,
       $28::timestamptz, $29::timestamptz, $30::timestamptz, $31::jsonb, $32::timestamptz, $33,
-      $34::jsonb, $35::jsonb
+      $34, $35, $36, $37, $38,
+      $39, $40, $41, $42,
+      $43::jsonb, $44::jsonb
     )
     ON CONFLICT (id) DO UPDATE SET
       public_id = EXCLUDED.public_id,
@@ -991,6 +1096,15 @@ async function upsertProductRecord(client: PoolClient, product: Product) {
       sale_dates_json = EXCLUDED.sale_dates_json,
       updated_at = EXCLUDED.updated_at,
       updated_by = EXCLUDED.updated_by,
+      supplier_id = EXCLUDED.supplier_id,
+      cost_usd = EXCLUDED.cost_usd,
+      stock_code = EXCLUDED.stock_code,
+      accounting_original_image_url = EXCLUDED.accounting_original_image_url,
+      original_slack_image_url = EXCLUDED.original_slack_image_url,
+      ai_batch_id = EXCLUDED.ai_batch_id,
+      review_status = EXCLUDED.review_status,
+      created_by_ai = EXCLUDED.created_by_ai,
+      ai_confidence_score = EXCLUDED.ai_confidence_score,
       translations_json = EXCLUDED.translations_json,
       ai_json = EXCLUDED.ai_json`,
     [
@@ -1027,6 +1141,15 @@ async function upsertProductRecord(client: PoolClient, product: Product) {
       JSON.stringify(product.saleDates ?? []),
       product.updatedAt,
       product.updatedBy,
+      product.supplierId ?? product.internal?.supplierId ?? null,
+      product.costUsd ?? product.internal?.costUsd ?? 0,
+      product.stockCode ?? product.internal?.stockCode ?? "",
+      product.accountingOriginalImageUrl ?? product.internal?.accountingOriginalImageUrl ?? "",
+      product.originalSlackImageUrl ?? product.internal?.originalSlackImageUrl ?? "",
+      product.aiBatchId ?? null,
+      product.reviewStatus ?? "approved",
+      Boolean(product.createdByAi),
+      product.aiConfidenceScore ?? null,
       product.translations ? JSON.stringify(product.translations) : null,
       product.ai ? JSON.stringify(product.ai) : null,
     ]
@@ -1261,6 +1384,15 @@ export async function getProductById(id: string) {
           sale_dates_json,
           updated_at,
           updated_by,
+          supplier_id,
+          cost_usd,
+          stock_code,
+          accounting_original_image_url,
+          original_slack_image_url,
+          ai_batch_id,
+          review_status,
+          created_by_ai,
+          ai_confidence_score,
           translations_json,
           ai_json
         FROM products
@@ -1376,6 +1508,15 @@ export async function getProductBySku(sku: string) {
           sale_dates_json,
           updated_at,
           updated_by,
+          supplier_id,
+          cost_usd,
+          stock_code,
+          accounting_original_image_url,
+          original_slack_image_url,
+          ai_batch_id,
+          review_status,
+          created_by_ai,
+          ai_confidence_score,
           translations_json,
           ai_json
         FROM products
@@ -1503,6 +1644,15 @@ export async function createProduct(
     translations?: Product["translations"];
     internal?: Partial<ProductInternalDetails>;
     ai?: Product["ai"];
+    supplierId?: string;
+    costUsd?: number;
+    stockCode?: string;
+    accountingOriginalImageUrl?: string;
+    originalSlackImageUrl?: string;
+    aiBatchId?: string | null;
+    reviewStatus?: Product["reviewStatus"];
+    createdByAi?: boolean;
+    aiConfidenceScore?: number | null;
   },
   createdBy: string
 ) {
@@ -1565,6 +1715,15 @@ export async function createProduct(
       ...normalizedInternal,
       purchasePrice: normalizedInternal.purchasePrice || normalizedInternal.costPrice,
       internalCode: normalizedInternal.internalCode || resolvedSku,
+      supplierId: trimText(input.supplierId ?? normalizedInternal.supplierId),
+      costUsd: Number(input.costUsd ?? normalizedInternal.costUsd ?? 0),
+      stockCode: trimText(input.stockCode ?? normalizedInternal.stockCode),
+      accountingOriginalImageUrl: trimText(
+        input.accountingOriginalImageUrl ?? normalizedInternal.accountingOriginalImageUrl
+      ),
+      originalSlackImageUrl: trimText(
+        input.originalSlackImageUrl ?? normalizedInternal.originalSlackImageUrl
+      ),
     },
     metrics: createProductMetrics(input.price, stock, normalizedInternal.costPrice),
     createdAt: now,
@@ -1574,6 +1733,19 @@ export async function createProduct(
     saleDates: [],
     updatedAt: now,
     updatedBy: createdBy,
+    supplierId: trimText(input.supplierId ?? normalizedInternal.supplierId),
+    costUsd: Number(input.costUsd ?? normalizedInternal.costUsd ?? 0),
+    stockCode: trimText(input.stockCode ?? normalizedInternal.stockCode),
+    accountingOriginalImageUrl: trimText(
+      input.accountingOriginalImageUrl ?? normalizedInternal.accountingOriginalImageUrl
+    ),
+    originalSlackImageUrl: trimText(
+      input.originalSlackImageUrl ?? normalizedInternal.originalSlackImageUrl
+    ),
+    aiBatchId: trimText(input.aiBatchId ?? "") || null,
+    reviewStatus: input.reviewStatus ?? (isActive ? "approved" : "draft"),
+    createdByAi: Boolean(input.createdByAi),
+    aiConfidenceScore: input.aiConfidenceScore ?? null,
     ai: input.ai,
   });
 

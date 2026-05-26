@@ -165,6 +165,12 @@ export default function AdminProductsPage() {
             >
               Crear producto
             </Link>
+            <Link
+              href="/admin/products/ai-pending"
+              className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-2 text-xs font-semibold text-amber-100 transition hover:border-amber-400 hover:bg-amber-500/20"
+            >
+              Productos IA pendientes
+            </Link>
           </div>
           <div className="flex items-center gap-3 xl:justify-end">
             <div className="min-w-0 text-right">
