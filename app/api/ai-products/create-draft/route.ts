@@ -41,6 +41,20 @@ export async function POST(request: Request) {
   try {
     const body = (await request.json()) as Record<string, unknown>;
     console.log("[ai-products/create-draft] payload recibido", body);
+    const generatedImagesSource = Array.isArray(body.generatedImages)
+      ? body.generatedImages
+      : Array.isArray(body.generated_images)
+        ? body.generated_images
+        : [];
+    const mergedAttributes = {
+      ...(asStringMap(body.attributes) ?? {}),
+      ...(asTrimmedString(body.subcategory) || asTrimmedString(body.sub_category)
+        ? { subcategory: asTrimmedString(body.subcategory) ?? asTrimmedString(body.sub_category) ?? "" }
+        : {}),
+      ...(asTrimmedString(body.model) ? { model: asTrimmedString(body.model) ?? "" } : {}),
+      ...(asTrimmedString(body.color) ? { color: asTrimmedString(body.color) ?? "" } : {}),
+      ...(asTrimmedString(body.material) ? { material: asTrimmedString(body.material) ?? "" } : {}),
+    };
 
     const normalizedReviewStatus: Product["reviewStatus"] | undefined =
       body.review_status === "pending" ||
@@ -68,31 +82,43 @@ export async function POST(request: Request) {
       description: asTrimmedString(body.description),
       category: asTrimmedString(body.category),
       tags: Array.isArray(body.tags) ? body.tags.map((tag) => String(tag)).filter(Boolean) : undefined,
-      priceSrd: asNullableNumber(body.priceSrd) ?? 0,
-      costUsd: asNullableNumber(body.costUsd) ?? 0,
+      priceSrd: asNullableNumber(body.priceSrd ?? body.price_srd) ?? 0,
+      costUsd: asNullableNumber(body.costUsd ?? body.cost_usd) ?? 0,
       stock: asNullableNumber(body.stock) ?? 0,
-      stockCode: asTrimmedString(body.stockCode),
+      stockCode: asTrimmedString(body.stockCode ?? body.stock_code),
       brand: asTrimmedString(body.brand),
-      sku: asTrimmedString(body.sku),
-      publicImageUrl: asTrimmedString(body.publicImageUrl),
+      sku: asTrimmedString(body.sku ?? body.model),
+      publicImageUrl:
+        asTrimmedString(body.publicImageUrl ?? body.public_image_url) ??
+        (generatedImagesSource[0] &&
+        typeof generatedImagesSource[0] === "object" &&
+        generatedImagesSource[0] !== null
+          ? asTrimmedString((generatedImagesSource[0] as Record<string, unknown>).url)
+          : undefined),
       originalTelegramImageUrl:
-        asTrimmedString(body.originalTelegramImageUrl) ?? asTrimmedString(body.original_image_url),
+        asTrimmedString(
+          body.originalTelegramImageUrl ??
+            body.original_image_url ??
+            body.accounting_original_image_url
+        ),
       originalSlackImageUrl: asTrimmedString(body.originalSlackImageUrl),
       originalSource: "telegram" as const,
-      confidenceScore: asNullableNumber(body.aiConfidenceScore) ?? null,
-      attributes: asStringMap(body.attributes),
+      confidenceScore: asNullableNumber(
+        body.aiConfidenceScore ?? body.ai_confidence_score ?? body.confidence
+      ) ?? null,
+      attributes: mergedAttributes,
       inventoryLabel: asTrimmedString(body.inventoryLabel),
       deliveryLabel: asTrimmedString(body.deliveryLabel),
       longDescription: asTrimmedString(body.longDescription),
-      shortDescription: asTrimmedString(body.shortDescription),
-      supplierName: asTrimmedString(body.supplierName),
-      supplierNameDetected: asTrimmedString(body.supplierNameDetected),
+      shortDescription: asTrimmedString(body.shortDescription ?? body.short_description),
+      supplierName: asTrimmedString(body.supplierName ?? body.supplier_name),
+      supplierNameDetected: asTrimmedString(body.supplierNameDetected ?? body.supplier_name),
       telegramMessageId: asTrimmedString(body.telegramMessageId),
       telegramChatId: asTrimmedString(body.telegramChatId),
       status: asTrimmedString(body.status),
       reviewStatus: normalizedReviewStatus,
-      generatedImages: Array.isArray(body.generatedImages)
-        ? body.generatedImages.map((image, index) => {
+      generatedImages: generatedImagesSource
+        .map((image, index) => {
             const record = image && typeof image === "object" ? (image as Record<string, unknown>) : {};
             return {
               id: typeof record.id === "string" ? record.id : `generated-${index + 1}`,
@@ -100,9 +126,9 @@ export async function POST(request: Request) {
               label: typeof record.label === "string" ? record.label : "Imagen generada",
             };
           }).filter((image) => image.url.trim())
-        : [],
-      seoTitle: asTrimmedString(body.seoTitle),
-      seoDescription: asTrimmedString(body.seoDescription),
+        ,
+      seoTitle: asTrimmedString(body.seoTitle ?? body.seo_title),
+      seoDescription: asTrimmedString(body.seoDescription ?? body.seo_description),
       specifications: asStringMap(body.specifications) ?? {},
       processingTimeMs: asNullableNumber(body.processingTimeMs) ?? undefined,
     };
