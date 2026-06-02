@@ -30,7 +30,7 @@ export async function POST(request: Request) {
       action: "status_changed",
       changedBy: auth.user.id,
       changedByName: auth.user.name,
-      changes: [{ field: "reviewStatus", oldValue: "draft", newValue: "rejected" }],
+      changes: [{ field: "reviewStatus", oldValue: "pending", newValue: "rejected" }],
     });
 
     return NextResponse.json({ success: true, product });

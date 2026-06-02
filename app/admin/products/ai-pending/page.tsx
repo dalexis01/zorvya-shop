@@ -129,12 +129,18 @@ export default function AdminAiPendingProductsPage() {
                 costUsd: updatedProduct?.costUsd ?? item.costUsd,
                 stockCode: updatedProduct?.stockCode ?? item.stockCode,
                 publicImageUrl: updatedProduct?.images?.[0]?.url ?? item.publicImageUrl,
+                originalTelegramImageUrl:
+                  updatedProduct?.originalTelegramImageUrl ?? item.originalTelegramImageUrl,
                 originalSlackImageUrl:
                   updatedProduct?.originalSlackImageUrl ?? item.originalSlackImageUrl,
                 originalImageUrl:
                   updatedProduct?.accountingOriginalImageUrl ?? item.originalImageUrl,
                 aiConfidenceScore:
                   updatedProduct?.aiConfidenceScore ?? item.aiConfidenceScore,
+                reviewStatus: updatedProduct?.reviewStatus ?? item.reviewStatus,
+                seoTitle: updatedProduct?.seoTitle ?? item.seoTitle,
+                seoDescription: updatedProduct?.seoDescription ?? item.seoDescription,
+                specifications: updatedProduct?.specifications ?? item.specifications,
               }
             : item
         )
@@ -155,7 +161,7 @@ export default function AdminAiPendingProductsPage() {
           <div>
             <h1 className="text-xl font-semibold text-white">Productos IA pendientes</h1>
             <p className="text-sm text-slate-400">
-              Todo lo que entre desde n8n + Slack queda en borrador hasta revision manual.
+              Todo lo que entre desde n8n + Telegram queda en borrador hasta revision manual.
             </p>
           </div>
           <div className="rounded-xl border border-cyan-500/30 bg-cyan-500/10 px-3 py-2 text-sm font-semibold text-cyan-200">
@@ -223,6 +229,9 @@ export default function AdminAiPendingProductsPage() {
                           <span className="rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-amber-200">
                             Draft IA
                           </span>
+                          <span className="rounded-full border border-slate-700 bg-[#0c1424] px-2 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-200">
+                            Revision {item.reviewStatus.replace("_", " ")}
+                          </span>
                           {item.aiConfidenceScore !== null ? (
                             <span className="rounded-full border border-cyan-500/30 bg-cyan-500/10 px-2 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-cyan-200">
                               IA {item.aiConfidenceScore}%
@@ -248,6 +257,10 @@ export default function AdminAiPendingProductsPage() {
                         <div className="mt-2 flex items-center justify-between">
                           <span className="text-slate-400">Categoria</span>
                           <strong>{item.category || "Sin categoria"}</strong>
+                        </div>
+                        <div className="mt-2 flex items-center justify-between">
+                          <span className="text-slate-400">Proveedor</span>
+                          <strong>{item.supplierName || item.supplierNameDetected || "Sin detectar"}</strong>
                         </div>
                         <div className="mt-2 flex items-center justify-between">
                           <span className="text-slate-400">Creado</span>
@@ -339,6 +352,14 @@ export default function AdminAiPendingProductsPage() {
                         className="rounded-xl border border-slate-700 bg-[#0c1424] px-4 py-2 text-sm font-semibold text-white transition hover:border-cyan-400 hover:text-cyan-200 disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         Regenerar descripcion
+                      </button>
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => runAction(item.id, "/api/admin/ai-products/regenerate-images")}
+                        className="rounded-xl border border-slate-700 bg-[#0c1424] px-4 py-2 text-sm font-semibold text-white transition hover:border-cyan-400 hover:text-cyan-200 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        Regenerar imagenes
                       </button>
                     </div>
                   </div>

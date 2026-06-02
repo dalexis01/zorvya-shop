@@ -75,6 +75,7 @@ export interface ProductInternalDetails {
   internalNotes: string;
   accountingImageUrl: string;
   accountingOriginalImageUrl?: string;
+  originalTelegramImageUrl?: string;
   originalSlackImageUrl?: string;
 }
 
@@ -196,14 +197,22 @@ export interface Product {
   updatedAt: string;
   updatedBy: string;
   supplierId?: string;
+  supplierName?: string;
   costUsd?: number;
+  priceSrd?: number;
   stockCode?: string;
   accountingOriginalImageUrl?: string;
+  originalTelegramImageUrl?: string;
   originalSlackImageUrl?: string;
+  originalSource?: "telegram" | "slack" | "manual" | "unknown";
   aiBatchId?: string | null;
-  reviewStatus?: "approved" | "draft" | "rejected" | "pending_review";
+  reviewStatus?: "approved" | "pending" | "needs_review" | "rejected";
   createdByAi?: boolean;
   aiConfidenceScore?: number | null;
+  generatedImages?: ProductAiImageCandidate[];
+  seoTitle?: string;
+  seoDescription?: string;
+  specifications?: Record<string, string>;
   translations?: ProductTranslationMap;
   ai?: {
     draftId: string | null;
@@ -223,7 +232,13 @@ export interface AiProductBatch {
   id: string;
   source: string;
   supplierId: string | null;
+  supplierNameDetected?: string;
   batchName: string;
+  telegramMessageId?: string;
+  telegramChatId?: string;
+  totalItems?: number;
+  completedItems?: number;
+  failedItems?: number;
   status: string;
   metadata: Record<string, unknown>;
   createdAt: string;
@@ -236,8 +251,10 @@ export interface AiProductPendingItem {
   productId: string | null;
   supplierId: string | null;
   supplierName: string;
+  supplierNameDetected?: string;
   publicImageUrl: string;
   originalImageUrl: string;
+  originalTelegramImageUrl: string;
   originalSlackImageUrl: string;
   costUsd: number;
   stockCode: string;
@@ -246,9 +263,14 @@ export interface AiProductPendingItem {
   description: string;
   category: string;
   tags: string[];
-  reviewStatus: "approved" | "draft" | "rejected" | "pending_review";
+  reviewStatus: "approved" | "pending" | "needs_review" | "rejected";
+  status?: string;
   aiConfidenceScore: number | null;
   createdByAi: boolean;
+  generatedImages?: ProductAiImageCandidate[];
+  seoTitle?: string;
+  seoDescription?: string;
+  specifications?: Record<string, string>;
   createdAt: string;
   updatedAt: string;
 }

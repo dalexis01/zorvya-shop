@@ -17,6 +17,7 @@ export async function POST(request: Request) {
     const contentType = request.headers.get("content-type") ?? "";
     let itemId = "";
     let sourceUrl = "";
+    let originalTelegramImageUrl = "";
     let originalSlackImageUrl = "";
     let filename = "";
     let body: ArrayBuffer | undefined;
@@ -25,6 +26,10 @@ export async function POST(request: Request) {
       const payload = (await request.json()) as Record<string, unknown>;
       itemId = String(payload.itemId ?? "");
       sourceUrl = typeof payload.sourceUrl === "string" ? payload.sourceUrl : "";
+      originalTelegramImageUrl =
+        typeof payload.originalTelegramImageUrl === "string"
+          ? payload.originalTelegramImageUrl
+          : "";
       originalSlackImageUrl =
         typeof payload.originalSlackImageUrl === "string" ? payload.originalSlackImageUrl : "";
       filename = typeof payload.filename === "string" ? payload.filename : "";
@@ -32,6 +37,7 @@ export async function POST(request: Request) {
       const url = new URL(request.url);
       itemId = url.searchParams.get("itemId") ?? "";
       sourceUrl = url.searchParams.get("sourceUrl") ?? "";
+      originalTelegramImageUrl = url.searchParams.get("originalTelegramImageUrl") ?? "";
       originalSlackImageUrl = url.searchParams.get("originalSlackImageUrl") ?? "";
       filename = url.searchParams.get("filename") ?? "";
       body = await request.arrayBuffer();
@@ -47,6 +53,7 @@ export async function POST(request: Request) {
       contentType: contentType && !contentType.includes("application/json") ? contentType : undefined,
       filename: filename || undefined,
       body,
+      originalTelegramImageUrl: originalTelegramImageUrl || undefined,
       originalSlackImageUrl: originalSlackImageUrl || undefined,
     });
 

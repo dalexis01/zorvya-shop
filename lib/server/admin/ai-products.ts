@@ -18,13 +18,21 @@ const AI_PRODUCTS_SCHEMA_FILE = path.join(
   "migrations",
   "009_ai_product_automation.sql"
 );
+const AI_PRODUCTS_TELEGRAM_SCHEMA_FILE = path.join(
+  process.cwd(),
+  "db",
+  "migrations",
+  "010_ai_product_telegram_upgrade.sql"
+);
 
 type AiBatchItemRow = QueryResultRow & {
   id: string;
   batch_id: string;
   product_id: string | null;
+  generated_product_id: string | null;
   supplier_id: string | null;
   supplier_name: string | null;
+  supplier_name_detected: string | null;
   title: string;
   description: string;
   category: string;
@@ -34,11 +42,19 @@ type AiBatchItemRow = QueryResultRow & {
   stock_code: string;
   public_image_url: string;
   original_image_url: string;
+  original_telegram_image_url: string;
   original_slack_image_url: string;
   review_status: string;
+  status: string;
   created_by_ai: boolean;
   ai_confidence_score: number | string | null;
+  generated_images: Product["generatedImages"] | null;
+  seo_title: string | null;
+  seo_description: string | null;
+  specifications: Record<string, string> | null;
   payload_json: Record<string, unknown> | null;
+  error_message: string | null;
+  processing_time_ms: number | string | null;
   created_at: Date | string;
   updated_at: Date | string;
 };
@@ -60,13 +76,24 @@ type CreateAiDraftInput = {
   brand?: string;
   sku?: string;
   publicImageUrl?: string;
+  originalTelegramImageUrl?: string;
   originalSlackImageUrl?: string;
+  originalSource?: Product["originalSource"];
   confidenceScore?: number | null;
   attributes?: Record<string, string>;
   inventoryLabel?: string;
   deliveryLabel?: string;
   longDescription?: string;
   shortDescription?: string;
+  supplierName?: string;
+  supplierNameDetected?: string;
+  telegramMessageId?: string;
+  telegramChatId?: string;
+  generatedImages?: Product["generatedImages"];
+  seoTitle?: string;
+  seoDescription?: string;
+  specifications?: Record<string, string>;
+  processingTimeMs?: number;
 };
 
 type UpdateAiDraftInput = Partial<{
@@ -80,6 +107,7 @@ type UpdateAiDraftInput = Partial<{
   stock: number;
   stockCode: string;
   publicImageUrl: string;
+  originalTelegramImageUrl: string;
   originalSlackImageUrl: string;
   confidenceScore: number | null;
   brand: string;
@@ -87,6 +115,10 @@ type UpdateAiDraftInput = Partial<{
   inventoryLabel: string;
   deliveryLabel: string;
   attributes: Record<string, string>;
+  generatedImages: Product["generatedImages"];
+  seoTitle: string;
+  seoDescription: string;
+  specifications: Record<string, string>;
 }>;
 
 let aiProductsPoolInstance: Pool | null = null;
@@ -167,11 +199,13 @@ function mapPendingRow(row: AiBatchItemRow): AiProductPendingItem {
   return {
     id: row.id,
     batchId: row.batch_id,
-    productId: row.product_id,
+    productId: row.generated_product_id ?? row.product_id,
     supplierId: row.supplier_id,
     supplierName: normalizeText(row.supplier_name),
+    supplierNameDetected: normalizeText(row.supplier_name_detected),
     publicImageUrl: normalizeText(row.public_image_url),
     originalImageUrl: normalizeText(row.original_image_url),
+    originalTelegramImageUrl: normalizeText(row.original_telegram_image_url),
     originalSlackImageUrl: normalizeText(row.original_slack_image_url),
     costUsd: Number(row.cost_usd ?? 0),
     stockCode: normalizeText(row.stock_code),
@@ -181,14 +215,20 @@ function mapPendingRow(row: AiBatchItemRow): AiProductPendingItem {
     category: row.category,
     tags: Array.isArray(row.tags_json) ? row.tags_json : [],
     reviewStatus:
+      row.review_status === "needs_review" ||
+      row.review_status === "pending" ||
       row.review_status === "rejected" ||
-      row.review_status === "pending_review" ||
       row.review_status === "approved"
         ? row.review_status
-        : "draft",
+        : "pending",
+    status: normalizeText(row.status) || "draft",
     aiConfidenceScore:
       row.ai_confidence_score === null ? null : Number(row.ai_confidence_score),
     createdByAi: Boolean(row.created_by_ai),
+    generatedImages: Array.isArray(row.generated_images) ? row.generated_images : [],
+    seoTitle: normalizeText(row.seo_title),
+    seoDescription: normalizeText(row.seo_description),
+    specifications: row.specifications ?? {},
     createdAt: toIsoString(row.created_at),
     updatedAt: toIsoString(row.updated_at),
   };
@@ -223,13 +263,15 @@ async function getAiProductsPool() {
 
 async function ensureAiProductsSchema(pool: Pool) {
   await getProductStats();
-  const [suppliersSql, aiSql] = await Promise.all([
+  const [suppliersSql, aiSql, aiTelegramSql] = await Promise.all([
     readFile(SUPPLIERS_SCHEMA_FILE, "utf8"),
     readFile(AI_PRODUCTS_SCHEMA_FILE, "utf8"),
+    readFile(AI_PRODUCTS_TELEGRAM_SCHEMA_FILE, "utf8"),
   ]);
 
   await pool.query(suppliersSql);
   await pool.query(aiSql);
+  await pool.query(aiTelegramSql);
 }
 
 async function getSupplierById(supplierId: string | null | undefined) {
@@ -242,13 +284,32 @@ async function getSupplierById(supplierId: string | null | undefined) {
   return choices.find((supplier) => supplier.id === normalizedId) ?? null;
 }
 
+async function getSupplierByName(supplierName: string | null | undefined) {
+  const normalizedName = normalizeText(supplierName).toLowerCase();
+  if (!normalizedName) {
+    return null;
+  }
+
+  const choices = await getSupplierChoices();
+  return (
+    choices.find((supplier) => normalizeText(supplier.name).toLowerCase() === normalizedName) ??
+    null
+  );
+}
+
 async function upsertBatch(
   client: PoolClient,
   input: {
     id: string;
     source: string;
     supplierId: string | null;
+    supplierNameDetected: string;
     batchName: string;
+    telegramMessageId: string;
+    telegramChatId: string;
+    totalItems: number;
+    completedItems: number;
+    failedItems: number;
     metadata: Record<string, unknown>;
   }
 ) {
@@ -258,20 +319,44 @@ async function upsertBatch(
         id,
         source,
         supplier_id,
+        supplier_name_detected,
         batch_name,
+        telegram_message_id,
+        telegram_chat_id,
+        total_items,
+        completed_items,
+        failed_items,
         status,
         metadata_json,
         created_at,
         updated_at
-      ) VALUES ($1, $2, $3, $4, 'open', $5::jsonb, NOW(), NOW())
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'open', $11::jsonb, NOW(), NOW())
       ON CONFLICT (id) DO UPDATE SET
         source = EXCLUDED.source,
         supplier_id = EXCLUDED.supplier_id,
+        supplier_name_detected = EXCLUDED.supplier_name_detected,
         batch_name = EXCLUDED.batch_name,
+        telegram_message_id = EXCLUDED.telegram_message_id,
+        telegram_chat_id = EXCLUDED.telegram_chat_id,
+        total_items = GREATEST(ai_product_batches.total_items + 1, EXCLUDED.total_items),
+        completed_items = ai_product_batches.completed_items,
+        failed_items = ai_product_batches.failed_items,
         metadata_json = EXCLUDED.metadata_json,
         updated_at = NOW()
     `,
-    [input.id, input.source, input.supplierId, input.batchName, JSON.stringify(input.metadata)]
+    [
+      input.id,
+      input.source,
+      input.supplierId,
+      input.supplierNameDetected,
+      input.batchName,
+      input.telegramMessageId,
+      input.telegramChatId,
+      input.totalItems,
+      input.completedItems,
+      input.failedItems,
+      JSON.stringify(input.metadata),
+    ]
   );
 }
 
@@ -282,6 +367,7 @@ async function insertBatchItem(
     batchId: string;
     productId: string;
     supplierId: string | null;
+    supplierNameDetected: string;
     title: string;
     description: string;
     category: string;
@@ -291,11 +377,18 @@ async function insertBatchItem(
     stockCode: string;
     publicImageUrl: string;
     originalImageUrl: string;
+    originalTelegramImageUrl: string;
     originalSlackImageUrl: string;
-    reviewStatus: "draft" | "pending_review" | "approved" | "rejected";
+    reviewStatus: "pending" | "needs_review" | "approved" | "rejected";
+    status: string;
     createdByAi: boolean;
     aiConfidenceScore: number | null;
+    generatedImages: Product["generatedImages"];
+    seoTitle: string;
+    seoDescription: string;
+    specifications: Record<string, string>;
     payload: Record<string, unknown>;
+    processingTimeMs: number;
   }
 ) {
   await client.query(
@@ -304,7 +397,9 @@ async function insertBatchItem(
         id,
         batch_id,
         product_id,
+        generated_product_id,
         supplier_id,
+        supplier_name_detected,
         title,
         description,
         category,
@@ -314,23 +409,32 @@ async function insertBatchItem(
         stock_code,
         public_image_url,
         original_image_url,
+        original_telegram_image_url,
         original_slack_image_url,
         review_status,
+        status,
         created_by_ai,
         ai_confidence_score,
+        generated_images,
+        seo_title,
+        seo_description,
+        specifications,
         payload_json,
+        processing_time_ms,
         created_at,
         updated_at
       ) VALUES (
-        $1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9, $10, $11, $12, $13, $14,
-        $15, $16, $17, $18::jsonb, NOW(), NOW()
+        $1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10, $11, $12, $13, $14, $15, $16,
+        $17, $18, $19, $20::jsonb, $21, $22, $23::jsonb, $24::jsonb, $25, NOW(), NOW()
       )
     `,
     [
       input.id,
       input.batchId,
       input.productId,
+      input.productId,
       input.supplierId,
+      input.supplierNameDetected,
       input.title,
       input.description,
       input.category,
@@ -340,11 +444,18 @@ async function insertBatchItem(
       input.stockCode,
       input.publicImageUrl,
       input.originalImageUrl,
+      input.originalTelegramImageUrl,
       input.originalSlackImageUrl,
       input.reviewStatus,
+      input.status,
       input.createdByAi,
       input.aiConfidenceScore,
+      JSON.stringify(input.generatedImages ?? []),
+      input.seoTitle,
+      input.seoDescription,
+      JSON.stringify(input.specifications ?? {}),
       JSON.stringify(input.payload),
+      input.processingTimeMs,
     ]
   );
 }
@@ -357,8 +468,10 @@ async function getPendingItemRow(itemId: string) {
         item.id,
         item.batch_id,
         item.product_id,
+        item.generated_product_id,
         item.supplier_id,
         suppliers.name AS supplier_name,
+        item.supplier_name_detected,
         item.title,
         item.description,
         item.category,
@@ -368,11 +481,19 @@ async function getPendingItemRow(itemId: string) {
         item.stock_code,
         item.public_image_url,
         item.original_image_url,
+        item.original_telegram_image_url,
         item.original_slack_image_url,
         item.review_status,
+        item.status,
         item.created_by_ai,
         item.ai_confidence_score,
+        item.generated_images,
+        item.seo_title,
+        item.seo_description,
+        item.specifications,
         item.payload_json,
+        item.error_message,
+        item.processing_time_ms,
         item.created_at,
         item.updated_at
       FROM ai_product_batch_items item
@@ -387,11 +508,18 @@ async function getPendingItemRow(itemId: string) {
 }
 
 async function updateBatchStatusForProduct(client: PoolClient, batchId: string) {
-  const statusResult = await client.query<{ pending_count: string; rejected_count: string }>(
+  const statusResult = await client.query<{
+    pending_count: string;
+    rejected_count: string;
+    total_count: string;
+    published_count: string;
+  }>(
     `
       SELECT
-        COUNT(*) FILTER (WHERE review_status IN ('draft', 'pending_review'))::text AS pending_count,
-        COUNT(*) FILTER (WHERE review_status = 'rejected')::text AS rejected_count
+        COUNT(*) FILTER (WHERE review_status IN ('pending', 'needs_review'))::text AS pending_count,
+        COUNT(*) FILTER (WHERE review_status = 'rejected')::text AS rejected_count,
+        COUNT(*)::text AS total_count,
+        COUNT(*) FILTER (WHERE status = 'published')::text AS published_count
       FROM ai_product_batch_items
       WHERE batch_id = $1
     `,
@@ -400,11 +528,19 @@ async function updateBatchStatusForProduct(client: PoolClient, batchId: string) 
 
   const pendingCount = Number(statusResult.rows[0]?.pending_count ?? 0);
   const rejectedCount = Number(statusResult.rows[0]?.rejected_count ?? 0);
+  const totalCount = Number(statusResult.rows[0]?.total_count ?? 0);
+  const publishedCount = Number(statusResult.rows[0]?.published_count ?? 0);
   const nextStatus = pendingCount > 0 ? "open" : rejectedCount > 0 ? "reviewed_with_rejections" : "reviewed";
 
   await client.query(
-    `UPDATE ai_product_batches SET status = $2, updated_at = NOW() WHERE id = $1`,
-    [batchId, nextStatus]
+    `UPDATE ai_product_batches
+     SET status = $2,
+         total_items = $3,
+         completed_items = $4,
+         failed_items = $5,
+         updated_at = NOW()
+     WHERE id = $1`,
+    [batchId, nextStatus, totalCount, publishedCount, rejectedCount]
   );
 }
 
@@ -443,8 +579,10 @@ export async function listAiPendingProducts() {
         item.id,
         item.batch_id,
         item.product_id,
+        item.generated_product_id,
         item.supplier_id,
         suppliers.name AS supplier_name,
+        item.supplier_name_detected,
         item.title,
         item.description,
         item.category,
@@ -454,16 +592,24 @@ export async function listAiPendingProducts() {
         item.stock_code,
         item.public_image_url,
         item.original_image_url,
+        item.original_telegram_image_url,
         item.original_slack_image_url,
         item.review_status,
+        item.status,
         item.created_by_ai,
         item.ai_confidence_score,
+        item.generated_images,
+        item.seo_title,
+        item.seo_description,
+        item.specifications,
         item.payload_json,
+        item.error_message,
+        item.processing_time_ms,
         item.created_at,
         item.updated_at
       FROM ai_product_batch_items item
       LEFT JOIN suppliers ON suppliers.id = item.supplier_id
-      WHERE item.review_status IN ('draft', 'pending_review')
+      WHERE item.review_status IN ('pending', 'needs_review')
       ORDER BY item.updated_at DESC, item.created_at DESC
     `
   );
@@ -472,9 +618,14 @@ export async function listAiPendingProducts() {
 }
 
 export async function createAiProductDraft(input: CreateAiDraftInput) {
+  const startedAt = Date.now();
   const pool = await getAiProductsPool();
   const client = await pool.connect();
-  const supplier = await getSupplierById(input.supplierId);
+  const supplierById = await getSupplierById(input.supplierId);
+  const supplierByName = supplierById ? null : await getSupplierByName(input.supplierName);
+  const supplier = supplierById ?? supplierByName;
+  const supplierNameDetected =
+    normalizeText(input.supplierName) || normalizeText(input.supplierNameDetected);
   const batchId = normalizeText(input.batchId) || randomUUID();
   const itemId = randomUUID();
   const tags = buildProductTags(input.tags);
@@ -484,19 +635,29 @@ export async function createAiProductDraft(input: CreateAiDraftInput) {
     title,
     category,
     tags,
-    supplier?.name ?? "",
+    supplier?.name ?? supplierNameDetected,
     input.description ?? input.longDescription
   );
-  const publicImageUrl = normalizeText(input.publicImageUrl || input.originalSlackImageUrl);
+  const publicImageUrl = normalizeText(
+    input.publicImageUrl || input.originalTelegramImageUrl || input.originalSlackImageUrl
+  );
+  const generatedImages = Array.isArray(input.generatedImages) ? input.generatedImages : [];
+  const reviewStatus: Product["reviewStatus"] = supplier ? "pending" : "needs_review";
 
   try {
     await client.query("BEGIN");
 
     await upsertBatch(client, {
       id: batchId,
-      source: normalizeText(input.batchSource) || "n8n",
+      source: normalizeText(input.batchSource) || "telegram",
       supplierId: supplier?.id ?? null,
+      supplierNameDetected,
       batchName: normalizeText(input.batchName) || `Batch ${new Date().toISOString().slice(0, 10)}`,
+      telegramMessageId: normalizeText(input.telegramMessageId),
+      telegramChatId: normalizeText(input.telegramChatId),
+      totalItems: 1,
+      completedItems: 0,
+      failedItems: 0,
       metadata: input.batchMetadata ?? {},
     });
 
@@ -533,33 +694,48 @@ export async function createAiProductDraft(input: CreateAiDraftInput) {
           shippingFee: 0,
           isHeavy: false,
           supplierId: supplier?.id ?? "",
-          supplier: supplier?.name ?? "",
+          supplier: supplier?.name ?? supplierNameDetected,
           supplierPhone: supplier?.phone ?? "",
           internalCode: normalizeText(input.sku) || normalizeText(input.stockCode),
           stockCode: normalizeText(input.stockCode),
-          internalNotes: "Creado automaticamente desde n8n + Slack + IA",
+          internalNotes: "Creado automaticamente desde n8n + Telegram + IA",
           accountingImageUrl: publicImageUrl,
           accountingOriginalImageUrl: "",
+          originalTelegramImageUrl: normalizeText(input.originalTelegramImageUrl),
           originalSlackImageUrl: normalizeText(input.originalSlackImageUrl),
         },
         supplierId: supplier?.id ?? undefined,
+        supplierName: supplier?.name ?? (supplierNameDetected || undefined),
         costUsd: Number(input.costUsd ?? 0),
+        priceSrd: Number(input.priceSrd ?? 0),
         stockCode: normalizeText(input.stockCode),
         accountingOriginalImageUrl: "",
+        originalTelegramImageUrl: normalizeText(input.originalTelegramImageUrl),
         originalSlackImageUrl: normalizeText(input.originalSlackImageUrl),
+        originalSource: "telegram",
         aiBatchId: batchId,
-        reviewStatus: "draft",
+        reviewStatus,
         createdByAi: true,
         aiConfidenceScore:
           input.confidenceScore === null || input.confidenceScore === undefined
             ? null
             : Number(input.confidenceScore),
+        generatedImages,
+        seoTitle: normalizeText(input.seoTitle) || title,
+        seoDescription:
+          normalizeText(input.seoDescription) || buildShortDescription(description, title),
+        specifications: input.specifications ?? {},
         ai: {
           draftId: itemId,
-          sourceImageUrl: normalizeText(input.originalSlackImageUrl || publicImageUrl),
-          generatedImages: publicImageUrl
-            ? [{ id: `${itemId}-public`, url: publicImageUrl, label: "Imagen publica" }]
-            : [],
+          sourceImageUrl: normalizeText(
+            input.originalTelegramImageUrl || input.originalSlackImageUrl || publicImageUrl
+          ),
+          generatedImages:
+            generatedImages.length > 0
+              ? generatedImages
+              : publicImageUrl
+                ? [{ id: `${itemId}-public`, url: publicImageUrl, label: "Imagen publica" }]
+                : [],
           suggestedName: title,
           suggestedSku: normalizeText(input.sku),
           suggestedInternalCode: normalizeText(input.stockCode),
@@ -577,6 +753,7 @@ export async function createAiProductDraft(input: CreateAiDraftInput) {
       batchId,
       productId: product.id,
       supplierId: supplier?.id ?? null,
+      supplierNameDetected,
       title,
       description,
       category,
@@ -586,17 +763,32 @@ export async function createAiProductDraft(input: CreateAiDraftInput) {
       stockCode: normalizeText(input.stockCode),
       publicImageUrl,
       originalImageUrl: "",
+      originalTelegramImageUrl: normalizeText(input.originalTelegramImageUrl),
       originalSlackImageUrl: normalizeText(input.originalSlackImageUrl),
-      reviewStatus: "draft",
+      reviewStatus,
+      status: "draft",
       createdByAi: true,
       aiConfidenceScore:
         input.confidenceScore === null || input.confidenceScore === undefined
           ? null
           : Number(input.confidenceScore),
+      generatedImages:
+        generatedImages.length > 0
+          ? generatedImages
+          : publicImageUrl
+            ? [{ id: `${itemId}-public`, url: publicImageUrl, label: "Imagen publica" }]
+            : [],
+      seoTitle: normalizeText(input.seoTitle) || title,
+      seoDescription:
+        normalizeText(input.seoDescription) || buildShortDescription(description, title),
+      specifications: input.specifications ?? {},
       payload: {
-        source: "n8n",
+        source: "telegram",
         attributes: input.attributes ?? {},
+        telegramMessageId: normalizeText(input.telegramMessageId),
+        telegramChatId: normalizeText(input.telegramChatId),
       },
+      processingTimeMs: Math.max(0, Date.now() - startedAt),
     });
 
     await client.query("COMMIT");
@@ -621,6 +813,7 @@ export async function uploadAiOriginalImage(input: {
   contentType?: string;
   filename?: string;
   body?: ArrayBuffer;
+  originalTelegramImageUrl?: string;
   originalSlackImageUrl?: string;
 }) {
   if (!process.env.BLOB_READ_WRITE_TOKEN) {
@@ -658,11 +851,17 @@ export async function uploadAiOriginalImage(input: {
     `
       UPDATE ai_product_batch_items
       SET original_image_url = $2,
-          original_slack_image_url = COALESCE(NULLIF($3, ''), original_slack_image_url),
+          original_telegram_image_url = COALESCE(NULLIF($3, ''), original_telegram_image_url),
+          original_slack_image_url = COALESCE(NULLIF($4, ''), original_slack_image_url),
           updated_at = NOW()
       WHERE id = $1
     `,
-    [item.id, blob.url, normalizeText(input.originalSlackImageUrl ?? input.sourceUrl)]
+    [
+      item.id,
+      blob.url,
+      normalizeText(input.originalTelegramImageUrl ?? input.sourceUrl),
+      normalizeText(input.originalSlackImageUrl),
+    ]
   );
 
   if (item.product_id) {
@@ -671,11 +870,16 @@ export async function uploadAiOriginalImage(input: {
       item.product_id,
       {
         accountingOriginalImageUrl: blob.url,
+        originalTelegramImageUrl: normalizeText(input.originalTelegramImageUrl ?? input.sourceUrl),
         originalSlackImageUrl: normalizeText(input.originalSlackImageUrl ?? input.sourceUrl),
+        originalSource: "telegram",
         internal: currentProduct
           ? {
               ...currentProduct.internal,
               accountingOriginalImageUrl: blob.url,
+              originalTelegramImageUrl: normalizeText(
+                input.originalTelegramImageUrl ?? input.sourceUrl
+              ),
               originalSlackImageUrl: normalizeText(input.originalSlackImageUrl ?? input.sourceUrl),
             }
           : undefined,
@@ -714,6 +918,7 @@ export async function updateAiProductDraft(itemId: string, input: UpdateAiDraftI
   }
 
   const publicImageUrl = normalizeText(input.publicImageUrl ?? item.public_image_url);
+  const generatedImages = input.generatedImages ?? item.generated_images ?? currentProduct.generatedImages ?? [];
   const updatePayload: Partial<Product> = {
     name: nextTitle,
     shortDescription: buildShortDescription(nextDescription, nextTitle),
@@ -726,24 +931,49 @@ export async function updateAiProductDraft(itemId: string, input: UpdateAiDraftI
         ? currentProduct.stock
         : Math.max(0, Math.trunc(Number(input.stock))),
     supplierId: supplier?.id ?? currentProduct.supplierId ?? undefined,
+    supplierName:
+      supplier?.name ?? item.supplier_name_detected ?? currentProduct.supplierName ?? undefined,
     costUsd:
       input.costUsd === undefined
         ? currentProduct.costUsd ?? Number(item.cost_usd ?? 0)
         : toMoney(Number(input.costUsd)),
+    priceSrd:
+      input.priceSrd === undefined
+        ? currentProduct.priceSrd ?? currentProduct.price
+        : toMoney(Number(input.priceSrd)),
     stockCode: normalizeText(input.stockCode) || currentProduct.stockCode || item.stock_code,
+    originalTelegramImageUrl:
+      normalizeText(input.originalTelegramImageUrl) ||
+      currentProduct.originalTelegramImageUrl ||
+      item.original_telegram_image_url,
     originalSlackImageUrl:
       normalizeText(input.originalSlackImageUrl) ||
       currentProduct.originalSlackImageUrl ||
       item.original_slack_image_url,
+    originalSource: "telegram",
     aiConfidenceScore:
       input.confidenceScore === undefined
         ? currentProduct.aiConfidenceScore ??
           (item.ai_confidence_score === null ? null : Number(item.ai_confidence_score))
         : input.confidenceScore,
+    reviewStatus: supplier?.id ? "pending" : "needs_review",
+    generatedImages,
+    seoTitle:
+      normalizeText(input.seoTitle) || currentProduct.seoTitle || item.seo_title || nextTitle,
+    seoDescription:
+      normalizeText(input.seoDescription) ||
+      currentProduct.seoDescription ||
+      item.seo_description ||
+      buildShortDescription(nextDescription, nextTitle),
+    specifications:
+      input.specifications ?? currentProduct.specifications ?? item.specifications ?? {},
     internal: {
       ...currentProduct.internal,
       supplierId: supplier?.id ?? currentProduct.internal.supplierId,
-      supplier: supplier?.name ?? currentProduct.internal.supplier,
+      supplier:
+        supplier?.name ??
+        item.supplier_name_detected ??
+        currentProduct.internal.supplier,
       supplierPhone: supplier?.phone ?? currentProduct.internal.supplierPhone,
       costUsd:
         input.costUsd === undefined
@@ -763,6 +993,10 @@ export async function updateAiProductDraft(itemId: string, input: UpdateAiDraftI
         publicImageUrl || currentProduct.internal.accountingImageUrl,
       accountingOriginalImageUrl:
         currentProduct.internal.accountingOriginalImageUrl || item.original_image_url,
+      originalTelegramImageUrl:
+        normalizeText(input.originalTelegramImageUrl) ||
+        currentProduct.internal.originalTelegramImageUrl ||
+        item.original_telegram_image_url,
       originalSlackImageUrl:
         normalizeText(input.originalSlackImageUrl) ||
         currentProduct.internal.originalSlackImageUrl ||
@@ -775,8 +1009,10 @@ export async function updateAiProductDraft(itemId: string, input: UpdateAiDraftI
       }),
       draftId: item.id,
       sourceImageUrl:
+        normalizeText(input.originalTelegramImageUrl) ||
         normalizeText(input.originalSlackImageUrl) ||
         currentProduct.ai?.sourceImageUrl ||
+        item.original_telegram_image_url ||
         item.original_slack_image_url ||
         publicImageUrl,
       suggestedName: nextTitle,
@@ -784,9 +1020,12 @@ export async function updateAiProductDraft(itemId: string, input: UpdateAiDraftI
       suggestedShortDescription: buildShortDescription(nextDescription, nextTitle),
       suggestedLongDescription: nextDescription,
       suggestedTags: nextTags,
-      generatedImages: publicImageUrl
-        ? [{ id: `${item.id}-public`, url: publicImageUrl, label: "Imagen publica" }]
-        : currentProduct.ai?.generatedImages ?? [],
+      generatedImages:
+        generatedImages.length > 0
+          ? generatedImages
+          : publicImageUrl
+            ? [{ id: `${item.id}-public`, url: publicImageUrl, label: "Imagen publica" }]
+            : currentProduct.ai?.generatedImages ?? [],
       suggestedSku: normalizeText(input.sku) || currentProduct.ai?.suggestedSku,
       suggestedInternalCode:
         normalizeText(input.stockCode) || currentProduct.ai?.suggestedInternalCode,
@@ -811,32 +1050,46 @@ export async function updateAiProductDraft(itemId: string, input: UpdateAiDraftI
     `
       UPDATE ai_product_batch_items
       SET supplier_id = $2,
-          title = $3,
-          description = $4,
-          category = $5,
-          tags_json = $6::jsonb,
-          price_srd = $7,
-          cost_usd = $8,
-          stock_code = $9,
-          public_image_url = $10,
-          original_slack_image_url = COALESCE(NULLIF($11, ''), original_slack_image_url),
-          ai_confidence_score = $12,
+          supplier_name_detected = $3,
+          title = $4,
+          description = $5,
+          category = $6,
+          tags_json = $7::jsonb,
+          price_srd = $8,
+          cost_usd = $9,
+          stock_code = $10,
+          public_image_url = $11,
+          original_telegram_image_url = COALESCE(NULLIF($12, ''), original_telegram_image_url),
+          original_slack_image_url = COALESCE(NULLIF($13, ''), original_slack_image_url),
+          ai_confidence_score = $14,
+          generated_images = $15::jsonb,
+          seo_title = $16,
+          seo_description = $17,
+          specifications = $18::jsonb,
+          review_status = $19,
           updated_at = NOW()
       WHERE id = $1
     `,
     [
       item.id,
       supplier?.id ?? item.supplier_id,
+      supplier?.name ?? item.supplier_name_detected ?? "",
       nextTitle,
       nextDescription,
       nextCategory,
       JSON.stringify(nextTags),
-      updatedProduct.price,
+      updatedProduct.priceSrd ?? updatedProduct.price,
       updatedProduct.costUsd ?? Number(item.cost_usd ?? 0),
       updatedProduct.stockCode ?? item.stock_code,
       publicImageUrl,
+      normalizeText(input.originalTelegramImageUrl),
       normalizeText(input.originalSlackImageUrl),
       updatedProduct.aiConfidenceScore,
+      JSON.stringify(updatedProduct.generatedImages ?? []),
+      updatedProduct.seoTitle ?? "",
+      updatedProduct.seoDescription ?? "",
+      JSON.stringify(updatedProduct.specifications ?? {}),
+      updatedProduct.reviewStatus ?? (supplier?.id ? "pending" : "needs_review"),
     ]
   );
 
@@ -868,6 +1121,7 @@ export async function publishAiProduct(itemId: string, updatedBy: string) {
       `
         UPDATE ai_product_batch_items
         SET review_status = 'approved',
+            status = 'published',
             published_at = NOW(),
             updated_at = NOW()
         WHERE id = $1
@@ -911,6 +1165,8 @@ export async function rejectAiProduct(itemId: string, updatedBy: string, reason?
       `
         UPDATE ai_product_batch_items
         SET review_status = 'rejected',
+            status = 'rejected',
+            error_message = COALESCE(NULLIF($3, ''), error_message),
             rejected_at = NOW(),
             payload_json = payload_json || $2::jsonb,
             updated_at = NOW()
@@ -922,6 +1178,7 @@ export async function rejectAiProduct(itemId: string, updatedBy: string, reason?
           rejectionReason: normalizeText(reason),
           rejectedBy: updatedBy,
         }),
+        normalizeText(reason),
       ]
     );
     await updateBatchStatusForProduct(client, item.batch_id);
@@ -956,6 +1213,8 @@ export async function changeAiProductSupplier(itemId: string, supplierId: string
     item.product_id,
     {
       supplierId: supplier.id,
+      supplierName: supplier.name,
+      reviewStatus: "pending",
       internal: {
         ...product.internal,
         supplierId: supplier.id,
@@ -968,8 +1227,13 @@ export async function changeAiProductSupplier(itemId: string, supplierId: string
 
   const pool = await getAiProductsPool();
   await pool.query(
-    `UPDATE ai_product_batch_items SET supplier_id = $2, updated_at = NOW() WHERE id = $1`,
-    [item.id, supplier.id]
+    `UPDATE ai_product_batch_items
+     SET supplier_id = $2,
+         supplier_name_detected = $3,
+         review_status = 'pending',
+         updated_at = NOW()
+     WHERE id = $1`,
+    [item.id, supplier.id, supplier.name]
   );
 
   return updatedProduct;
@@ -985,7 +1249,7 @@ export async function regenerateAiProductDescription(itemId: string, updatedBy: 
     item.title,
     item.category,
     Array.isArray(item.tags_json) ? item.tags_json : [],
-    normalizeText(item.supplier_name),
+    normalizeText(item.supplier_name) || normalizeText(item.supplier_name_detected),
     ""
   );
 
@@ -1014,6 +1278,51 @@ export async function regenerateAiProductDescription(itemId: string, updatedBy: 
   );
 
   return product;
+}
+
+export async function requestAiImageRegeneration(itemId: string, updatedBy: string) {
+  const item = await getPendingItemRow(itemId);
+  if (!item || !(item.generated_product_id ?? item.product_id)) {
+    throw new Error("AI_DRAFT_NOT_FOUND");
+  }
+
+  const productId = item.generated_product_id ?? item.product_id!;
+  const product = await getProductById(productId);
+  if (!product) {
+    throw new Error("PRODUCT_NOT_FOUND");
+  }
+
+  await updateProduct(
+    productId,
+    {
+      reviewStatus: product.reviewStatus === "approved" ? "approved" : "pending",
+      ai: {
+        ...(product.ai ?? { draftId: item.id, generatedImages: [] }),
+        draftId: item.id,
+        generatedImages: product.generatedImages ?? product.ai?.generatedImages ?? [],
+      },
+    },
+    updatedBy
+  );
+
+  const pool = await getAiProductsPool();
+  await pool.query(
+    `
+      UPDATE ai_product_batch_items
+      SET payload_json = payload_json || $2::jsonb,
+          updated_at = NOW()
+      WHERE id = $1
+    `,
+    [
+      item.id,
+      JSON.stringify({
+        regenerateImagesRequestedAt: new Date().toISOString(),
+        regenerateImagesRequestedBy: updatedBy,
+      }),
+    ]
+  );
+
+  return { success: true };
 }
 
 export async function getAiOriginalImageResponse(itemId: string) {

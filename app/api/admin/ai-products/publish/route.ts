@@ -28,7 +28,7 @@ export async function POST(request: Request) {
       action: "status_changed",
       changedBy: auth.user.id,
       changedByName: auth.user.name,
-      changes: [{ field: "reviewStatus", oldValue: "draft", newValue: "approved" }],
+      changes: [{ field: "reviewStatus", oldValue: "pending", newValue: "approved" }],
     });
     revalidateTag(STOREFRONT_PRODUCTS_TAG, { expire: 0 });
 

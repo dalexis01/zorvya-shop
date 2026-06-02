@@ -34,6 +34,10 @@ export async function POST(request: Request) {
       stockCode: typeof body.stockCode === "string" ? body.stockCode : undefined,
       publicImageUrl:
         typeof body.publicImageUrl === "string" ? body.publicImageUrl : undefined,
+      originalTelegramImageUrl:
+        typeof body.originalTelegramImageUrl === "string"
+          ? body.originalTelegramImageUrl
+          : undefined,
       originalSlackImageUrl:
         typeof body.originalSlackImageUrl === "string"
           ? body.originalSlackImageUrl
@@ -50,6 +54,28 @@ export async function POST(request: Request) {
         typeof body.inventoryLabel === "string" ? body.inventoryLabel : undefined,
       deliveryLabel:
         typeof body.deliveryLabel === "string" ? body.deliveryLabel : undefined,
+      generatedImages: Array.isArray(body.generatedImages)
+        ? body.generatedImages.map((image, index) => {
+            const record = image && typeof image === "object" ? (image as Record<string, unknown>) : {};
+            return {
+              id: typeof record.id === "string" ? record.id : `generated-${index + 1}`,
+              url: String(record.url ?? ""),
+              label: typeof record.label === "string" ? record.label : "Imagen generada",
+            };
+          })
+        : undefined,
+      seoTitle: typeof body.seoTitle === "string" ? body.seoTitle : undefined,
+      seoDescription:
+        typeof body.seoDescription === "string" ? body.seoDescription : undefined,
+      specifications:
+        body.specifications && typeof body.specifications === "object"
+          ? Object.fromEntries(
+              Object.entries(body.specifications as Record<string, unknown>).map(([key, value]) => [
+                key,
+                String(value),
+              ])
+            )
+          : undefined,
       attributes:
         body.attributes && typeof body.attributes === "object"
           ? Object.fromEntries(
