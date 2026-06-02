@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { createAiProductDraft } from "@/lib/server/admin/ai-products";
+import type { Product } from "@/lib/shop/admin-types";
 import { isValidAiAdminSecret } from "@/lib/server/admin/ai-secret";
 
 export const runtime = "nodejs";
@@ -41,6 +42,19 @@ export async function POST(request: Request) {
     const body = (await request.json()) as Record<string, unknown>;
     console.log("[ai-products/create-draft] payload recibido", body);
 
+    const normalizedReviewStatus: Product["reviewStatus"] | undefined =
+      body.review_status === "pending" ||
+      body.review_status === "needs_review" ||
+      body.review_status === "approved" ||
+      body.review_status === "rejected"
+        ? body.review_status
+        : body.reviewStatus === "pending" ||
+            body.reviewStatus === "needs_review" ||
+            body.reviewStatus === "approved" ||
+            body.reviewStatus === "rejected"
+          ? body.reviewStatus
+          : undefined;
+
     const normalizedDraftPayload = {
       batchId: asTrimmedString(body.batchId),
       batchName: asTrimmedString(body.batchName),
@@ -75,6 +89,8 @@ export async function POST(request: Request) {
       supplierNameDetected: asTrimmedString(body.supplierNameDetected),
       telegramMessageId: asTrimmedString(body.telegramMessageId),
       telegramChatId: asTrimmedString(body.telegramChatId),
+      status: asTrimmedString(body.status),
+      reviewStatus: normalizedReviewStatus,
       generatedImages: Array.isArray(body.generatedImages)
         ? body.generatedImages.map((image, index) => {
             const record = image && typeof image === "object" ? (image as Record<string, unknown>) : {};

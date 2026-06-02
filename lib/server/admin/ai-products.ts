@@ -95,6 +95,8 @@ type CreateAiDraftInput = {
   supplierNameDetected?: string;
   telegramMessageId?: string;
   telegramChatId?: string;
+  status?: string;
+  reviewStatus?: Product["reviewStatus"];
   generatedImages?: Product["generatedImages"];
   seoTitle?: string;
   seoDescription?: string;
@@ -318,6 +320,7 @@ async function upsertBatch(
     totalItems: number;
     completedItems: number;
     failedItems: number;
+    status: string;
     metadata: Record<string, unknown>;
   }
 ) {
@@ -338,7 +341,7 @@ async function upsertBatch(
         metadata_json,
         created_at,
         updated_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'open', $11::jsonb, NOW(), NOW())
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::jsonb, NOW(), NOW())
       ON CONFLICT (id) DO UPDATE SET
         source = EXCLUDED.source,
         supplier_id = EXCLUDED.supplier_id,
@@ -363,6 +366,7 @@ async function upsertBatch(
       input.totalItems,
       input.completedItems,
       input.failedItems,
+      input.status,
       JSON.stringify(input.metadata),
     ]
   );
@@ -432,8 +436,8 @@ async function insertBatchItem(
         created_at,
         updated_at
       ) VALUES (
-        $1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10, $11, $12, $13, $14, $15, $16,
-        $17, $18, $19, $20::jsonb, $21, $22, $23::jsonb, $24::jsonb, $25, NOW(), NOW()
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb, $11, $12, $13, $14, $15, $16,
+        $17, $18, $19, $20, $21, $22::jsonb, $23, $24, $25::jsonb, $26::jsonb, $27, NOW(), NOW()
       )
     `,
     [
@@ -650,7 +654,15 @@ export async function createAiProductDraft(input: CreateAiDraftInput) {
     input.publicImageUrl || input.originalTelegramImageUrl || input.originalSlackImageUrl
   );
   const generatedImages = Array.isArray(input.generatedImages) ? input.generatedImages : [];
-  const reviewStatus: Product["reviewStatus"] = supplier ? "pending" : "needs_review";
+  const requestedReviewStatus =
+    input.reviewStatus === "pending" ||
+    input.reviewStatus === "needs_review" ||
+    input.reviewStatus === "approved" ||
+    input.reviewStatus === "rejected"
+      ? input.reviewStatus
+      : null;
+  const reviewStatus: Product["reviewStatus"] =
+    requestedReviewStatus ?? (supplier ? "pending" : "needs_review");
   const sanitizedCostUsd =
     input.costUsd === null || input.costUsd === undefined || Number.isNaN(Number(input.costUsd))
       ? 0
@@ -762,6 +774,7 @@ export async function createAiProductDraft(input: CreateAiDraftInput) {
       totalItems: 1,
       completedItems: 0,
       failedItems: 0,
+      status: normalizeText(input.status) || "open",
       metadata: input.batchMetadata ?? {},
     });
 
