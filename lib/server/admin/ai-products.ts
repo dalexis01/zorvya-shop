@@ -24,6 +24,12 @@ const AI_PRODUCTS_TELEGRAM_SCHEMA_FILE = path.join(
   "migrations",
   "010_ai_product_telegram_upgrade.sql"
 );
+const AI_PRODUCTS_TELEGRAM_FIXES_SCHEMA_FILE = path.join(
+  process.cwd(),
+  "db",
+  "migrations",
+  "011_ai_products_nullable_supplier_name.sql"
+);
 
 type AiBatchItemRow = QueryResultRow & {
   id: string;
@@ -263,15 +269,17 @@ async function getAiProductsPool() {
 
 async function ensureAiProductsSchema(pool: Pool) {
   await getProductStats();
-  const [suppliersSql, aiSql, aiTelegramSql] = await Promise.all([
+  const [suppliersSql, aiSql, aiTelegramSql, aiTelegramFixesSql] = await Promise.all([
     readFile(SUPPLIERS_SCHEMA_FILE, "utf8"),
     readFile(AI_PRODUCTS_SCHEMA_FILE, "utf8"),
     readFile(AI_PRODUCTS_TELEGRAM_SCHEMA_FILE, "utf8"),
+    readFile(AI_PRODUCTS_TELEGRAM_FIXES_SCHEMA_FILE, "utf8"),
   ]);
 
   await pool.query(suppliersSql);
   await pool.query(aiSql);
   await pool.query(aiTelegramSql);
+  await pool.query(aiTelegramFixesSql);
 }
 
 async function getSupplierById(supplierId: string | null | undefined) {
@@ -643,6 +651,102 @@ export async function createAiProductDraft(input: CreateAiDraftInput) {
   );
   const generatedImages = Array.isArray(input.generatedImages) ? input.generatedImages : [];
   const reviewStatus: Product["reviewStatus"] = supplier ? "pending" : "needs_review";
+  const sanitizedCostUsd =
+    input.costUsd === null || input.costUsd === undefined || Number.isNaN(Number(input.costUsd))
+      ? 0
+      : Number(input.costUsd);
+  const sanitizedPriceSrd =
+    input.priceSrd === null || input.priceSrd === undefined || Number.isNaN(Number(input.priceSrd))
+      ? 0
+      : Number(input.priceSrd);
+  const sanitizedSpecifications =
+    input.specifications && typeof input.specifications === "object"
+      ? input.specifications
+      : {};
+  const sanitizedGeneratedImages = generatedImages.length > 0 ? generatedImages : [];
+  const productDraftInput = {
+    name: title,
+    category,
+    tags,
+    price: toMoney(sanitizedPriceSrd),
+    stock: Math.max(0, Math.trunc(Number(input.stock ?? 0))),
+    shortDescription: buildShortDescription(description, title),
+    longDescription: description,
+    brand: normalizeText(input.brand) || "ZorvyA",
+    sku: normalizeText(input.sku) || undefined,
+    images: publicImageUrl
+      ? [
+          {
+            url: publicImageUrl,
+            alt: title || "Imagen IA",
+            isPrimary: true,
+          },
+        ]
+      : [],
+    isActive: false,
+    isVisible: false,
+    showStock: false,
+    inventoryLabel: normalizeText(input.inventoryLabel) || "Pendiente de revision IA",
+    deliveryLabel: normalizeText(input.deliveryLabel) || "Delivery disponible",
+    attributes: input.attributes ?? {},
+    internal: {
+      costPrice: sanitizedCostUsd,
+      costUsd: sanitizedCostUsd,
+      purchasePrice: sanitizedCostUsd,
+      shippingFee: 0,
+      isHeavy: false,
+      supplierId: supplier?.id ?? "",
+      supplier: supplier?.name ?? supplierNameDetected,
+      supplierPhone: supplier?.phone ?? "",
+      internalCode: normalizeText(input.sku) || normalizeText(input.stockCode),
+      stockCode: normalizeText(input.stockCode),
+      internalNotes: "Creado automaticamente desde n8n + Telegram + IA",
+      accountingImageUrl: publicImageUrl,
+      accountingOriginalImageUrl: "",
+      originalTelegramImageUrl: normalizeText(input.originalTelegramImageUrl),
+      originalSlackImageUrl: normalizeText(input.originalSlackImageUrl),
+    },
+    supplierId: supplier?.id ?? undefined,
+    supplierName: supplier?.name ?? undefined,
+    costUsd: sanitizedCostUsd,
+    priceSrd: sanitizedPriceSrd,
+    stockCode: normalizeText(input.stockCode),
+    accountingOriginalImageUrl: "",
+    originalTelegramImageUrl: normalizeText(input.originalTelegramImageUrl),
+    originalSlackImageUrl: normalizeText(input.originalSlackImageUrl),
+    originalSource: "telegram" as const,
+    aiBatchId: batchId,
+    reviewStatus,
+    createdByAi: true,
+    aiConfidenceScore:
+      input.confidenceScore === null || input.confidenceScore === undefined
+        ? null
+        : Number(input.confidenceScore),
+    generatedImages: sanitizedGeneratedImages,
+    seoTitle: normalizeText(input.seoTitle) || title,
+    seoDescription:
+      normalizeText(input.seoDescription) || buildShortDescription(description, title),
+    specifications: sanitizedSpecifications,
+    ai: {
+      draftId: itemId,
+      sourceImageUrl: normalizeText(
+        input.originalTelegramImageUrl || input.originalSlackImageUrl || publicImageUrl
+      ),
+      generatedImages:
+        sanitizedGeneratedImages.length > 0
+          ? sanitizedGeneratedImages
+          : publicImageUrl
+            ? [{ id: `${itemId}-public`, url: publicImageUrl, label: "Imagen publica" }]
+            : [],
+      suggestedName: title,
+      suggestedSku: normalizeText(input.sku),
+      suggestedInternalCode: normalizeText(input.stockCode),
+      suggestedShortDescription: buildShortDescription(description, title),
+      suggestedLongDescription: description,
+      suggestedCategory: category,
+      suggestedTags: tags,
+    },
+  };
 
   try {
     await client.query("BEGIN");
@@ -661,92 +765,9 @@ export async function createAiProductDraft(input: CreateAiDraftInput) {
       metadata: input.batchMetadata ?? {},
     });
 
-    const product = await createProduct(
-      {
-        name: title,
-        category,
-        tags,
-        price: toMoney(Number(input.priceSrd ?? 0)),
-        stock: Math.max(0, Math.trunc(Number(input.stock ?? 0))),
-        shortDescription: buildShortDescription(description, title),
-        longDescription: description,
-        brand: normalizeText(input.brand) || "ZorvyA",
-        sku: normalizeText(input.sku) || undefined,
-        images: publicImageUrl
-          ? [
-              {
-                url: publicImageUrl,
-                alt: title || "Imagen IA",
-                isPrimary: true,
-              },
-            ]
-          : [],
-        isActive: false,
-        isVisible: false,
-        showStock: false,
-        inventoryLabel: normalizeText(input.inventoryLabel) || "Pendiente de revision IA",
-        deliveryLabel: normalizeText(input.deliveryLabel) || "Delivery disponible",
-        attributes: input.attributes ?? {},
-        internal: {
-          costPrice: Number(input.costUsd ?? 0),
-          costUsd: Number(input.costUsd ?? 0),
-          purchasePrice: Number(input.costUsd ?? 0),
-          shippingFee: 0,
-          isHeavy: false,
-          supplierId: supplier?.id ?? "",
-          supplier: supplier?.name ?? supplierNameDetected,
-          supplierPhone: supplier?.phone ?? "",
-          internalCode: normalizeText(input.sku) || normalizeText(input.stockCode),
-          stockCode: normalizeText(input.stockCode),
-          internalNotes: "Creado automaticamente desde n8n + Telegram + IA",
-          accountingImageUrl: publicImageUrl,
-          accountingOriginalImageUrl: "",
-          originalTelegramImageUrl: normalizeText(input.originalTelegramImageUrl),
-          originalSlackImageUrl: normalizeText(input.originalSlackImageUrl),
-        },
-        supplierId: supplier?.id ?? undefined,
-        supplierName: supplier?.name ?? (supplierNameDetected || undefined),
-        costUsd: Number(input.costUsd ?? 0),
-        priceSrd: Number(input.priceSrd ?? 0),
-        stockCode: normalizeText(input.stockCode),
-        accountingOriginalImageUrl: "",
-        originalTelegramImageUrl: normalizeText(input.originalTelegramImageUrl),
-        originalSlackImageUrl: normalizeText(input.originalSlackImageUrl),
-        originalSource: "telegram",
-        aiBatchId: batchId,
-        reviewStatus,
-        createdByAi: true,
-        aiConfidenceScore:
-          input.confidenceScore === null || input.confidenceScore === undefined
-            ? null
-            : Number(input.confidenceScore),
-        generatedImages,
-        seoTitle: normalizeText(input.seoTitle) || title,
-        seoDescription:
-          normalizeText(input.seoDescription) || buildShortDescription(description, title),
-        specifications: input.specifications ?? {},
-        ai: {
-          draftId: itemId,
-          sourceImageUrl: normalizeText(
-            input.originalTelegramImageUrl || input.originalSlackImageUrl || publicImageUrl
-          ),
-          generatedImages:
-            generatedImages.length > 0
-              ? generatedImages
-              : publicImageUrl
-                ? [{ id: `${itemId}-public`, url: publicImageUrl, label: "Imagen publica" }]
-                : [],
-          suggestedName: title,
-          suggestedSku: normalizeText(input.sku),
-          suggestedInternalCode: normalizeText(input.stockCode),
-          suggestedShortDescription: buildShortDescription(description, title),
-          suggestedLongDescription: description,
-          suggestedCategory: category,
-          suggestedTags: tags,
-        },
-      },
-      "ai:n8n"
-    );
+    console.log("[ai-products/create-draft] objeto final a insertar", productDraftInput);
+
+    const product = await createProduct(productDraftInput, "ai:n8n");
 
     await insertBatchItem(client, {
       id: itemId,
@@ -759,7 +780,7 @@ export async function createAiProductDraft(input: CreateAiDraftInput) {
       category,
       tags,
       priceSrd: toMoney(Number(input.priceSrd ?? 0)),
-      costUsd: toMoney(Number(input.costUsd ?? 0)),
+      costUsd: toMoney(sanitizedCostUsd),
       stockCode: normalizeText(input.stockCode),
       publicImageUrl,
       originalImageUrl: "",
@@ -773,15 +794,15 @@ export async function createAiProductDraft(input: CreateAiDraftInput) {
           ? null
           : Number(input.confidenceScore),
       generatedImages:
-        generatedImages.length > 0
-          ? generatedImages
+        sanitizedGeneratedImages.length > 0
+          ? sanitizedGeneratedImages
           : publicImageUrl
             ? [{ id: `${itemId}-public`, url: publicImageUrl, label: "Imagen publica" }]
             : [],
       seoTitle: normalizeText(input.seoTitle) || title,
       seoDescription:
         normalizeText(input.seoDescription) || buildShortDescription(description, title),
-      specifications: input.specifications ?? {},
+      specifications: sanitizedSpecifications,
       payload: {
         source: "telegram",
         attributes: input.attributes ?? {},
@@ -801,6 +822,7 @@ export async function createAiProductDraft(input: CreateAiDraftInput) {
     };
   } catch (error) {
     await client.query("ROLLBACK");
+    console.error("[ai-products/create-draft] postgres error completo", error);
     throw error;
   } finally {
     client.release();

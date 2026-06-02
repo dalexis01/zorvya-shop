@@ -7,6 +7,30 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
+function asTrimmedString(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function asNullableNumber(value: unknown): number | null | undefined {
+  if (value === undefined) return undefined;
+  if (value === null || value === "") return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function asStringMap(value: unknown): Record<string, string> | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return undefined;
+  }
+
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>).map(([key, entryValue]) => [
+      key,
+      String(entryValue ?? ""),
+    ])
+  );
+}
+
 export async function POST(request: Request) {
   const auth = isValidAiAdminSecret(request);
   if (!auth.ok) {
@@ -15,64 +39,42 @@ export async function POST(request: Request) {
 
   try {
     const body = (await request.json()) as Record<string, unknown>;
-    const result = await createAiProductDraft({
-      batchId: typeof body.batchId === "string" ? body.batchId : undefined,
-      batchName: typeof body.batchName === "string" ? body.batchName : undefined,
-      batchSource: typeof body.batchSource === "string" ? body.batchSource : undefined,
+    console.log("[ai-products/create-draft] payload recibido", body);
+
+    const normalizedDraftPayload = {
+      batchId: asTrimmedString(body.batchId),
+      batchName: asTrimmedString(body.batchName),
+      batchSource: asTrimmedString(body.batchSource),
       batchMetadata:
-        body.batchMetadata && typeof body.batchMetadata === "object"
+        body.batchMetadata && typeof body.batchMetadata === "object" && !Array.isArray(body.batchMetadata)
           ? (body.batchMetadata as Record<string, unknown>)
           : undefined,
-      supplierId: typeof body.supplierId === "string" ? body.supplierId : undefined,
-      title: String(body.title ?? ""),
-      description: typeof body.description === "string" ? body.description : undefined,
-      category: typeof body.category === "string" ? body.category : undefined,
-      tags: Array.isArray(body.tags) ? body.tags.map((tag) => String(tag)) : undefined,
-      priceSrd: Number(body.priceSrd ?? 0),
-      costUsd: Number(body.costUsd ?? 0),
-      stock: Number(body.stock ?? 0),
-      stockCode: typeof body.stockCode === "string" ? body.stockCode : undefined,
-      brand: typeof body.brand === "string" ? body.brand : undefined,
-      sku: typeof body.sku === "string" ? body.sku : undefined,
-      publicImageUrl:
-        typeof body.publicImageUrl === "string" ? body.publicImageUrl : undefined,
+      supplierId: asTrimmedString(body.supplierId),
+      title: String(body.title ?? "").trim(),
+      description: asTrimmedString(body.description),
+      category: asTrimmedString(body.category),
+      tags: Array.isArray(body.tags) ? body.tags.map((tag) => String(tag)).filter(Boolean) : undefined,
+      priceSrd: asNullableNumber(body.priceSrd) ?? 0,
+      costUsd: asNullableNumber(body.costUsd) ?? 0,
+      stock: asNullableNumber(body.stock) ?? 0,
+      stockCode: asTrimmedString(body.stockCode),
+      brand: asTrimmedString(body.brand),
+      sku: asTrimmedString(body.sku),
+      publicImageUrl: asTrimmedString(body.publicImageUrl),
       originalTelegramImageUrl:
-        typeof body.originalTelegramImageUrl === "string"
-          ? body.originalTelegramImageUrl
-          : undefined,
-      originalSlackImageUrl:
-        typeof body.originalSlackImageUrl === "string"
-          ? body.originalSlackImageUrl
-          : undefined,
-      originalSource: "telegram",
-      confidenceScore:
-        body.aiConfidenceScore === null || body.aiConfidenceScore === undefined
-          ? null
-          : Number(body.aiConfidenceScore),
-      attributes:
-        body.attributes && typeof body.attributes === "object"
-          ? Object.fromEntries(
-              Object.entries(body.attributes as Record<string, unknown>).map(([key, value]) => [
-                key,
-                String(value),
-              ])
-            )
-          : undefined,
-      inventoryLabel:
-        typeof body.inventoryLabel === "string" ? body.inventoryLabel : undefined,
-      deliveryLabel:
-        typeof body.deliveryLabel === "string" ? body.deliveryLabel : undefined,
-      longDescription:
-        typeof body.longDescription === "string" ? body.longDescription : undefined,
-      shortDescription:
-        typeof body.shortDescription === "string" ? body.shortDescription : undefined,
-      supplierName: typeof body.supplierName === "string" ? body.supplierName : undefined,
-      supplierNameDetected:
-        typeof body.supplierNameDetected === "string" ? body.supplierNameDetected : undefined,
-      telegramMessageId:
-        typeof body.telegramMessageId === "string" ? body.telegramMessageId : undefined,
-      telegramChatId:
-        typeof body.telegramChatId === "string" ? body.telegramChatId : undefined,
+        asTrimmedString(body.originalTelegramImageUrl) ?? asTrimmedString(body.original_image_url),
+      originalSlackImageUrl: asTrimmedString(body.originalSlackImageUrl),
+      originalSource: "telegram" as const,
+      confidenceScore: asNullableNumber(body.aiConfidenceScore) ?? null,
+      attributes: asStringMap(body.attributes),
+      inventoryLabel: asTrimmedString(body.inventoryLabel),
+      deliveryLabel: asTrimmedString(body.deliveryLabel),
+      longDescription: asTrimmedString(body.longDescription),
+      shortDescription: asTrimmedString(body.shortDescription),
+      supplierName: asTrimmedString(body.supplierName),
+      supplierNameDetected: asTrimmedString(body.supplierNameDetected),
+      telegramMessageId: asTrimmedString(body.telegramMessageId),
+      telegramChatId: asTrimmedString(body.telegramChatId),
       generatedImages: Array.isArray(body.generatedImages)
         ? body.generatedImages.map((image, index) => {
             const record = image && typeof image === "object" ? (image as Record<string, unknown>) : {};
@@ -81,25 +83,31 @@ export async function POST(request: Request) {
               url: String(record.url ?? ""),
               label: typeof record.label === "string" ? record.label : "Imagen generada",
             };
-          })
-        : undefined,
-      seoTitle: typeof body.seoTitle === "string" ? body.seoTitle : undefined,
-      seoDescription:
-        typeof body.seoDescription === "string" ? body.seoDescription : undefined,
-      specifications:
-        body.specifications && typeof body.specifications === "object"
-          ? Object.fromEntries(
-              Object.entries(body.specifications as Record<string, unknown>).map(([key, value]) => [
-                key,
-                String(value),
-              ])
-            )
-          : undefined,
-      processingTimeMs:
-        body.processingTimeMs === undefined ? undefined : Number(body.processingTimeMs),
-    });
+          }).filter((image) => image.url.trim())
+        : [],
+      seoTitle: asTrimmedString(body.seoTitle),
+      seoDescription: asTrimmedString(body.seoDescription),
+      specifications: asStringMap(body.specifications) ?? {},
+      processingTimeMs: asNullableNumber(body.processingTimeMs) ?? undefined,
+    };
 
-    return NextResponse.json({ success: true, ...result });
+    if (!normalizedDraftPayload.title) {
+      return NextResponse.json(
+        { success: false, error: "title es obligatorio" },
+        { status: 400 }
+      );
+    }
+
+    console.log("[ai-products/create-draft] objeto final", normalizedDraftPayload);
+
+    const result = await createAiProductDraft(normalizedDraftPayload);
+
+    return NextResponse.json({
+      success: true,
+      product_id: result.productId,
+      status: "draft",
+      ...result,
+    });
   } catch (error) {
     console.error("[ai-products/create-draft] failed:", error);
     return NextResponse.json(

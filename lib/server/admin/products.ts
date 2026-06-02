@@ -1149,9 +1149,9 @@ async function upsertProductRecord(client: PoolClient, product: Product) {
       $28::timestamptz, $29::timestamptz, $30::timestamptz, $31::jsonb, $32::timestamptz, $33,
       $34, $35, $36, $37, $38, $39,
       $40, $41, $42, $43,
-      $44, $45, $46, $47, $48::jsonb,
-      $49, $50, $51::jsonb,
-      $52::jsonb, $53::jsonb
+      $44, $45, $46, $47::jsonb, $48,
+      $49, $50::jsonb,
+      $51::jsonb, $52::jsonb
     )
     ON CONFLICT (id) DO UPDATE SET
       public_id = EXCLUDED.public_id,
@@ -1240,7 +1240,7 @@ async function upsertProductRecord(client: PoolClient, product: Product) {
       product.updatedAt,
       product.updatedBy,
       product.supplierId ?? product.internal?.supplierId ?? null,
-      product.supplierName ?? product.internal?.supplier ?? "",
+      trimText(product.supplierName ?? product.internal?.supplier) || null,
       product.costUsd ?? product.internal?.costUsd ?? 0,
       product.priceSrd ?? product.price ?? 0,
       product.stockCode ?? product.internal?.stockCode ?? "",
