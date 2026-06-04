@@ -253,6 +253,7 @@ export interface AiProductPendingItem {
   supplierName: string;
   supplierNameDetected?: string;
   publicImageUrl: string;
+  thumbnailUrl?: string;
   originalImageUrl: string;
   originalTelegramImageUrl: string;
   originalSlackImageUrl: string;

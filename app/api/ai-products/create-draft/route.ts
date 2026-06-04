@@ -32,6 +32,49 @@ function asStringMap(value: unknown): Record<string, string> | undefined {
   );
 }
 
+function normalizeGeneratedImages(
+  value: unknown,
+  imageUrl: string | undefined,
+  thumbnailUrl: string | undefined
+) {
+  const rawList = Array.isArray(value) ? value : [];
+  const images = rawList
+    .map((image, index) => {
+      const record = image && typeof image === "object" ? (image as Record<string, unknown>) : {};
+      const url = String(record.url ?? "").trim();
+      if (!url) {
+        return null;
+      }
+
+      return {
+        id: typeof record.id === "string" ? record.id : `generated-${index + 1}`,
+        url,
+        label: typeof record.label === "string" ? record.label : "Imagen generada",
+      };
+    })
+    .filter((image): image is { id: string; url: string; label: string } => Boolean(image));
+
+  const result = [...images];
+
+  if (imageUrl && !result.some((image) => image.url === imageUrl)) {
+    result.unshift({
+      id: "generated-primary",
+      url: imageUrl,
+      label: "Imagen principal",
+    });
+  }
+
+  if (thumbnailUrl && !result.some((image) => image.url === thumbnailUrl)) {
+    result.push({
+      id: "generated-thumbnail",
+      url: thumbnailUrl,
+      label: "Thumbnail",
+    });
+  }
+
+  return result;
+}
+
 export async function POST(request: Request) {
   const auth = isValidAiAdminSecret(request);
   if (!auth.ok) {
@@ -41,6 +84,14 @@ export async function POST(request: Request) {
   try {
     const body = (await request.json()) as Record<string, unknown>;
     console.log("[ai-products/create-draft] payload recibido", body);
+    const imageUrl =
+      asTrimmedString(body.image_url) ??
+      asTrimmedString(body.imageUrl) ??
+      asTrimmedString(body.public_image_url) ??
+      asTrimmedString(body.publicImageUrl);
+    const thumbnailUrl =
+      asTrimmedString(body.thumbnail_url) ??
+      asTrimmedString(body.thumbnailUrl);
     const generatedImagesSource = Array.isArray(body.generatedImages)
       ? body.generatedImages
       : Array.isArray(body.generated_images)
@@ -55,6 +106,12 @@ export async function POST(request: Request) {
       ...(asTrimmedString(body.color) ? { color: asTrimmedString(body.color) ?? "" } : {}),
       ...(asTrimmedString(body.material) ? { material: asTrimmedString(body.material) ?? "" } : {}),
     };
+
+    const normalizedGeneratedImages = normalizeGeneratedImages(
+      generatedImagesSource,
+      imageUrl,
+      thumbnailUrl
+    );
 
     const normalizedReviewStatus: Product["reviewStatus"] | undefined =
       body.review_status === "pending" ||
@@ -88,21 +145,20 @@ export async function POST(request: Request) {
       stockCode: asTrimmedString(body.stockCode ?? body.stock_code),
       brand: asTrimmedString(body.brand),
       sku: asTrimmedString(body.sku ?? body.model),
-      publicImageUrl:
-        asTrimmedString(body.publicImageUrl ?? body.public_image_url) ??
-        (generatedImagesSource[0] &&
-        typeof generatedImagesSource[0] === "object" &&
-        generatedImagesSource[0] !== null
-          ? asTrimmedString((generatedImagesSource[0] as Record<string, unknown>).url)
-          : undefined),
+      publicImageUrl: imageUrl,
+      thumbnailUrl,
+      accountingOriginalImageUrl:
+        asTrimmedString(body.accounting_original_image_url) ??
+        asTrimmedString(body.accountingOriginalImageUrl),
       originalTelegramImageUrl:
         asTrimmedString(
           body.originalTelegramImageUrl ??
-            body.original_image_url ??
-            body.accounting_original_image_url
+            body.original_telegram_image_url ??
+            body.original_image_url
         ),
       originalSlackImageUrl: asTrimmedString(body.originalSlackImageUrl),
-      originalSource: "telegram" as const,
+      originalSource:
+        asTrimmedString(body.source) === "telegram" ? "telegram" as const : "telegram" as const,
       confidenceScore: asNullableNumber(
         body.aiConfidenceScore ?? body.ai_confidence_score ?? body.confidence
       ) ?? null,
@@ -117,16 +173,7 @@ export async function POST(request: Request) {
       telegramChatId: asTrimmedString(body.telegramChatId),
       status: asTrimmedString(body.status),
       reviewStatus: normalizedReviewStatus,
-      generatedImages: generatedImagesSource
-        .map((image, index) => {
-            const record = image && typeof image === "object" ? (image as Record<string, unknown>) : {};
-            return {
-              id: typeof record.id === "string" ? record.id : `generated-${index + 1}`,
-              url: String(record.url ?? ""),
-              label: typeof record.label === "string" ? record.label : "Imagen generada",
-            };
-          }).filter((image) => image.url.trim())
-        ,
+      generatedImages: normalizedGeneratedImages,
       seoTitle: asTrimmedString(body.seoTitle ?? body.seo_title),
       seoDescription: asTrimmedString(body.seoDescription ?? body.seo_description),
       specifications: asStringMap(body.specifications) ?? {},

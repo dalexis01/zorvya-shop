@@ -82,6 +82,8 @@ type CreateAiDraftInput = {
   brand?: string;
   sku?: string;
   publicImageUrl?: string;
+  thumbnailUrl?: string;
+  accountingOriginalImageUrl?: string;
   originalTelegramImageUrl?: string;
   originalSlackImageUrl?: string;
   originalSource?: Product["originalSource"];
@@ -204,6 +206,14 @@ function buildProductTags(tags: string[] | undefined) {
 }
 
 function mapPendingRow(row: AiBatchItemRow): AiProductPendingItem {
+  const generatedImages = Array.isArray(row.generated_images) ? row.generated_images : [];
+  const payloadThumbnail =
+    row.payload_json && typeof row.payload_json.thumbnailUrl === "string"
+      ? normalizeText(String(row.payload_json.thumbnailUrl))
+      : "";
+  const publicImageUrl =
+    normalizeText(row.public_image_url) || normalizeText(generatedImages[0]?.url);
+
   return {
     id: row.id,
     batchId: row.batch_id,
@@ -211,7 +221,9 @@ function mapPendingRow(row: AiBatchItemRow): AiProductPendingItem {
     supplierId: row.supplier_id,
     supplierName: normalizeText(row.supplier_name),
     supplierNameDetected: normalizeText(row.supplier_name_detected),
-    publicImageUrl: normalizeText(row.public_image_url),
+    publicImageUrl,
+    thumbnailUrl:
+      payloadThumbnail || normalizeText(generatedImages.find((image) => image.url !== publicImageUrl)?.url),
     originalImageUrl: normalizeText(row.original_image_url),
     originalTelegramImageUrl: normalizeText(row.original_telegram_image_url),
     originalSlackImageUrl: normalizeText(row.original_slack_image_url),
@@ -233,7 +245,7 @@ function mapPendingRow(row: AiBatchItemRow): AiProductPendingItem {
     aiConfidenceScore:
       row.ai_confidence_score === null ? null : Number(row.ai_confidence_score),
     createdByAi: Boolean(row.created_by_ai),
-    generatedImages: Array.isArray(row.generated_images) ? row.generated_images : [],
+    generatedImages,
     seoTitle: normalizeText(row.seo_title),
     seoDescription: normalizeText(row.seo_description),
     specifications: row.specifications ?? {},
@@ -650,10 +662,41 @@ export async function createAiProductDraft(input: CreateAiDraftInput) {
     supplier?.name ?? supplierNameDetected,
     input.description ?? input.longDescription
   );
-  const publicImageUrl = normalizeText(
-    input.publicImageUrl || input.originalTelegramImageUrl || input.originalSlackImageUrl
-  );
+  const publicImageUrl = normalizeText(input.publicImageUrl);
+  const thumbnailUrl = normalizeText(input.thumbnailUrl);
   const generatedImages = Array.isArray(input.generatedImages) ? input.generatedImages : [];
+  const sanitizedGeneratedImages = generatedImages
+    .map((image) => ({
+      id: normalizeText(image?.id) || randomUUID(),
+      url: normalizeText(image?.url),
+      label: normalizeText(image?.label) || "Imagen generada",
+    }))
+    .filter((image) => image.url);
+  const productGallery = [
+    publicImageUrl
+      ? {
+          url: publicImageUrl,
+          alt: title || "Imagen IA",
+          isPrimary: true,
+        }
+      : null,
+    thumbnailUrl && thumbnailUrl !== publicImageUrl
+      ? {
+          url: thumbnailUrl,
+          alt: `${title || "Producto"} thumbnail`,
+          isPrimary: false,
+        }
+      : null,
+    ...sanitizedGeneratedImages
+      .filter((image) => image.url !== publicImageUrl && image.url !== thumbnailUrl)
+      .map((image) => ({
+        url: image.url,
+        alt: image.label || title || "Imagen generada",
+        isPrimary: false,
+      })),
+  ].filter((image): image is { url: string; alt: string; isPrimary: boolean } => Boolean(image));
+  const hasPublicGeneratedImages =
+    Boolean(publicImageUrl) || Boolean(thumbnailUrl) || sanitizedGeneratedImages.length > 0;
   const requestedReviewStatus =
     input.reviewStatus === "pending" ||
     input.reviewStatus === "needs_review" ||
@@ -662,7 +705,9 @@ export async function createAiProductDraft(input: CreateAiDraftInput) {
       ? input.reviewStatus
       : null;
   const reviewStatus: Product["reviewStatus"] =
-    requestedReviewStatus ?? (supplier ? "pending" : "needs_review");
+    !hasPublicGeneratedImages
+      ? "needs_review"
+      : requestedReviewStatus ?? (supplier ? "pending" : "needs_review");
   const sanitizedCostUsd =
     input.costUsd === null || input.costUsd === undefined || Number.isNaN(Number(input.costUsd))
       ? 0
@@ -675,7 +720,6 @@ export async function createAiProductDraft(input: CreateAiDraftInput) {
     input.specifications && typeof input.specifications === "object"
       ? input.specifications
       : {};
-  const sanitizedGeneratedImages = generatedImages.length > 0 ? generatedImages : [];
   const productDraftInput = {
     name: title,
     category,
@@ -686,15 +730,7 @@ export async function createAiProductDraft(input: CreateAiDraftInput) {
     longDescription: description,
     brand: normalizeText(input.brand) || "ZorvyA",
     sku: normalizeText(input.sku) || undefined,
-    images: publicImageUrl
-      ? [
-          {
-            url: publicImageUrl,
-            alt: title || "Imagen IA",
-            isPrimary: true,
-          },
-        ]
-      : [],
+    images: productGallery,
     isActive: false,
     isVisible: false,
     showStock: false,
@@ -713,8 +749,8 @@ export async function createAiProductDraft(input: CreateAiDraftInput) {
       internalCode: normalizeText(input.sku) || normalizeText(input.stockCode),
       stockCode: normalizeText(input.stockCode),
       internalNotes: "Creado automaticamente desde n8n + Telegram + IA",
-      accountingImageUrl: publicImageUrl,
-      accountingOriginalImageUrl: "",
+      accountingImageUrl: publicImageUrl || thumbnailUrl,
+      accountingOriginalImageUrl: normalizeText(input.accountingOriginalImageUrl),
       originalTelegramImageUrl: normalizeText(input.originalTelegramImageUrl),
       originalSlackImageUrl: normalizeText(input.originalSlackImageUrl),
     },
@@ -723,7 +759,7 @@ export async function createAiProductDraft(input: CreateAiDraftInput) {
     costUsd: sanitizedCostUsd,
     priceSrd: sanitizedPriceSrd,
     stockCode: normalizeText(input.stockCode),
-    accountingOriginalImageUrl: "",
+    accountingOriginalImageUrl: normalizeText(input.accountingOriginalImageUrl),
     originalTelegramImageUrl: normalizeText(input.originalTelegramImageUrl),
     originalSlackImageUrl: normalizeText(input.originalSlackImageUrl),
     originalSource: "telegram" as const,
@@ -796,7 +832,7 @@ export async function createAiProductDraft(input: CreateAiDraftInput) {
       costUsd: toMoney(sanitizedCostUsd),
       stockCode: normalizeText(input.stockCode),
       publicImageUrl,
-      originalImageUrl: "",
+      originalImageUrl: normalizeText(input.accountingOriginalImageUrl),
       originalTelegramImageUrl: normalizeText(input.originalTelegramImageUrl),
       originalSlackImageUrl: normalizeText(input.originalSlackImageUrl),
       reviewStatus,
@@ -818,6 +854,8 @@ export async function createAiProductDraft(input: CreateAiDraftInput) {
       specifications: sanitizedSpecifications,
       payload: {
         source: "telegram",
+        hasMissingPublicImages: !hasPublicGeneratedImages,
+        thumbnailUrl,
         attributes: input.attributes ?? {},
         telegramMessageId: normalizeText(input.telegramMessageId),
         telegramChatId: normalizeText(input.telegramChatId),

@@ -129,6 +129,7 @@ export default function AdminAiPendingProductsPage() {
                 costUsd: updatedProduct?.costUsd ?? item.costUsd,
                 stockCode: updatedProduct?.stockCode ?? item.stockCode,
                 publicImageUrl: updatedProduct?.images?.[0]?.url ?? item.publicImageUrl,
+                thumbnailUrl: updatedProduct?.images?.[1]?.url ?? item.thumbnailUrl,
                 originalTelegramImageUrl:
                   updatedProduct?.originalTelegramImageUrl ?? item.originalTelegramImageUrl,
                 originalSlackImageUrl:
@@ -138,6 +139,7 @@ export default function AdminAiPendingProductsPage() {
                 aiConfidenceScore:
                   updatedProduct?.aiConfidenceScore ?? item.aiConfidenceScore,
                 reviewStatus: updatedProduct?.reviewStatus ?? item.reviewStatus,
+                generatedImages: updatedProduct?.generatedImages ?? item.generatedImages,
                 seoTitle: updatedProduct?.seoTitle ?? item.seoTitle,
                 seoDescription: updatedProduct?.seoDescription ?? item.seoDescription,
                 specifications: updatedProduct?.specifications ?? item.specifications,
@@ -184,6 +186,13 @@ export default function AdminAiPendingProductsPage() {
           {items.map((item) => {
             const busy = pendingActionId === item.id;
             const supplierDraft = supplierDrafts[item.id] ?? item.supplierId ?? "";
+            const publicPreviewImages =
+              item.generatedImages && item.generatedImages.length > 0
+                ? item.generatedImages
+                : item.publicImageUrl
+                  ? [{ id: `${item.id}-public`, url: item.publicImageUrl, label: "Imagen publica" }]
+                  : [];
+            const hasMissingPublicImages = publicPreviewImages.length === 0;
 
             return (
               <article
@@ -205,6 +214,22 @@ export default function AdminAiPendingProductsPage() {
                         </div>
                       )}
                     </div>
+                    {publicPreviewImages.length > 0 ? (
+                      <div className="grid grid-cols-3 gap-2">
+                        {publicPreviewImages.slice(0, 6).map((image) => (
+                          <div
+                            key={image.id}
+                            className="overflow-hidden rounded-xl border border-slate-800 bg-[#09101d]"
+                          >
+                            <img
+                              src={image.url}
+                              alt={image.label}
+                              className="h-20 w-full object-cover"
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
                     <div className="grid grid-cols-2 gap-2 text-xs">
                       <button
                         type="button"
@@ -219,8 +244,27 @@ export default function AdminAiPendingProductsPage() {
                       >
                         Editar
                       </Link>
+                      </div>
+                      <div className="rounded-[1rem] border border-slate-800 bg-[#09101d] p-3">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-400">
+                          Contabilidad privada
+                        </p>
+                        <div className="mt-3 space-y-2 text-xs text-slate-300">
+                          <p>
+                            Telegram original:
+                            <span className="ml-2 break-all text-white">
+                              {item.originalTelegramImageUrl || "Sin original"}
+                            </span>
+                          </p>
+                          <p>
+                            Referencia contable:
+                            <span className="ml-2 break-all text-white">
+                              {item.originalImageUrl || "Sin referencia"}
+                            </span>
+                          </p>
+                        </div>
+                      </div>
                     </div>
-                  </div>
 
                   <div className="space-y-4">
                     <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
@@ -237,9 +281,19 @@ export default function AdminAiPendingProductsPage() {
                               IA {item.aiConfidenceScore}%
                             </span>
                           ) : null}
+                          {hasMissingPublicImages ? (
+                            <span className="rounded-full border border-rose-500/30 bg-rose-500/10 px-2 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-rose-200">
+                              Faltan imagenes publicas generadas
+                            </span>
+                          ) : null}
                         </div>
                         <h2 className="text-2xl font-semibold text-white">{item.title}</h2>
                         <p className="text-sm leading-6 text-slate-300">{item.description}</p>
+                        {hasMissingPublicImages ? (
+                          <p className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">
+                            Faltan imágenes públicas generadas.
+                          </p>
+                        ) : null}
                       </div>
                       <div className="min-w-[220px] rounded-[1rem] border border-slate-800 bg-[#09101d] p-3 text-sm text-slate-200">
                         <div className="flex items-center justify-between">
