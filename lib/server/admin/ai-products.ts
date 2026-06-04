@@ -1398,6 +1398,100 @@ export async function requestAiImageRegeneration(itemId: string, updatedBy: stri
   return { success: true };
 }
 
+export async function cleanupAiDraftRecordsForProduct(productId: string) {
+  const normalizedProductId = normalizeText(productId);
+  if (!normalizedProductId) {
+    return;
+  }
+
+  const pool = await getAiProductsPool();
+  const client = await pool.connect();
+
+  try {
+    await client.query("BEGIN");
+    const affectedBatches = await client.query<{ batch_id: string }>(
+      `
+        SELECT DISTINCT batch_id
+        FROM ai_product_batch_items
+        WHERE product_id = $1 OR generated_product_id = $1
+      `,
+      [normalizedProductId]
+    );
+
+    await client.query(
+      `
+        DELETE FROM ai_product_batch_items
+        WHERE product_id = $1 OR generated_product_id = $1
+      `,
+      [normalizedProductId]
+    );
+
+    for (const row of affectedBatches.rows) {
+      const remaining = await client.query<{ count: string }>(
+        `SELECT COUNT(*)::text AS count FROM ai_product_batch_items WHERE batch_id = $1`,
+        [row.batch_id]
+      );
+
+      if (Number(remaining.rows[0]?.count ?? 0) === 0) {
+        await client.query(`DELETE FROM ai_product_batches WHERE id = $1`, [row.batch_id]);
+      } else {
+        await updateBatchStatusForProduct(client, row.batch_id);
+      }
+    }
+
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+export async function deleteAiDraftItem(itemId: string) {
+  const normalizedItemId = normalizeText(itemId);
+  if (!normalizedItemId) {
+    throw new Error("AI_DRAFT_NOT_FOUND");
+  }
+
+  const pool = await getAiProductsPool();
+  const client = await pool.connect();
+
+  try {
+    await client.query("BEGIN");
+    const item = await client.query<{ batch_id: string }>(
+      `SELECT batch_id FROM ai_product_batch_items WHERE id = $1 LIMIT 1`,
+      [normalizedItemId]
+    );
+
+    if (item.rowCount === 0) {
+      throw new Error("AI_DRAFT_NOT_FOUND");
+    }
+
+    const batchId = item.rows[0].batch_id;
+
+    await client.query(`DELETE FROM ai_product_batch_items WHERE id = $1`, [normalizedItemId]);
+
+    const remaining = await client.query<{ count: string }>(
+      `SELECT COUNT(*)::text AS count FROM ai_product_batch_items WHERE batch_id = $1`,
+      [batchId]
+    );
+
+    if (Number(remaining.rows[0]?.count ?? 0) === 0) {
+      await client.query(`DELETE FROM ai_product_batches WHERE id = $1`, [batchId]);
+    } else {
+      await updateBatchStatusForProduct(client, batchId);
+    }
+
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 export async function getAiOriginalImageResponse(itemId: string) {
   const item = await getPendingItemRow(itemId);
   if (!item || !normalizeText(item.original_image_url)) {

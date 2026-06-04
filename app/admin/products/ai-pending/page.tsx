@@ -202,17 +202,19 @@ export default function AdminAiPendingProductsPage() {
                 <div className="grid gap-4 xl:grid-cols-[240px_minmax(0,1fr)]">
                   <div className="space-y-3">
                     <div className="overflow-hidden rounded-[1rem] border border-slate-800 bg-[#09101d]">
-                      {item.publicImageUrl ? (
-                        <img
-                          src={item.publicImageUrl}
-                          alt={item.title}
-                          className="h-56 w-full object-cover"
-                        />
-                      ) : (
-                        <div className="flex h-56 items-center justify-center text-sm text-slate-500">
-                          Sin imagen publica
-                        </div>
-                      )}
+                      <Link href={item.productId ? `/admin/products/${item.productId}` : "/admin/products"}>
+                        {item.publicImageUrl ? (
+                          <img
+                            src={item.publicImageUrl}
+                            alt={item.title}
+                            className="h-56 w-full object-cover"
+                          />
+                        ) : (
+                          <div className="flex h-56 items-center justify-center text-sm text-slate-500">
+                            Sin imagen publica
+                          </div>
+                        )}
+                      </Link>
                     </div>
                     {publicPreviewImages.length > 0 ? (
                       <div className="grid grid-cols-3 gap-2">
@@ -287,7 +289,14 @@ export default function AdminAiPendingProductsPage() {
                             </span>
                           ) : null}
                         </div>
-                        <h2 className="text-2xl font-semibold text-white">{item.title}</h2>
+                        <Link
+                          href={item.productId ? `/admin/products/${item.productId}` : "/admin/products"}
+                          className="inline-block"
+                        >
+                          <h2 className="text-2xl font-semibold text-white transition hover:text-cyan-200">
+                            {item.title}
+                          </h2>
+                        </Link>
                         <p className="text-sm leading-6 text-slate-300">{item.description}</p>
                         {hasMissingPublicImages ? (
                           <p className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">
@@ -414,6 +423,14 @@ export default function AdminAiPendingProductsPage() {
                         className="rounded-xl border border-slate-700 bg-[#0c1424] px-4 py-2 text-sm font-semibold text-white transition hover:border-cyan-400 hover:text-cyan-200 disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         Regenerar imagenes
+                      </button>
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => runAction(item.id, "/api/admin/ai-products/delete", {}, true)}
+                        className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-2 text-sm font-semibold text-rose-100 transition hover:border-rose-400 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        Eliminar
                       </button>
                     </div>
                   </div>

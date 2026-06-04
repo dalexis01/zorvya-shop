@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { revalidateTag } from "next/cache";
 
+import { cleanupAiDraftRecordsForProduct } from "@/lib/server/admin/ai-products";
 import { createStatusLog } from "@/lib/server/admin/logs";
 import { deleteProduct, getProductById, updateProduct } from "@/lib/server/admin/products";
 import { requireAdminRequestUser } from "@/lib/server/admin/request-auth";
@@ -171,6 +172,7 @@ export async function DELETE(
     }
 
     await deleteProduct(id);
+    await cleanupAiDraftRecordsForProduct(id);
 
     await createStatusLog({
       type: "product",
