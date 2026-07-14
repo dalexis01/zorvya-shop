@@ -109,7 +109,7 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const query = searchParams.get("q")?.trim() ?? "";
   const localeParam = searchParams.get("locale");
-  const locale: Locale = isLocale(localeParam) ? localeParam : "es";
+  const locale: Locale = isLocale(localeParam) ? localeParam : "en";
 
   if (query.length < 2) {
     return NextResponse.json({

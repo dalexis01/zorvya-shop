@@ -143,7 +143,7 @@ function buildFallbackReply(message: string, locale: string, transcript: Assista
 export async function POST(request: Request) {
   try {
     const payload = (await request.json()) as AssistantRequestPayload;
-    const locale = normalizeText(payload.locale) || "es";
+    const locale = normalizeText(payload.locale) || "en";
     const customerName = normalizeText(payload.customerName) || "Cliente";
     const transcript = Array.isArray(payload.transcript) ? payload.transcript.slice(-14) : [];
     const apiKey = process.env.OPENAI_API_KEY;

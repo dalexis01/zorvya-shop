@@ -9,7 +9,10 @@ import { STOREFRONT_PRODUCTS_TAG } from "@/lib/server/catalog";
 
 export async function POST(request: Request) {
   try {
-    const auth = await requireAdminRequestUser();
+    const auth = await requireAdminRequestUser({
+      request,
+      permission: "ai_products.manage",
+    });
 
     if (!auth.user) {
       return NextResponse.json({ success: false, error: auth.error }, { status: auth.status });

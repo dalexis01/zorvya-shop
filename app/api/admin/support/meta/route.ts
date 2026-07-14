@@ -23,7 +23,7 @@ let supportMetaCache:
 
 export async function GET() {
   try {
-    const auth = await requireAdminRequestUser();
+    const auth = await requireAdminRequestUser({ permission: "support.read" });
 
     if (!auth.user) {
       return NextResponse.json(

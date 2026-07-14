@@ -4,7 +4,6 @@ import { randomUUID } from "node:crypto";
 
 import { unstable_cache } from "next/cache";
 
-import { readDataFile, writeDataFile } from "@/lib/server/storage";
 import type {
   HomepageBanner,
   HomepageButtonConfig,
@@ -12,6 +11,11 @@ import type {
   HomepageSettings,
   HomepageThemeSettings,
 } from "@/lib/shop/admin-types";
+import {
+  RUNTIME_SETTING_KEYS,
+  getAdminRuntimeSetting,
+  setAdminRuntimeSetting,
+} from "@/lib/server/admin/runtime-db";
 import { STORE_BRAND } from "@/lib/shop/config";
 import {
   createDefaultHomepageVisualStyles,
@@ -19,7 +23,6 @@ import {
 } from "@/lib/shop/homepage-visuals";
 import { createDefaultHomepageBlocks, normalizeHomepageBlocks } from "@/lib/shop/homepage-blocks";
 
-const HOMEPAGE_SETTINGS_FILE = "homepage-settings.json";
 export const HOMEPAGE_SETTINGS_TAG = "homepage-settings";
 
 function buildHomepageMediaProxyUrl(kind: "logo" | "hero" | "block" | "section" | "banner", key: string, updatedAt?: string) {
@@ -451,7 +454,10 @@ function normalizeSettings(settings: Partial<HomepageSettings> | null | undefine
 }
 
 async function readHomepageSettingsUncached() {
-  const settings = await readDataFile<HomepageSettings | null>(HOMEPAGE_SETTINGS_FILE, null);
+  const settings = await getAdminRuntimeSetting<HomepageSettings | null>(
+    RUNTIME_SETTING_KEYS.homepage,
+    null
+  );
   return normalizeSettings(settings);
 }
 
@@ -536,6 +542,6 @@ export async function updateHomepageSettings(updates: Partial<HomepageSettings>)
     updatedAt: new Date().toISOString(),
   });
 
-  await writeDataFile(HOMEPAGE_SETTINGS_FILE, next);
+  await setAdminRuntimeSetting(RUNTIME_SETTING_KEYS.homepage, next);
   return next;
 }

@@ -7,7 +7,10 @@ import { requireAdminRequestUser } from "@/lib/server/admin/request-auth";
 export const runtime = "nodejs";
 
 export async function POST(request: Request) {
-  const auth = await requireAdminRequestUser();
+  const auth = await requireAdminRequestUser({
+    request,
+    permission: "ai_products.manage",
+  });
   if (!auth.user) {
     return NextResponse.json({ success: false, error: auth.error }, { status: auth.status });
   }

@@ -17,7 +17,7 @@ let ordersMetaCache:
 
 export async function GET() {
   try {
-    const auth = await requireAdminRequestUser();
+    const auth = await requireAdminRequestUser({ permission: "orders.read" });
 
     if (!auth.user) {
       return NextResponse.json(

@@ -14,7 +14,7 @@ export async function GET(request: NextRequest) {
   const localeParam = request.nextUrl.searchParams.get("locale");
   const subtotal = Number(request.nextUrl.searchParams.get("subtotal") ?? "0");
   const hasHeavy = request.nextUrl.searchParams.get("hasHeavy") === "true";
-  const locale: Locale = isLocale(localeParam) ? localeParam : "es";
+  const locale: Locale = isLocale(localeParam) ? localeParam : "en";
 
   if (address.length < 5) {
     return NextResponse.json(

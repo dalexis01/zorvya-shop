@@ -12,7 +12,7 @@ export const runtime = "nodejs";
 export async function GET(request: Request) {
   try {
     console.log("[api-metrics] admin orders route called");
-    const auth = await requireAdminRequestUser();
+    const auth = await requireAdminRequestUser({ permission: "orders.read" });
 
     if (!auth.user) {
       return NextResponse.json(

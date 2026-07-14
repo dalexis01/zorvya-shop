@@ -9,7 +9,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const auth = await requireAdminRequestUser();
+    const auth = await requireAdminRequestUser({ permission: "users.read" });
 
     if (!auth.user) {
       return NextResponse.json(
@@ -50,7 +50,10 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const auth = await requireAdminRequestUser();
+    const auth = await requireAdminRequestUser({
+      request,
+      permission: "users.update",
+    });
 
     if (!auth.user) {
       return NextResponse.json(

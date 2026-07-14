@@ -46,7 +46,10 @@ async function geocodeAddress(address: string): Promise<[number, number] | null>
 }
 
 export async function POST(request: NextRequest) {
-  const auth = await requireAdminRequestUser();
+  const auth = await requireAdminRequestUser({
+    request,
+    permission: "orders.update",
+  });
 
   if (!auth.user) {
     return NextResponse.json({ error: auth.error }, { status: auth.status });

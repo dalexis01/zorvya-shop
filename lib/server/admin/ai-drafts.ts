@@ -2,11 +2,13 @@ import "server-only";
 
 import { randomUUID } from "node:crypto";
 
-import { readDataFile, writeDataFile } from "@/lib/server/storage";
 import { generateProductAiDraft } from "@/lib/server/admin/ai-helpers";
+import {
+  RUNTIME_SETTING_KEYS,
+  getAdminRuntimeSetting,
+  setAdminRuntimeSetting,
+} from "@/lib/server/admin/runtime-db";
 import type { ProductAiDraft } from "@/lib/shop/admin-types";
-
-const AI_DRAFTS_FILE = "content-ai-drafts.json";
 
 function trimText(value: string | undefined) {
   return (value ?? "").trim();
@@ -63,12 +65,15 @@ function normalizeDraft(draft: ProductAiDraft): ProductAiDraft {
 }
 
 async function readAiDrafts() {
-  const drafts = await readDataFile<ProductAiDraft[]>(AI_DRAFTS_FILE, []);
+  const drafts = await getAdminRuntimeSetting<ProductAiDraft[]>(RUNTIME_SETTING_KEYS.aiDrafts, []);
   return drafts.map(normalizeDraft);
 }
 
 async function writeAiDrafts(drafts: ProductAiDraft[]) {
-  await writeDataFile(AI_DRAFTS_FILE, drafts.map(normalizeDraft));
+  await setAdminRuntimeSetting(
+    RUNTIME_SETTING_KEYS.aiDrafts,
+    drafts.map(normalizeDraft)
+  );
 }
 
 export async function getAllProductAiDrafts() {

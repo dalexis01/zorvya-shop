@@ -10,7 +10,7 @@ import { requireAdminRequestUser } from "@/lib/server/admin/request-auth";
 
 export async function GET(request: Request) {
   try {
-    const auth = await requireAdminRequestUser();
+    const auth = await requireAdminRequestUser({ permission: "content.update" });
 
     if (!auth.user) {
       return NextResponse.json(
@@ -52,7 +52,10 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const auth = await requireAdminRequestUser();
+    const auth = await requireAdminRequestUser({
+      request,
+      permission: "content.update",
+    });
 
     if (!auth.user) {
       return NextResponse.json(
@@ -88,7 +91,10 @@ export async function POST(request: Request) {
 
 export async function PATCH(request: Request) {
   try {
-    const auth = await requireAdminRequestUser();
+    const auth = await requireAdminRequestUser({
+      request,
+      permission: "content.update",
+    });
 
     if (!auth.user) {
       return NextResponse.json(

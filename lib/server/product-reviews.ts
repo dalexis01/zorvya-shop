@@ -3,10 +3,19 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 
 import { getProductById, updateProduct } from "@/lib/server/admin/products";
-import { readDataFile, writeDataFile } from "@/lib/server/storage";
+import { getAdminRuntimePool } from "@/lib/server/admin/runtime-db";
 import type { ProductReview } from "@/lib/shop/types";
 
-const PRODUCT_REVIEWS_FILE = "product-reviews.json";
+type ProductReviewRow = {
+  id: string;
+  product_id: string;
+  user_id: string | null;
+  customer_name: string;
+  customer_email: string;
+  rating: number;
+  comment: string;
+  created_at: string;
+};
 
 function trimText(value: string | undefined) {
   return (value ?? "").trim().replace(/\s+/g, " ");
@@ -16,20 +25,24 @@ function normalizeReview(review: ProductReview): ProductReview {
   return {
     ...review,
     customerName: trimText(review.customerName) || "Cliente",
-    customerEmail: trimText(review.customerEmail),
+    customerEmail: trimText(review.customerEmail).toLowerCase(),
     comment: trimText(review.comment),
     rating: Math.max(1, Math.min(5, Number(review.rating) || 5)),
     createdAt: review.createdAt || new Date().toISOString(),
   };
 }
 
-async function readReviews() {
-  const reviews = await readDataFile<ProductReview[]>(PRODUCT_REVIEWS_FILE, []);
-  return reviews.map(normalizeReview);
-}
-
-async function writeReviews(reviews: ProductReview[]) {
-  await writeDataFile(PRODUCT_REVIEWS_FILE, reviews.map(normalizeReview));
+function mapReviewRow(row: ProductReviewRow): ProductReview {
+  return normalizeReview({
+    id: row.id,
+    productId: row.product_id,
+    userId: row.user_id,
+    customerName: row.customer_name,
+    customerEmail: row.customer_email,
+    rating: Number(row.rating) || 5,
+    comment: row.comment,
+    createdAt: row.created_at,
+  });
 }
 
 export function calculateReviewMetrics(
@@ -71,10 +84,26 @@ async function syncProductReviewMetrics(productId: string) {
 }
 
 export async function getReviewsByProductId(productId: string) {
-  const reviews = await readReviews();
-  return reviews
-    .filter((review) => review.productId === productId)
-    .sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime());
+  const pool = await getAdminRuntimePool();
+  const result = await pool.query<ProductReviewRow>(
+    `
+      SELECT
+        id,
+        product_id,
+        user_id,
+        customer_name,
+        customer_email,
+        rating,
+        comment,
+        created_at::text
+      FROM admin_product_reviews
+      WHERE product_id = $1
+      ORDER BY created_at DESC
+    `,
+    [productId]
+  );
+
+  return result.rows.map(mapReviewRow);
 }
 
 export async function createProductReview(input: {
@@ -85,7 +114,7 @@ export async function createProductReview(input: {
   rating: number;
   comment: string;
 }) {
-  const reviews = await readReviews();
+  const pool = await getAdminRuntimePool();
   const newReview = normalizeReview({
     id: randomUUID(),
     productId: input.productId,
@@ -97,8 +126,33 @@ export async function createProductReview(input: {
     createdAt: new Date().toISOString(),
   });
 
-  reviews.push(newReview);
-  await writeReviews(reviews);
+  await pool.query(
+    `
+      INSERT INTO admin_product_reviews (
+        id,
+        product_id,
+        user_id,
+        customer_name,
+        customer_email,
+        rating,
+        comment,
+        created_at
+      ) VALUES (
+        $1, $2, $3, $4, LOWER($5), $6, $7, $8::timestamptz
+      )
+    `,
+    [
+      newReview.id,
+      newReview.productId,
+      newReview.userId,
+      newReview.customerName,
+      newReview.customerEmail,
+      newReview.rating,
+      newReview.comment,
+      newReview.createdAt,
+    ]
+  );
+
   await syncProductReviewMetrics(input.productId);
 
   return newReview;

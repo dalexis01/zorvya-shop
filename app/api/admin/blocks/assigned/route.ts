@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 // Returns the list of order IDs already assigned to a delivery block.
 // Replaces the broken HEAD handler (HTTP HEAD spec strips the body).
 export async function GET() {
-  const auth = await requireAdminRequestUser();
+  const auth = await requireAdminRequestUser({ permission: "blocks.read" });
   if (!auth.user) {
     return NextResponse.json({ success: false, error: auth.error }, { status: auth.status });
   }

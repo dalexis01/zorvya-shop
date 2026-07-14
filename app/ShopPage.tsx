@@ -664,7 +664,7 @@ export default function ShopPage({
   initialClientTheme,
   paypalClientId,
 }: ShopPageProps) {
-  const [locale, setLocale] = useState<Locale>("es");
+  const [locale, setLocale] = useState<Locale>("en");
   const [clientTheme, setClientTheme] = useState<ClientTheme>(initialClientTheme);
   const [products, setProducts] = useState<StorefrontProduct[]>(() =>
     orderStorefrontProducts(initialProducts, String(initialRenderAt), initialRenderAt)
@@ -786,7 +786,7 @@ export default function ShopPage({
     }),
     []
   )[locale];
-  const localizedSettings = settings.localizedContent[locale] ?? settings.localizedContent.es;
+  const localizedSettings = settings.localizedContent[locale] ?? settings.localizedContent.en;
   const theme = settings.theme;
   const cartPanelWidth = isCompactViewport ? "calc(100vw - 1rem)" : "min(92vw, 24rem)";
   const chatPanelWidth = isCompactViewport ? "calc(100vw - 1rem)" : "min(92vw, 22rem)";
@@ -1221,7 +1221,7 @@ export default function ShopPage({
   }, [assistantState]);
 
   useEffect(() => {
-    setLocale(readStoredLocale("es"));
+    setLocale(readStoredLocale("en"));
     setAssistantState(readCustomerAssistantState());
     setSupportToken(readSupportToken());
   }, [readSupportToken]);
@@ -1255,12 +1255,12 @@ export default function ShopPage({
       if (detail) {
         setLocale(detail);
       } else {
-        setLocale(readStoredLocale("es"));
+        setLocale(readStoredLocale("en"));
       }
     };
 
     const handleStorage = () => {
-      setLocale(readStoredLocale("es"));
+      setLocale(readStoredLocale("en"));
     };
 
     window.addEventListener(LOCALE_STORAGE_EVENT, handleLocaleChange as EventListener);

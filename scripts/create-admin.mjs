@@ -1,9 +1,15 @@
 import { randomBytes, randomUUID, scryptSync } from "node:crypto";
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
 
-const DATA_DIRECTORY = path.join(process.cwd(), "data");
-const ADMIN_USERS_FILE = path.join(DATA_DIRECTORY, "admin-users.json");
+import { Pool } from "pg";
+
+const RUNTIME_SCHEMA_FILE = path.join(
+  process.cwd(),
+  "db",
+  "migrations",
+  "012_admin_runtime_postgres.sql"
+);
 const KEY_LENGTH = 64;
 
 const [emailArg, passwordArg, nameArg, roleArg] = process.argv.slice(2);
@@ -15,6 +21,15 @@ const input = {
   role: roleArg ?? "admin",
   createdBy: "system",
 };
+
+function getConnectionString() {
+  return (
+    process.env.DATABASE_URL ||
+    process.env.POSTGRES_URL ||
+    process.env.SUPABASE_DB_URL ||
+    ""
+  ).trim();
+}
 
 function normalizeEmail(email) {
   return email.trim().toLowerCase();
@@ -37,10 +52,17 @@ function getDefaultPermissions(role) {
         "orders.read",
         "orders.update",
         "orders.delete",
+        "blocks.read",
+        "blocks.manage",
         "support.read",
         "support.respond",
         "users.read",
         "users.update",
+        "providers.read",
+        "providers.manage",
+        "settings.manage",
+        "revenue.read",
+        "ai_products.manage",
         "content.update",
         "admin.manage_staff",
       ];
@@ -51,9 +73,13 @@ function getDefaultPermissions(role) {
         "products.update",
         "orders.read",
         "orders.update",
+        "blocks.read",
+        "blocks.manage",
         "support.read",
         "support.respond",
         "users.read",
+        "providers.read",
+        "settings.manage",
       ];
     case "support_agent":
       return ["support.read", "support.respond", "users.read", "orders.read"];
@@ -62,86 +88,96 @@ function getDefaultPermissions(role) {
   }
 }
 
-async function ensureDataFile(filePath, fallback) {
-  await mkdir(DATA_DIRECTORY, { recursive: true });
-
-  try {
-    await readFile(filePath, "utf8");
-  } catch {
-    await writeFile(filePath, JSON.stringify(fallback, null, 2), "utf8");
+function shouldUseSsl(connectionString) {
+  if (process.env.PGSSL === "disable") {
+    return false;
   }
+
+  return connectionString.includes("supabase") || process.env.NODE_ENV === "production";
 }
 
-async function readJsonFile(filePath, fallback) {
-  await ensureDataFile(filePath, fallback);
-
-  try {
-    const fileContents = await readFile(filePath, "utf8");
-
-    if (!fileContents.trim()) {
-      return fallback;
-    }
-
-    return JSON.parse(fileContents);
-  } catch {
-    return fallback;
-  }
-}
-
-async function writeJsonFile(filePath, value) {
-  const temporaryFilePath = `${filePath}.tmp`;
-
-  await mkdir(DATA_DIRECTORY, { recursive: true });
-  await writeFile(temporaryFilePath, JSON.stringify(value, null, 2), "utf8");
-  await rename(temporaryFilePath, filePath);
+async function ensureSchema(pool) {
+  const sql = await readFile(RUNTIME_SCHEMA_FILE, "utf8");
+  await pool.query(sql);
 }
 
 async function main() {
-  const role = input.role.trim();
-  const permissions = getDefaultPermissions(role);
-  const users = await readJsonFile(ADMIN_USERS_FILE, []);
-  const email = normalizeEmail(input.email);
+  const connectionString = getConnectionString();
 
-  const existingUser = users.find((user) => user.email === email);
-  if (existingUser) {
-    console.error(`Admin user already exists for ${email}`);
-    process.exitCode = 1;
-    return;
+  if (!connectionString) {
+    throw new Error("DATABASE_URL, POSTGRES_URL o SUPABASE_DB_URL es requerido.");
   }
 
-  const now = new Date().toISOString();
-  const newUser = {
-    id: randomUUID(),
-    email,
-    passwordHash: hashPassword(input.password),
-    name: input.name.trim(),
-    role,
-    permissions,
-    isActive: true,
-    createdAt: now,
-    updatedAt: now,
-    lastLoginAt: null,
-    createdBy: input.createdBy,
-  };
+  const role = input.role.trim();
+  const permissions = getDefaultPermissions(role);
+  const pool = new Pool({
+    connectionString,
+    ssl: shouldUseSsl(connectionString) ? { rejectUnauthorized: false } : undefined,
+  });
 
-  users.push(newUser);
-  await writeJsonFile(ADMIN_USERS_FILE, users);
+  try {
+    await ensureSchema(pool);
 
-  console.log("Admin user created successfully");
-  console.log(
-    JSON.stringify(
-      {
-        id: newUser.id,
-        email: newUser.email,
-        name: newUser.name,
-        role: newUser.role,
-      },
-      null,
-      2
-    )
-  );
-  console.log(`Login email: ${input.email}`);
-  console.log(`Login password: ${input.password}`);
+    const email = normalizeEmail(input.email);
+    const existingUser = await pool.query(
+      `SELECT id FROM admin_users WHERE LOWER(email) = $1 LIMIT 1`,
+      [email]
+    );
+
+    if (existingUser.rowCount) {
+      console.error(`Admin user already exists for ${email}`);
+      process.exitCode = 1;
+      return;
+    }
+
+    const userId = randomUUID();
+    await pool.query(
+      `
+        INSERT INTO admin_users (
+          id,
+          email,
+          password_hash,
+          name,
+          role,
+          permissions_json,
+          is_active,
+          created_at,
+          updated_at,
+          last_login_at,
+          created_by
+        ) VALUES (
+          $1, LOWER($2), $3, $4, $5, $6::jsonb, TRUE, NOW(), NOW(), NULL, $7
+        )
+      `,
+      [
+        userId,
+        email,
+        hashPassword(input.password),
+        input.name.trim(),
+        role,
+        JSON.stringify(permissions),
+        input.createdBy,
+      ]
+    );
+
+    console.log("Admin user created successfully");
+    console.log(
+      JSON.stringify(
+        {
+          id: userId,
+          email,
+          name: input.name.trim(),
+          role,
+        },
+        null,
+        2
+      )
+    );
+    console.log(`Login email: ${input.email}`);
+    console.log(`Login password: ${input.password}`);
+  } finally {
+    await pool.end();
+  }
 }
 
 main().catch((error) => {

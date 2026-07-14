@@ -5,7 +5,7 @@ import { createSupplier, getSupplierChoices, getSuppliers } from "@/lib/server/a
 
 export async function GET(request: Request) {
   try {
-    const auth = await requireAdminRequestUser();
+    const auth = await requireAdminRequestUser({ permission: "providers.read" });
 
     if (!auth.user) {
       return NextResponse.json({ success: false, error: auth.error }, { status: auth.status });
@@ -33,7 +33,10 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const auth = await requireAdminRequestUser();
+    const auth = await requireAdminRequestUser({
+      request,
+      permission: "providers.manage",
+    });
 
     if (!auth.user) {
       return NextResponse.json({ success: false, error: auth.error }, { status: auth.status });

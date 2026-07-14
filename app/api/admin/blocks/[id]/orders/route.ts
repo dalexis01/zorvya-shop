@@ -12,7 +12,10 @@ export const dynamic = "force-dynamic";
 type RouteContext = { params: Promise<{ id: string }> };
 
 export async function POST(request: Request, ctx: RouteContext) {
-  const auth = await requireAdminRequestUser();
+  const auth = await requireAdminRequestUser({
+    request,
+    permission: "blocks.manage",
+  });
   if (!auth.user) return NextResponse.json({ success: false, error: auth.error }, { status: auth.status });
 
   const { id } = await ctx.params;

@@ -1,9 +1,11 @@
 import "server-only";
 
-import { readDataFile, writeDataFile } from "@/lib/server/storage";
 import type { PayPalEnvironment, PayPalSettings } from "@/lib/shop/admin-types";
-
-const PAYPAL_SETTINGS_FILE = "paypal-settings.json";
+import {
+  RUNTIME_SETTING_KEYS,
+  getAdminRuntimeSetting,
+  setAdminRuntimeSetting,
+} from "@/lib/server/admin/runtime-db";
 
 function trimText(value: string | undefined | null) {
   return (value ?? "").trim();
@@ -76,7 +78,10 @@ function normalizeStoredPayPalSettings(
 }
 
 async function readRawPayPalSettings() {
-  return readDataFile<Partial<PayPalSettings> | null>(PAYPAL_SETTINGS_FILE, null);
+  return getAdminRuntimeSetting<Partial<PayPalSettings> | null>(
+    RUNTIME_SETTING_KEYS.paypal,
+    null
+  );
 }
 
 export async function getPayPalSettings() {
@@ -102,9 +107,7 @@ export async function getPayPalSettingsMeta() {
   };
 }
 
-export async function updatePayPalSettings(
-  updates: Partial<PayPalSettings>
-) {
+export async function updatePayPalSettings(updates: Partial<PayPalSettings>) {
   const current = await getPayPalSettings();
   const next = normalizeStoredPayPalSettings({
     ...current,
@@ -112,6 +115,6 @@ export async function updatePayPalSettings(
     updatedAt: new Date().toISOString(),
   });
 
-  await writeDataFile(PAYPAL_SETTINGS_FILE, next);
+  await setAdminRuntimeSetting(RUNTIME_SETTING_KEYS.paypal, next);
   return next;
 }

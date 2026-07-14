@@ -3,7 +3,7 @@ import type { Locale } from "@/lib/shop/types";
 export const LOCALE_STORAGE_KEY = "zorvya-locale-v1";
 export const LOCALE_STORAGE_EVENT = "zorvya-locale-change";
 
-export function readStoredLocale(fallback: Locale = "es"): Locale {
+export function readStoredLocale(fallback: Locale = "en"): Locale {
   if (typeof window === "undefined") {
     return fallback;
   }

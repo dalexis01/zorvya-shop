@@ -486,7 +486,7 @@ function ProductDetailClient({
   compact?: boolean;
 }) {
   const router = useRouter();
-  const [locale, setLocale] = useState<Locale>("es");
+  const [locale, setLocale] = useState<Locale>("en");
   const [clientTheme, setClientTheme] = useState<ClientTheme>(initialClientTheme);
   const [currentSessionUser, setCurrentSessionUser] = useState<SessionUser | null>(sessionUser);
   const [preferencesHydrated, setPreferencesHydrated] = useState(false);
@@ -528,7 +528,7 @@ function ProductDetailClient({
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
   const supportMessagesRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
-    const storedLocale = readStoredLocale("es");
+    const storedLocale = readStoredLocale("en");
     const storedTheme = readStoredClientTheme(initialClientTheme);
 
     setLocale(storedLocale);
@@ -547,7 +547,7 @@ function ProductDetailClient({
 
   useEffect(() => {
     const syncLocale = () => {
-      setLocale(readStoredLocale("es"));
+      setLocale(readStoredLocale("en"));
     };
 
     const handleStorage = (event: StorageEvent) => {

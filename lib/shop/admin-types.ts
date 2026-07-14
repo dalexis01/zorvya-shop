@@ -31,10 +31,17 @@ export type AdminPermission =
   | "orders.read"
   | "orders.update"
   | "orders.delete"
+  | "blocks.read"
+  | "blocks.manage"
   | "support.read"
   | "support.respond"
   | "users.read"
   | "users.update"
+  | "providers.read"
+  | "providers.manage"
+  | "settings.manage"
+  | "revenue.read"
+  | "ai_products.manage"
   | "content.update"
   | "admin.manage_staff";
 

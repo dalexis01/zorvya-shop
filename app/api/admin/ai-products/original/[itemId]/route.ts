@@ -11,7 +11,7 @@ export async function GET(
   _request: Request,
   { params }: { params: Promise<{ itemId: string }> }
 ) {
-  const auth = await requireAdminRequestUser();
+  const auth = await requireAdminRequestUser({ permission: "ai_products.manage" });
   if (!auth.user) {
     return NextResponse.json({ success: false, error: auth.error }, { status: auth.status });
   }

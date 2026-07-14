@@ -1,18 +1,38 @@
 import "server-only";
 
 import { randomUUID } from "node:crypto";
-import { readDataFile, writeDataFile } from "../storage";
 
-import type { StatusLog, StatusChange } from "@/lib/shop/admin-types";
+import type { StatusChange, StatusLog } from "@/lib/shop/admin-types";
+import { getAdminRuntimePool } from "@/lib/server/admin/runtime-db";
 
-const LOGS_FILE = "admin-logs.json";
+type StatusLogRow = {
+  id: string;
+  type: StatusLog["type"];
+  target_id: string;
+  action: StatusLog["action"];
+  changed_by: string;
+  changed_by_name: string;
+  changes_json: StatusChange[] | null;
+  created_at: string;
+};
 
-async function readLogs() {
-  return readDataFile<StatusLog[]>(LOGS_FILE, []);
+function mapStatusLogRow(row: StatusLogRow): StatusLog {
+  return {
+    id: row.id,
+    type: row.type,
+    targetId: row.target_id,
+    action: row.action,
+    changedBy: row.changed_by,
+    changedByName: row.changed_by_name,
+    changes: Array.isArray(row.changes_json) ? row.changes_json : [],
+    createdAt: row.created_at,
+  };
 }
 
-async function writeLogs(logs: StatusLog[]) {
-  await writeDataFile(LOGS_FILE, logs);
+async function queryLogs(sql: string, values: unknown[] = []) {
+  const pool = await getAdminRuntimePool();
+  const result = await pool.query<StatusLogRow>(sql, values);
+  return result.rows.map(mapStatusLogRow);
 }
 
 export async function createStatusLog(input: {
@@ -34,9 +54,33 @@ export async function createStatusLog(input: {
     createdAt: new Date().toISOString(),
   };
 
-  const logs = await readLogs();
-  logs.push(log);
-  await writeLogs(logs);
+  const pool = await getAdminRuntimePool();
+  await pool.query(
+    `
+      INSERT INTO admin_status_logs (
+        id,
+        type,
+        target_id,
+        action,
+        changed_by,
+        changed_by_name,
+        changes_json,
+        created_at
+      ) VALUES (
+        $1, $2, $3, $4, $5, $6, $7::jsonb, $8::timestamptz
+      )
+    `,
+    [
+      log.id,
+      log.type,
+      log.targetId,
+      log.action,
+      log.changedBy,
+      log.changedByName,
+      JSON.stringify(log.changes),
+      log.createdAt,
+    ]
+  );
 
   return log;
 }
@@ -45,32 +89,101 @@ export async function getLogsForTarget(
   targetId: string,
   type?: "order" | "product" | "user" | "content"
 ) {
-  const logs = await readLogs();
-  return logs
-    .filter(
-      (log) =>
-        log.targetId === targetId && (!type || log.type === type)
-    )
-    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  if (type) {
+    return queryLogs(
+      `
+        SELECT
+          id,
+          type,
+          target_id,
+          action,
+          changed_by,
+          changed_by_name,
+          changes_json,
+          created_at::text
+        FROM admin_status_logs
+        WHERE target_id = $1 AND type = $2
+        ORDER BY created_at DESC
+      `,
+      [targetId, type]
+    );
+  }
+
+  return queryLogs(
+    `
+      SELECT
+        id,
+        type,
+        target_id,
+        action,
+        changed_by,
+        changed_by_name,
+        changes_json,
+        created_at::text
+      FROM admin_status_logs
+      WHERE target_id = $1
+      ORDER BY created_at DESC
+    `,
+    [targetId]
+  );
 }
 
 export async function getLogsByUser(changedBy: string) {
-  const logs = await readLogs();
-  return logs
-    .filter((log) => log.changedBy === changedBy)
-    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  return queryLogs(
+    `
+      SELECT
+        id,
+        type,
+        target_id,
+        action,
+        changed_by,
+        changed_by_name,
+        changes_json,
+        created_at::text
+      FROM admin_status_logs
+      WHERE changed_by = $1
+      ORDER BY created_at DESC
+    `,
+    [changedBy]
+  );
 }
 
 export async function getLogsForType(type: "order" | "product" | "user" | "content") {
-  const logs = await readLogs();
-  return logs
-    .filter((log) => log.type === type)
-    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  return queryLogs(
+    `
+      SELECT
+        id,
+        type,
+        target_id,
+        action,
+        changed_by,
+        changed_by_name,
+        changes_json,
+        created_at::text
+      FROM admin_status_logs
+      WHERE type = $1
+      ORDER BY created_at DESC
+    `,
+    [type]
+  );
 }
 
 export async function getRecentLogs(limit: number = 50) {
-  const logs = await readLogs();
-  return logs
-    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-    .slice(0, limit);
+  return queryLogs(
+    `
+      SELECT
+        id,
+        type,
+        target_id,
+        action,
+        changed_by,
+        changed_by_name,
+        changes_json,
+        created_at::text
+      FROM admin_status_logs
+      ORDER BY created_at DESC
+      LIMIT $1
+    `,
+    [limit]
+  );
 }

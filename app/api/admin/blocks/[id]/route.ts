@@ -14,7 +14,7 @@ export const dynamic = "force-dynamic";
 type RouteContext = { params: Promise<{ id: string }> };
 
 export async function GET(_req: Request, ctx: RouteContext) {
-  const auth = await requireAdminRequestUser();
+  const auth = await requireAdminRequestUser({ permission: "blocks.read" });
   if (!auth.user) return NextResponse.json({ success: false, error: auth.error }, { status: auth.status });
 
   const { id } = await ctx.params;
@@ -25,7 +25,10 @@ export async function GET(_req: Request, ctx: RouteContext) {
 }
 
 export async function PUT(request: Request, ctx: RouteContext) {
-  const auth = await requireAdminRequestUser();
+  const auth = await requireAdminRequestUser({
+    request,
+    permission: "blocks.manage",
+  });
   if (!auth.user) return NextResponse.json({ success: false, error: auth.error }, { status: auth.status });
 
   const { id } = await ctx.params;
@@ -56,8 +59,11 @@ export async function PUT(request: Request, ctx: RouteContext) {
   }
 }
 
-export async function DELETE(_req: Request, ctx: RouteContext) {
-  const auth = await requireAdminRequestUser();
+export async function DELETE(request: Request, ctx: RouteContext) {
+  const auth = await requireAdminRequestUser({
+    request,
+    permission: "blocks.manage",
+  });
   if (!auth.user) return NextResponse.json({ success: false, error: auth.error }, { status: auth.status });
 
   const { id } = await ctx.params;

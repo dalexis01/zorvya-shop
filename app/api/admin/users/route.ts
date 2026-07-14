@@ -5,7 +5,7 @@ import { getAdminUsers } from "@/lib/server/admin/users";
 
 export async function GET(request: Request) {
   try {
-    const auth = await requireAdminRequestUser();
+    const auth = await requireAdminRequestUser({ permission: "users.read" });
 
     if (!auth.user) {
       return NextResponse.json(

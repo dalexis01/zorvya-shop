@@ -1,8 +1,10 @@
 import "server-only";
 
-import { readDataFile, writeDataFile } from "@/lib/server/storage";
-
-const FILE = "orders-settings.json";
+import {
+  RUNTIME_SETTING_KEYS,
+  getAdminRuntimeSetting,
+  setAdminRuntimeSetting,
+} from "@/lib/server/admin/runtime-db";
 
 export interface OrdersAdminSettings {
   autoMode: boolean;
@@ -11,9 +13,18 @@ export interface OrdersAdminSettings {
 const DEFAULTS: OrdersAdminSettings = { autoMode: false };
 
 export async function getOrdersAdminSettings(): Promise<OrdersAdminSettings> {
-  const raw = await readDataFile<OrdersAdminSettings | null>(FILE, null);
-  if (!raw || typeof raw !== "object") return { ...DEFAULTS };
-  return { autoMode: Boolean((raw as OrdersAdminSettings).autoMode ?? DEFAULTS.autoMode) };
+  const raw = await getAdminRuntimeSetting<OrdersAdminSettings | null>(
+    RUNTIME_SETTING_KEYS.orders,
+    null
+  );
+
+  if (!raw || typeof raw !== "object") {
+    return { ...DEFAULTS };
+  }
+
+  return {
+    autoMode: Boolean((raw as OrdersAdminSettings).autoMode ?? DEFAULTS.autoMode),
+  };
 }
 
 export async function updateOrdersAdminSettings(
@@ -21,6 +32,6 @@ export async function updateOrdersAdminSettings(
 ): Promise<OrdersAdminSettings> {
   const current = await getOrdersAdminSettings();
   const next: OrdersAdminSettings = { ...current, ...patch };
-  await writeDataFile(FILE, next);
+  await setAdminRuntimeSetting(RUNTIME_SETTING_KEYS.orders, next);
   return next;
 }

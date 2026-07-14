@@ -11,7 +11,10 @@ const ALLOWED_CONTENT_TYPES = new Set([
 ]);
 
 export async function POST(request: Request): Promise<NextResponse> {
-  const auth = await requireAdminRequestUser();
+  const auth = await requireAdminRequestUser({
+    request,
+    permission: "products.update",
+  });
   if (!auth.user) {
     return NextResponse.json({ success: false, error: auth.error }, { status: auth.status });
   }

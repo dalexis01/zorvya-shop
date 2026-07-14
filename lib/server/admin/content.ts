@@ -1,18 +1,119 @@
 import "server-only";
 
 import { randomUUID } from "node:crypto";
-import { readDataFile, writeDataFile } from "../storage";
 
 import type { FeaturedContent } from "@/lib/shop/admin-types";
-
-const FEATURED_FILE = "content-featured.json";
+import { getAdminRuntimePool } from "@/lib/server/admin/runtime-db";
 
 async function readFeaturedContent() {
-  return readDataFile<FeaturedContent[]>(FEATURED_FILE, []);
+  const pool = await getAdminRuntimePool();
+  const result = await pool.query<{
+    id: string;
+    type: FeaturedContent["type"];
+    product_ids_json: string[] | null;
+    position: number;
+    is_active: boolean;
+    start_date: string;
+    end_date: string | null;
+    created_at: string;
+    updated_at: string;
+    updated_by: string;
+  }>(
+    `
+      SELECT
+        id,
+        type,
+        product_ids_json,
+        position,
+        is_active,
+        start_date::text,
+        end_date::text,
+        created_at::text,
+        updated_at::text,
+        updated_by
+      FROM admin_featured_content
+      ORDER BY position ASC, created_at ASC
+    `
+  );
+
+  return result.rows.map<FeaturedContent>((row) => ({
+    id: row.id,
+    type: row.type,
+    productIds: Array.isArray(row.product_ids_json) ? row.product_ids_json : [],
+    position: Number(row.position) || 0,
+    isActive: Boolean(row.is_active),
+    startDate: row.start_date,
+    endDate: row.end_date ?? undefined,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    updatedBy: row.updated_by,
+  }));
 }
 
 async function writeFeaturedContent(content: FeaturedContent[]) {
-  await writeDataFile(FEATURED_FILE, content);
+  const pool = await getAdminRuntimePool();
+  const client = await pool.connect();
+
+  try {
+    await client.query("BEGIN");
+
+    for (const item of content) {
+      await client.query(
+        `
+          INSERT INTO admin_featured_content (
+            id,
+            type,
+            product_ids_json,
+            position,
+            is_active,
+            start_date,
+            end_date,
+            created_at,
+            updated_at,
+            updated_by
+          ) VALUES (
+            $1, $2, $3::jsonb, $4, $5, $6::timestamptz, $7::timestamptz,
+            $8::timestamptz, $9::timestamptz, $10
+          )
+          ON CONFLICT (id) DO UPDATE SET
+            type = EXCLUDED.type,
+            product_ids_json = EXCLUDED.product_ids_json,
+            position = EXCLUDED.position,
+            is_active = EXCLUDED.is_active,
+            start_date = EXCLUDED.start_date,
+            end_date = EXCLUDED.end_date,
+            updated_at = EXCLUDED.updated_at,
+            updated_by = EXCLUDED.updated_by
+        `,
+        [
+          item.id,
+          item.type,
+          JSON.stringify(item.productIds ?? []),
+          item.position,
+          item.isActive,
+          item.startDate,
+          item.endDate ?? null,
+          item.createdAt,
+          item.updatedAt,
+          item.updatedBy,
+        ]
+      );
+    }
+
+    const ids = content.map((item) => item.id);
+    if (ids.length > 0) {
+      await client.query(`DELETE FROM admin_featured_content WHERE NOT (id = ANY($1::text[]))`, [ids]);
+    } else {
+      await client.query(`DELETE FROM admin_featured_content`);
+    }
+
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 export async function getFeaturedContent(type?: "featured" | "top" | "banner") {

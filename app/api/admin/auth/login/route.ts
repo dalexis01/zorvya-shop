@@ -1,8 +1,35 @@
 import { NextResponse } from "next/server";
 import { authenticateAdminUser, createAdminSession, toAdminSessionUser } from "@/lib/server/admin/auth";
 
+function isAllowedOrigin(request: Request) {
+  const origin = request.headers.get("origin");
+  const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host");
+  const proto = request.headers.get("x-forwarded-proto") ?? "https";
+
+  if (!origin || !host) {
+    return process.env.NODE_ENV !== "production";
+  }
+
+  try {
+    const parsed = new URL(origin);
+    return `${parsed.protocol}//${parsed.host}`.toLowerCase() === `${proto}://${host}`.toLowerCase();
+  } catch {
+    return false;
+  }
+}
+
 export async function POST(request: Request) {
   try {
+    if (!isAllowedOrigin(request)) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Invalid request origin",
+        },
+        { status: 403 }
+      );
+    }
+
     const payload = (await request.json()) as unknown;
 
     if (

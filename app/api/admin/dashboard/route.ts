@@ -24,7 +24,7 @@ let dashboardStatsCache:
 export async function GET() {
   try {
     console.log("[api-metrics] admin dashboard route called");
-    const auth = await requireAdminRequestUser();
+    const auth = await requireAdminRequestUser({ permission: "revenue.read" });
 
     if (!auth.user) {
       return NextResponse.json(

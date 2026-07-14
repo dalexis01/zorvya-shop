@@ -1,11 +1,9 @@
 import "server-only";
 
 import { randomUUID } from "node:crypto";
-import { stat } from "node:fs/promises";
-import path from "node:path";
 
 import { createCustomerNotification } from "@/lib/server/customer-notifications";
-import { readDataFile, writeDataFile } from "../storage";
+import { getAdminRuntimePool } from "@/lib/server/admin/runtime-db";
 
 import type {
   SupportChatEntry,
@@ -13,15 +11,28 @@ import type {
   SupportResponse,
 } from "@/lib/shop/admin-types";
 
-const SUPPORT_FILE = "support-messages.json";
-const SUPPORT_FILE_PATH = path.join(process.cwd(), "data", SUPPORT_FILE);
-
-type SupportMessagesCache = {
-  cacheKey: string;
-  messages: SupportMessage[];
+type SupportMessageRow = {
+  id: string;
+  order_id: string | null;
+  customer_id: string;
+  customer_name: string;
+  customer_email: string;
+  customer_phone: string | null;
+  subject: string;
+  message: string;
+  priority: "low" | "medium" | "high";
+  status: "open" | "in_progress" | "resolved";
+  category: "product" | "delivery" | "payment" | "other";
+  source: "chatbot" | "email";
+  customer_token: string | null;
+  chat_entries_json: SupportChatEntry[] | null;
+  responses_json: SupportResponse[] | null;
+  admin_seen_at: string | null;
+  customer_seen_at: string | null;
+  created_at: string;
+  updated_at: string;
+  resolved_at: string | null;
 };
-
-let supportMessagesCache: SupportMessagesCache | null = null;
 
 function trimText(value: string | undefined) {
   return (value ?? "").trim().replace(/\s+/g, " ");
@@ -125,50 +136,163 @@ function normalizeSupportMessage(message: SupportMessage): SupportMessage {
   };
 }
 
-function cloneSupportMessages(messages: SupportMessage[]) {
-  return typeof structuredClone === "function"
-    ? structuredClone(messages)
-    : messages.map((message) => ({
-        ...message,
-        responses: [...message.responses],
-        chatEntries: [...message.chatEntries],
-      }));
-}
-
-async function getSupportMessagesCacheKey() {
-  try {
-    const metadata = await stat(SUPPORT_FILE_PATH);
-    return `${metadata.size}:${metadata.mtimeMs}`;
-  } catch {
-    return "";
-  }
+function mapSupportMessageRow(row: SupportMessageRow) {
+  return normalizeSupportMessage({
+    id: row.id,
+    orderId: row.order_id ?? undefined,
+    customerId: row.customer_id,
+    customerName: row.customer_name,
+    customerEmail: row.customer_email,
+    customerPhone: row.customer_phone ?? undefined,
+    subject: row.subject,
+    message: row.message,
+    priority: row.priority,
+    status: row.status,
+    category: row.category,
+    source: row.source,
+    customerToken: row.customer_token ?? undefined,
+    chatEntries: Array.isArray(row.chat_entries_json) ? row.chat_entries_json : [],
+    responses: Array.isArray(row.responses_json) ? row.responses_json : [],
+    adminSeenAt: row.admin_seen_at ?? null,
+    customerSeenAt: row.customer_seen_at ?? null,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    resolvedAt: row.resolved_at ?? undefined,
+  });
 }
 
 async function readSupportMessages(): Promise<SupportMessage[]> {
-  const cacheKey = await getSupportMessagesCacheKey();
-
-  if (cacheKey && supportMessagesCache?.cacheKey === cacheKey) {
-    return cloneSupportMessages(supportMessagesCache.messages);
-  }
-
-  const messages = (await readDataFile<SupportMessage[]>(SUPPORT_FILE, [])).map(
-    normalizeSupportMessage
+  const pool = await getAdminRuntimePool();
+  const result = await pool.query<SupportMessageRow>(
+    `
+      SELECT
+        id,
+        order_id,
+        customer_id,
+        customer_name,
+        customer_email,
+        customer_phone,
+        subject,
+        message,
+        priority,
+        status,
+        category,
+        source,
+        customer_token,
+        chat_entries_json,
+        responses_json,
+        admin_seen_at::text,
+        customer_seen_at::text,
+        created_at::text,
+        updated_at::text,
+        resolved_at::text
+      FROM admin_support_messages
+      ORDER BY updated_at DESC, created_at DESC
+    `
   );
-  const nextCacheKey = (await getSupportMessagesCacheKey()) || cacheKey;
 
-  if (nextCacheKey) {
-    supportMessagesCache = {
-      cacheKey: nextCacheKey,
-      messages,
-    };
-  }
-
-  return cloneSupportMessages(messages);
+  return result.rows.map(mapSupportMessageRow);
 }
 
 async function writeSupportMessages(messages: SupportMessage[]) {
-  supportMessagesCache = null;
-  await writeDataFile(SUPPORT_FILE, messages.map(normalizeSupportMessage));
+  const pool = await getAdminRuntimePool();
+  const client = await pool.connect();
+  const normalizedMessages = messages.map(normalizeSupportMessage);
+
+  try {
+    await client.query("BEGIN");
+
+    for (const message of normalizedMessages) {
+      await client.query(
+        `
+          INSERT INTO admin_support_messages (
+            id,
+            order_id,
+            customer_id,
+            customer_name,
+            customer_email,
+            customer_phone,
+            subject,
+            message,
+            priority,
+            status,
+            category,
+            source,
+            customer_token,
+            chat_entries_json,
+            responses_json,
+            admin_seen_at,
+            customer_seen_at,
+            created_at,
+            updated_at,
+            resolved_at
+          ) VALUES (
+            $1, $2, $3, $4, LOWER($5), $6, $7, $8, $9, $10, $11, $12, $13,
+            $14::jsonb, $15::jsonb, $16::timestamptz, $17::timestamptz, $18::timestamptz,
+            $19::timestamptz, $20::timestamptz
+          )
+          ON CONFLICT (id) DO UPDATE SET
+            order_id = EXCLUDED.order_id,
+            customer_id = EXCLUDED.customer_id,
+            customer_name = EXCLUDED.customer_name,
+            customer_email = EXCLUDED.customer_email,
+            customer_phone = EXCLUDED.customer_phone,
+            subject = EXCLUDED.subject,
+            message = EXCLUDED.message,
+            priority = EXCLUDED.priority,
+            status = EXCLUDED.status,
+            category = EXCLUDED.category,
+            source = EXCLUDED.source,
+            customer_token = EXCLUDED.customer_token,
+            chat_entries_json = EXCLUDED.chat_entries_json,
+            responses_json = EXCLUDED.responses_json,
+            admin_seen_at = EXCLUDED.admin_seen_at,
+            customer_seen_at = EXCLUDED.customer_seen_at,
+            updated_at = EXCLUDED.updated_at,
+            resolved_at = EXCLUDED.resolved_at
+        `,
+        [
+          message.id,
+          message.orderId ?? null,
+          message.customerId,
+          message.customerName,
+          message.customerEmail,
+          message.customerPhone ?? null,
+          message.subject,
+          message.message,
+          message.priority,
+          message.status,
+          message.category,
+          message.source,
+          message.customerToken ?? null,
+          JSON.stringify(message.chatEntries ?? []),
+          JSON.stringify(message.responses ?? []),
+          message.adminSeenAt ?? null,
+          message.customerSeenAt ?? null,
+          message.createdAt,
+          message.updatedAt,
+          message.resolvedAt ?? null,
+        ]
+      );
+    }
+
+    const ids = normalizedMessages.map((message) => message.id);
+    if (ids.length > 0) {
+      await client.query(
+        `DELETE FROM admin_support_messages WHERE NOT (id = ANY($1::text[]))`,
+        [ids]
+      );
+    } else {
+      await client.query(`DELETE FROM admin_support_messages`);
+    }
+
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 function matchesCustomer(

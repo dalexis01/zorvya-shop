@@ -153,8 +153,11 @@ async function optimizeOrderSequence(
   return optimizedOrders;
 }
 
-export async function POST(_req: Request, ctx: RouteContext) {
-  const auth = await requireAdminRequestUser();
+export async function POST(request: Request, ctx: RouteContext) {
+  const auth = await requireAdminRequestUser({
+    request,
+    permission: "blocks.manage",
+  });
   if (!auth.user) return NextResponse.json({ success: false, error: auth.error }, { status: auth.status });
 
   const { id } = await ctx.params;

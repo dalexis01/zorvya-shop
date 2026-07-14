@@ -13,7 +13,7 @@ export async function GET(request: NextRequest) {
   const latitude = Number(request.nextUrl.searchParams.get("latitude") ?? "0");
   const longitude = Number(request.nextUrl.searchParams.get("longitude") ?? "0");
   const localeParam = request.nextUrl.searchParams.get("locale");
-  const locale: Locale = isLocale(localeParam) ? localeParam : "es";
+  const locale: Locale = isLocale(localeParam) ? localeParam : "en";
 
   if (!Number.isFinite(latitude) || !Number.isFinite(longitude) || latitude === 0 || longitude === 0) {
     return NextResponse.json(

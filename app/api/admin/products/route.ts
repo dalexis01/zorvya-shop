@@ -17,7 +17,7 @@ function getErrorMessage(error: unknown) {
 
 export async function GET(request: Request) {
   try {
-    const auth = await requireAdminRequestUser();
+    const auth = await requireAdminRequestUser({ permission: "products.read" });
 
     if (!auth.user) {
       return NextResponse.json(
@@ -69,7 +69,10 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const auth = await requireAdminRequestUser();
+    const auth = await requireAdminRequestUser({
+      request,
+      permission: "products.create",
+    });
 
     if (!auth.user) {
       return NextResponse.json(

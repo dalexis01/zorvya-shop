@@ -12,7 +12,7 @@ export const runtime = "nodejs";
 
 export async function GET() {
   try {
-    const auth = await requireAdminRequestUser();
+    const auth = await requireAdminRequestUser({ permission: "revenue.read" });
 
     if (!auth.user) {
       return NextResponse.json(
@@ -40,7 +40,10 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const auth = await requireAdminRequestUser();
+    const auth = await requireAdminRequestUser({
+      request,
+      permission: "revenue.read",
+    });
 
     if (!auth.user) {
       return NextResponse.json(

@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export async function GET() {
-  const auth = await requireAdminRequestUser();
+  const auth = await requireAdminRequestUser({ permission: "ai_products.manage" });
   if (!auth.user) {
     return NextResponse.json({ success: false, error: auth.error }, { status: auth.status });
   }

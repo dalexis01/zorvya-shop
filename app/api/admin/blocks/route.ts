@@ -16,7 +16,7 @@ export const runtime = "nodejs";
 
 export async function GET() {
   console.log("[api-metrics] admin blocks route called");
-  const auth = await requireAdminRequestUser();
+  const auth = await requireAdminRequestUser({ permission: "blocks.read" });
   if (!auth.user) {
     return NextResponse.json(
       { success: false, error: auth.error },
@@ -58,7 +58,10 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const auth = await requireAdminRequestUser();
+  const auth = await requireAdminRequestUser({
+    request,
+    permission: "blocks.manage",
+  });
   if (!auth.user) {
     return NextResponse.json(
       { success: false, error: auth.error },

@@ -8,7 +8,10 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const auth = await requireAdminRequestUser();
+    const auth = await requireAdminRequestUser({
+      request,
+      permission: "providers.manage",
+    });
 
     if (!auth.user) {
       return NextResponse.json({ success: false, error: auth.error }, { status: auth.status });
