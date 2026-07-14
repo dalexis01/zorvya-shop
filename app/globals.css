@@ -1943,6 +1943,34 @@ html[data-client-theme="light"] .client-panel * {
   border-color: rgb(148 163 184 / 0.35);
 }
 
+html[data-client-theme="light"] .client-product-copy {
+  color: #10203a;
+}
+
+html[data-client-theme="light"] .client-product-copy :is(.text-white, .text-slate-300, .text-slate-400, .text-slate-500) {
+  color: inherit !important;
+}
+
+html[data-client-theme="light"] .client-product-surface {
+  border-color: rgb(148 163 184 / 0.45) !important;
+  background: rgb(255 255 255 / 0.9) !important;
+  color: #10203a !important;
+}
+
+html[data-client-theme="light"] .client-product-surface-muted {
+  border-color: rgb(148 163 184 / 0.35) !important;
+  background: rgb(241 245 249 / 0.95) !important;
+  color: #10203a !important;
+}
+
+html[data-client-theme="light"] .client-product-input {
+  color: #10203a !important;
+}
+
+html[data-client-theme="light"] .client-product-input::placeholder {
+  color: rgb(100 116 139) !important;
+}
+
 @media (max-width: 767px) {
   .product-media--detail {
     padding: 0.25rem;

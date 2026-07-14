@@ -1641,7 +1641,9 @@ function ProductDetailClient({
         </div>
       </header>
 
-      <div className={`w-full overflow-x-hidden px-4 lg:px-6 2xl:px-8 ${compact ? "py-5" : "py-8"}`}>
+      <div
+        className={`client-product-copy w-full overflow-x-hidden px-4 lg:px-6 2xl:px-8 ${compact ? "py-5" : "py-8"}`}
+      >
         {notice ? (
           <div className="rounded-[1.5rem] border border-emerald-500/20 bg-emerald-500/10 px-5 py-4 text-sm text-emerald-100">
             {notice}
@@ -1924,9 +1926,9 @@ function ProductDetailClient({
         <section className={`grid min-w-0 items-start gap-5 lg:hidden ${compact ? "mt-3" : "mt-5 lg:mt-6"}`}>
           {/* Panel lateral izquierdo - Productos similares */}
           {filteredRecommended.length > 0 || recommendedSearch ? (
-            <div className="order-3 min-w-0 h-fit rounded-[2.25rem] border border-slate-800 bg-[#050816] p-4 shadow-[0_24px_80px_rgba(0,0,0,0.35)] lg:order-3 lg:col-span-2">
+            <div className="client-product-surface order-3 min-w-0 h-fit rounded-[2.25rem] border border-slate-800 bg-[#050816] p-4 shadow-[0_24px_80px_rgba(0,0,0,0.35)] lg:order-3 lg:col-span-2">
               <p className="text-xs uppercase tracking-[0.3em] text-cyan-300 font-semibold">{t.recommended}</p>
-              <div className="mt-4 rounded-full border border-slate-800 bg-[#0a1020] px-3 py-2">
+              <div className="client-product-surface-muted mt-4 rounded-full border border-slate-800 bg-[#0a1020] px-3 py-2">
                 <div className="flex items-center gap-2.5">
                   <svg
                     viewBox="0 0 24 24"
@@ -1944,7 +1946,7 @@ function ProductDetailClient({
                     value={recommendedSearch}
                     onChange={(event) => setRecommendedSearch(event.target.value)}
                     placeholder={t.recommendedSearchPlaceholder}
-                    className="min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-slate-500"
+                    className="client-product-input min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-slate-500"
                   />
                 </div>
               </div>
@@ -1954,7 +1956,7 @@ function ProductDetailClient({
                     key={String(item.id)}
                     onClick={() => router.push(`/products/${item.id}`)}
                     type="button"
-                    className="text-left rounded-[1.2rem] border border-slate-800 bg-[#0a1020] p-2.5 transition hover:border-cyan-500/40 group"
+                    className="client-product-surface-muted text-left rounded-[1.2rem] border border-slate-800 bg-[#0a1020] p-2.5 transition hover:border-cyan-500/40 group"
                   >
                     <div className="relative mb-3 aspect-[5/4] overflow-hidden rounded-[1rem]">
                       <StorefrontImage
@@ -1987,7 +1989,7 @@ function ProductDetailClient({
 
           {/* Sección central - Imágenes del producto */}
           <div className="order-1 min-w-0 space-y-4 lg:order-2">
-            <div className="relative overflow-hidden rounded-[2.25rem] border border-slate-800 bg-[#050816] shadow-[0_24px_80px_rgba(0,0,0,0.35)]">
+            <div className="client-product-surface relative overflow-hidden rounded-[2.25rem] border border-slate-800 bg-[#050816] shadow-[0_24px_80px_rgba(0,0,0,0.35)]">
               {activeImage ? (
                 <button type="button" onClick={() => setLightboxOpen(true)} className="block w-full">
                     <div className="relative aspect-[5/4] min-h-[16.5rem] w-full sm:min-h-[24rem] lg:min-h-[34rem] xl:min-h-[38rem]">
@@ -2036,7 +2038,7 @@ function ProductDetailClient({
           </div>
 
           {/* Sección derecha - Información del producto */}
-          <div className="order-2 min-w-0 space-y-4 rounded-[2.25rem] border border-transparent bg-transparent p-0 shadow-none lg:order-3 lg:border-slate-800 lg:bg-[#050816] lg:p-5 lg:shadow-[0_24px_80px_rgba(0,0,0,0.35)]">
+          <div className="client-product-surface order-2 min-w-0 space-y-4 rounded-[2.25rem] border border-transparent bg-transparent p-0 shadow-none lg:order-3 lg:border-slate-800 lg:bg-[#050816] lg:p-5 lg:shadow-[0_24px_80px_rgba(0,0,0,0.35)]">
             <div className="min-w-0">
               <h1 className="hidden text-3xl font-semibold tracking-tight text-white lg:block">{product.name}</h1>
               <div className="mt-2 hidden items-center gap-2 text-sm text-slate-300 lg:flex">
@@ -2048,7 +2050,7 @@ function ProductDetailClient({
             </div>
 
             <div className="space-y-3 lg:hidden">
-              <div className="rounded-[1.75rem] border border-slate-800 bg-[#0a1020] p-4">
+              <div className="client-product-surface-muted rounded-[1.75rem] border border-slate-800 bg-[#0a1020] p-4">
                 <p className="text-xs uppercase tracking-[0.22em] text-slate-500">{t.price}</p>
                 <p className="mt-2 text-3xl font-semibold text-white">{formatCurrency(activePrice)}</p>
                 {product.originalPrice ? (
@@ -2079,7 +2081,7 @@ function ProductDetailClient({
               </div>
 
               {selectedModel?.details ? (
-                <div className="rounded-[1.75rem] border border-slate-800 bg-[#0a1020] p-4">
+                <div className="client-product-surface-muted rounded-[1.75rem] border border-slate-800 bg-[#0a1020] p-4">
                   <p className="break-words text-sm leading-6 text-slate-300">{selectedModel.details}</p>
                 </div>
               ) : null}
@@ -2090,7 +2092,7 @@ function ProductDetailClient({
                 <button
                   type="button"
                   onClick={openReviewSection}
-                  className="rounded-[1.35rem] border border-slate-800 bg-[#0a1020] p-4 text-left transition hover:border-cyan-500/45"
+                  className="client-product-surface-muted rounded-[1.35rem] border border-slate-800 bg-[#0a1020] p-4 text-left transition hover:border-cyan-500/45"
                   aria-label={t.leaveComment}
                 >
                   <p className="text-xs uppercase tracking-[0.22em] text-slate-500">
@@ -2101,7 +2103,7 @@ function ProductDetailClient({
                     {reviewCount} {t.reviews}
                   </p>
                 </button>
-                <div className="rounded-[1.35rem] border border-slate-800 bg-[#0a1020] p-4">
+                <div className="client-product-surface-muted rounded-[1.35rem] border border-slate-800 bg-[#0a1020] p-4">
                   <p className="text-xs uppercase tracking-[0.22em] text-slate-500">{t.price}</p>
                   <p className="mt-2 text-2xl font-semibold text-white">{formatCurrency(activePrice)}</p>
                   {product.originalPrice ? (
@@ -2131,7 +2133,7 @@ function ProductDetailClient({
             </div>
 
             {displayModelOptions.length > 0 ? (
-            <div className="rounded-[1.75rem] border border-slate-800 bg-[#0a1020] p-5">
+            <div className="client-product-surface-muted rounded-[1.75rem] border border-slate-800 bg-[#0a1020] p-5">
               <div className="flex items-center justify-between gap-3">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
                   {t.modelLabel}
@@ -2181,7 +2183,7 @@ function ProductDetailClient({
             ) : null}
 
             {displayColors.length > 0 ? (
-              <div className="rounded-[1.75rem] border border-slate-800 bg-[#0a1020] p-5">
+              <div className="client-product-surface-muted rounded-[1.75rem] border border-slate-800 bg-[#0a1020] p-5">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
                   {t.colorLabel}
                 </p>
@@ -2212,7 +2214,7 @@ function ProductDetailClient({
         </section>
 
         {filteredRecommended.length > 0 || recommendedSearch ? (
-          <section className={`hidden rounded-[2rem] border border-slate-800 bg-[#050816] p-5 shadow-[0_24px_80px_rgba(0,0,0,0.35)] lg:block ${compact ? "mt-6" : "mt-8"}`}>
+          <section className={`client-product-surface hidden rounded-[2rem] border border-slate-800 bg-[#050816] p-5 shadow-[0_24px_80px_rgba(0,0,0,0.35)] lg:block ${compact ? "mt-6" : "mt-8"}`}>
             <div className="flex items-center justify-between gap-4">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.28em] text-cyan-300">
@@ -2220,7 +2222,7 @@ function ProductDetailClient({
                 </p>
                 <h2 className="mt-2 text-2xl font-semibold text-white">{t.recommended}</h2>
               </div>
-              <div className="w-full max-w-sm rounded-full border border-slate-800 bg-[#0a1020] px-3 py-2">
+              <div className="client-product-surface-muted w-full max-w-sm rounded-full border border-slate-800 bg-[#0a1020] px-3 py-2">
                 <div className="flex items-center gap-2.5">
                   <svg
                     viewBox="0 0 24 24"
@@ -2238,7 +2240,7 @@ function ProductDetailClient({
                     value={recommendedSearch}
                     onChange={(event) => setRecommendedSearch(event.target.value)}
                     placeholder={t.recommendedSearchPlaceholder}
-                    className="min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-slate-500"
+                    className="client-product-input min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-slate-500"
                   />
                 </div>
               </div>
@@ -2250,7 +2252,7 @@ function ProductDetailClient({
                   key={`desktop-rec-${item.id}`}
                   onClick={() => router.push(`/products/${item.id}`)}
                   type="button"
-                  className="rounded-[1.4rem] border border-slate-800 bg-[#08101e] p-3 text-left transition hover:border-cyan-500/40"
+                  className="client-product-surface-muted rounded-[1.4rem] border border-slate-800 bg-[#08101e] p-3 text-left transition hover:border-cyan-500/40"
                 >
                   <div className="relative aspect-[4/3] overflow-hidden rounded-[1rem]">
                     <StorefrontImage
@@ -2286,7 +2288,7 @@ function ProductDetailClient({
           <section className={`grid gap-6 xl:grid-cols-[1fr_0.95fr] ${compact ? "mt-6" : "mt-8"}`}>
             <div
               ref={reviewSectionRef}
-              className="rounded-[2rem] border border-slate-800 bg-[#050816] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.35)]"
+              className="client-product-surface rounded-[2rem] border border-slate-800 bg-[#050816] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.35)]"
             >
               <div className="flex items-end justify-between gap-4">
                 <div>
@@ -2302,19 +2304,19 @@ function ProductDetailClient({
                     value={name}
                     onChange={(event) => setName(event.target.value)}
                     placeholder={t.name}
-                    className="w-full rounded-2xl border border-slate-700 bg-[#0a1020] px-4 py-3 text-sm text-white outline-none transition focus:border-cyan-400"
+                    className="client-product-input w-full rounded-2xl border border-slate-700 bg-[#0a1020] px-4 py-3 text-sm text-white outline-none transition focus:border-cyan-400"
                   />
                   <input
                     type="email"
                     value={email}
                     onChange={(event) => setEmail(event.target.value)}
                     placeholder={t.email}
-                    className="w-full rounded-2xl border border-slate-700 bg-[#0a1020] px-4 py-3 text-sm text-white outline-none transition focus:border-cyan-400"
+                    className="client-product-input w-full rounded-2xl border border-slate-700 bg-[#0a1020] px-4 py-3 text-sm text-white outline-none transition focus:border-cyan-400"
                   />
                 </div>
 
                 <div className="grid gap-4 md:grid-cols-[220px_1fr]">
-                  <div className="rounded-2xl border border-slate-700 bg-[#0a1020] px-4 py-3">
+                  <div className="client-product-surface-muted rounded-2xl border border-slate-700 bg-[#0a1020] px-4 py-3">
                     <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">
                       {t.rating}
                     </p>
@@ -2339,7 +2341,7 @@ function ProductDetailClient({
                     onChange={(event) => setComment(event.target.value)}
                     placeholder={t.comment}
                     rows={4}
-                    className="w-full rounded-2xl border border-slate-700 bg-[#0a1020] px-4 py-3 text-sm text-white outline-none transition focus:border-cyan-400"
+                    className="client-product-input w-full rounded-2xl border border-slate-700 bg-[#0a1020] px-4 py-3 text-sm text-white outline-none transition focus:border-cyan-400"
                   />
                 </div>
 
@@ -2354,14 +2356,14 @@ function ProductDetailClient({
 
               <div className="mt-8 space-y-4">
                 {reviews.length === 0 ? (
-                  <div className="rounded-[1.5rem] border border-dashed border-slate-700 bg-[#0a1020] px-5 py-6 text-sm text-slate-400">
+                  <div className="client-product-surface-muted rounded-[1.5rem] border border-dashed border-slate-700 bg-[#0a1020] px-5 py-6 text-sm text-slate-400">
                     {t.noComments}
                   </div>
                 ) : (
                   reviews.map((review) => (
                     <article
                       key={review.id}
-                      className="rounded-[1.5rem] border border-slate-800 bg-[#0a1020] px-5 py-4"
+                      className="client-product-surface-muted rounded-[1.5rem] border border-slate-800 bg-[#0a1020] px-5 py-4"
                     >
                       <div className="flex items-start justify-between gap-4">
                         <div>
@@ -2468,7 +2470,7 @@ function ProductDetailClient({
           }}
         >
           <div
-            className="client-panel flex w-full max-w-lg flex-col overflow-hidden rounded-[2rem] border border-slate-800 bg-[#050816] text-white shadow-[0_24px_80px_rgba(0,0,0,0.5)]"
+            className="client-panel client-product-copy client-product-surface flex w-full max-w-lg flex-col overflow-hidden rounded-[2rem] border border-slate-800 bg-[#050816] text-white shadow-[0_24px_80px_rgba(0,0,0,0.5)]"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="flex items-center justify-between border-b border-slate-800 px-5 py-4">
@@ -2507,7 +2509,7 @@ function ProductDetailClient({
                     }
                     setSupportMode("chat");
                   }}
-                  className="rounded-[1.5rem] border border-slate-800 bg-[#08101e] px-4 py-5 text-left transition hover:border-cyan-500/40"
+                  className="client-product-surface-muted rounded-[1.5rem] border border-slate-800 bg-[#08101e] px-4 py-5 text-left transition hover:border-cyan-500/40"
                 >
                   <div className="mb-3 inline-flex h-11 w-11 items-center justify-center rounded-full bg-cyan-500/15 text-cyan-300">
                     <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.9">
@@ -2523,7 +2525,7 @@ function ProductDetailClient({
                   onClick={() => {
                     window.location.href = "tel:+5970000000";
                   }}
-                  className="rounded-[1.5rem] border border-slate-800 bg-[#08101e] px-4 py-5 text-left transition hover:border-cyan-500/40"
+                  className="client-product-surface-muted rounded-[1.5rem] border border-slate-800 bg-[#08101e] px-4 py-5 text-left transition hover:border-cyan-500/40"
                 >
                   <div className="mb-3 inline-flex h-11 w-11 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-300">
                     <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.9">
@@ -2536,7 +2538,7 @@ function ProductDetailClient({
                 <button
                   type="button"
                   onClick={() => setNotice(t.supportWhatsappSoon)}
-                  className="rounded-[1.5rem] border border-slate-800 bg-[#08101e] px-4 py-5 text-left transition hover:border-cyan-500/40"
+                  className="client-product-surface-muted rounded-[1.5rem] border border-slate-800 bg-[#08101e] px-4 py-5 text-left transition hover:border-cyan-500/40"
                 >
                   <div className="mb-3 inline-flex h-11 w-11 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-300">
                     <svg viewBox="0 0 24 24" className="h-5 w-5" fill="currentColor">
@@ -2551,7 +2553,7 @@ function ProductDetailClient({
               <div className="flex h-[32rem] flex-col">
                 <div ref={supportMessagesRef} className="flex-1 space-y-3 overflow-y-auto px-5 py-4">
                   {supportLoading ? (
-                    <div className="rounded-[1.25rem] border border-slate-800 bg-[#08101e] px-4 py-3 text-sm text-slate-400">
+                    <div className="client-product-surface-muted rounded-[1.25rem] border border-slate-800 bg-[#08101e] px-4 py-3 text-sm text-slate-400">
                       {t.sending}
                     </div>
                   ) : null}
@@ -2570,7 +2572,7 @@ function ProductDetailClient({
                       </div>
                     ))
                   ) : (
-                    <div className="rounded-[1.25rem] border border-slate-800 bg-[#08101e] px-4 py-3 text-sm text-slate-400">
+                    <div className="client-product-surface-muted rounded-[1.25rem] border border-slate-800 bg-[#08101e] px-4 py-3 text-sm text-slate-400">
                       {t.supportChatSubtitle}
                     </div>
                   )}
@@ -2582,14 +2584,14 @@ function ProductDetailClient({
                     value={supportContactEmail}
                     onChange={(event) => setSupportContactEmail(event.target.value)}
                     placeholder={t.contactEmail}
-                    className="w-full rounded-2xl border border-slate-700 bg-[#0a1020] px-4 py-3 text-sm text-white outline-none transition focus:border-cyan-400"
+                    className="client-product-input w-full rounded-2xl border border-slate-700 bg-[#0a1020] px-4 py-3 text-sm text-white outline-none transition focus:border-cyan-400"
                   />
                   <textarea
                     value={supportMessage}
                     onChange={(event) => setSupportMessage(event.target.value)}
                     placeholder={t.supportMessagePlaceholder}
                     rows={3}
-                    className="w-full rounded-2xl border border-slate-700 bg-[#0a1020] px-4 py-3 text-sm text-white outline-none transition focus:border-cyan-400"
+                    className="client-product-input w-full rounded-2xl border border-slate-700 bg-[#0a1020] px-4 py-3 text-sm text-white outline-none transition focus:border-cyan-400"
                   />
                   {supportError ? <p className="text-sm text-rose-300">{supportError}</p> : null}
                   <button
